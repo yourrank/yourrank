@@ -50,6 +50,7 @@ describe("dashboard loading states", () => {
   it("announces the initial dashboard and credits loaders", () => {
     const dashboardHtml = PAGES.dashboard.Component({ activePath: "/dashboard" }).toString();
     const creditsHtml = PAGES.rewardsRedemptions.Component({}).toString();
+    const rewardsPage = fs.readFileSync(path.resolve(assets, "../react/pages/rewards/page.tsx"), "utf8");
     expect(dashboardHtml).toContain('id="loading" class="yr-workspace-loader" role="status"');
     expect(dashboardHtml).toContain('id="loadingStatus">Loading your workspace');
     expect(dashboardHtml).toContain('class="yr-loader-track"');
@@ -59,7 +60,7 @@ describe("dashboard loading states", () => {
     expect(PAGES.dashboard.config.bootWatchdog).toBe(true);
     expect(PAGES.rewardsRedemptions.config.bootWatchdog).toBe(true);
     expect(read("dashboard.js")).toContain("window.__yrBoot?.signal()");
-    expect(read("credits.js")).toContain("window.__yrBoot?.signal()");
+    expect(rewardsPage).toContain("__yrBoot?.signal?.()");
   });
   it("keeps loading, ready zero, and unknown values distinct", () => {
     expect(UNKNOWN).toBe("—");
@@ -119,23 +120,24 @@ describe("dashboard loading states", () => {
   });
 
   it("does not coerce credits payload fields to zero before resolution", () => {
-    const credits = read("credits.js");
-    expect(credits).not.toMatch(/usage\.[A-Za-z0-9_]+ \|\| 0/);
-    expect(credits).not.toMatch(/limits\.[A-Za-z0-9_]+ \|\| 0/);
+    const rewardsPage = fs.readFileSync(path.resolve(assets, "../react/pages/rewards/page.tsx"), "utf8");
+    expect(rewardsPage).toContain('value={loading ? "—" : String(summary.periodEarned ?? 0)}');
+    expect(rewardsPage).toContain('numberOr(usage.shopItems, "—")');
+    expect(rewardsPage).not.toMatch(/usage\.[A-Za-z0-9_]+ \|\| 0/);
+    expect(rewardsPage).not.toMatch(/limits\.[A-Za-z0-9_]+ \|\| 0/);
   });
 
-  it("uses shared list loading and confirmed-empty treatments", () => {
+  it("uses loading and confirmed-empty treatments on Rewards and Audience lists", () => {
     const utils = read("dashboard/utils.js");
-    const credits = read("credits.js");
-    const pages = fs.readFileSync(path.resolve(assets, "../pages/credits-pages.js"), "utf8");
+    const audiencePage = fs.readFileSync(path.resolve(assets, "../react/pages/audience/page.tsx"), "utf8");
+    const rewardsPage = fs.readFileSync(path.resolve(assets, "../react/pages/rewards/page.tsx"), "utf8");
     expect(utils).toContain("setRowsLoading");
     expect(utils).toContain("renderEmpty(this.emptyEl, this.emptySpec)");
-    expect(credits).toContain("rewardCtrl?.setLoading(true)");
-    expect(credits).toContain('emptyEl: $("cr-reward-empty")');
-    expect(credits).toContain('emptyEl: $("cr-viewer-empty")');
-    expect(credits).toContain('emptyEl: $("cr-redemption-empty")');
-    expect(credits).toContain('$("cr-history-feed-empty")');
-    expect(pages).not.toContain("Loading your credits dashboard");
+    expect(rewardsPage).toContain('loading ? <div role="status" aria-live="polite" aria-busy="true"');
+    expect(rewardsPage).toContain('all: { title: "No claims yet"');
+    expect(audiencePage).toContain('function LoadingRows(');
+    expect(audiencePage).toContain('id="cr-viewer-empty"');
+    expect(audiencePage).toContain('id="cr-history-feed-empty"');
   });
 
   it("resets error presentation before retrying into a normal empty state", () => {
@@ -150,20 +152,23 @@ describe("dashboard loading states", () => {
     expect(performance).toContain('node.removeAttribute("aria-current")');
   });
 
-  it("keeps credits load failures plain and retryable", () => {
-    const credits = read("credits.js");
-    expect(credits).toContain('logError("load-credits-dashboard", err)');
-    expect(credits).toContain('title: "Couldn\'t load members"');
-    expect(credits).toContain('body: "People for the selected site could not be loaded."');
-    expect(credits).toContain('title: "Couldn\'t load your credits dashboard"');
-    expect(credits).toContain("retry: () => load()");
-    expect(credits).not.toContain("err.message}</p>");
-    expect(credits).toContain('$("cr-app").hidden = false');
+  it("keeps Audience and Rewards load failures plain and retryable", () => {
+    const audiencePage = fs.readFileSync(path.resolve(assets, "../react/pages/audience/page.tsx"), "utf8");
+    const rewardsPage = fs.readFileSync(path.resolve(assets, "../react/pages/rewards/page.tsx"), "utf8");
+    expect(audiencePage).toContain('title="Couldn\'t load members"');
+    expect(audiencePage).toContain('body="People for the selected site could not be loaded."');
+    expect(audiencePage).toContain('onRetry={() => void loadMembers()}');
+    expect(audiencePage).not.toContain("err.message}</p>");
+    expect(rewardsPage).toContain("Couldn't load your credits dashboard");
+    expect(rewardsPage).toContain("Your rewards data could not be loaded.");
+    expect(rewardsPage).toContain(">Try again</Button>");
+    expect(rewardsPage).not.toContain("err.message}</p>");
   });
 
   it("bounds authenticated dashboard boot outside the module graph", () => {
     const shell = fs.readFileSync(path.resolve(assets, "../../../../packages/shared/src/page-shell.ts"), "utf8");
     const watchdog = read("dashboard-boot-watchdog.js");
+    const giveawaysPage = fs.readFileSync(path.resolve(assets, "../react/pages/giveaways/page.tsx"), "utf8");
     expect(shell).toContain("DASHBOARD_BOOT_WATCHDOG");
     expect(shell).toContain('/assets/dashboard-boot-watchdog.js?v=2');
     expect(watchdog).toContain("setTimeout(function ()");
@@ -171,9 +176,10 @@ describe("dashboard loading states", () => {
     expect(watchdog).toContain("unhandledrejection");
     expect(watchdog).toContain("data-yr-boot-retry");
     expect(watchdog).not.toContain("import ");
-    expect(read("giveaways.js")).toContain("withDashboardTimeout");
-    expect(read("giveaways.js")).toContain('window.__yrBoot?.fail');
-    expect(read("giveaways.js")).not.toContain("await fetch(");
+    expect(giveawaysPage).toContain("withDashboardTimeout");
+    expect(giveawaysPage).toContain("window.__yrBoot?.fail");
+    expect(giveawaysPage).toContain("window.__yrBoot?.signal()");
+    expect(giveawaysPage).not.toContain("await fetch(");
   });
 
   it("ignores third-party boot errors but catches same-origin assets", () => {
@@ -216,7 +222,7 @@ describe("dashboard loading states", () => {
     expect(localRuntimeError.classes).toContain("yr-boot-failure");
 
     const localStylesheet = runWatchdogError({
-      target: { tagName: "LINK", href: "/assets/giveaways.css" },
+      target: { tagName: "LINK", href: "/assets/react/react.css" },
     });
     expect(localStylesheet.surface.hidden).toBe(false);
     expect(localStylesheet.surface.innerHTML).toContain("Couldn't load this dashboard.");
@@ -225,24 +231,23 @@ describe("dashboard loading states", () => {
 
   it("hides list controls and invalid page labels when lists are empty", () => {
     const utils = read("dashboard/utils.js");
-    const credits = read("credits.js");
+    const rewardsPage = fs.readFileSync(path.resolve(assets, "../react/pages/rewards/page.tsx"), "utf8");
     const boards = read("dashboard/boards.js");
     const players = read("dashboard/players.js");
     expect(utils).toContain("wrap.hidden = this.all.length === 0");
     expect(utils).toContain("this._setControlsHidden(this.all.length === 0)");
     expect(utils).toContain('this.pageInfo.textContent = total ? `Page ${this.page}');
     expect(utils).not.toContain(": `0`");
-    expect(credits).toContain('toggleAttribute("hidden", items.length === 0)');
+    expect(rewardsPage).toContain("items.length > 0 && <div id=\"cr-shop-controls\"");
     expect(boards).toContain("controls.hidden = state.BOARDS.length === 0");
     expect(players).toContain("controls.hidden = empty");
     expect(players).toContain("archiveForm.hidden = empty");
   });
 
   it("starts the redemption channel chip in a disconnected state", () => {
-    const pages = fs.readFileSync(path.resolve(assets, "../pages/credits-pages.js"), "utf8");
-    expect(pages).toContain('class="v3-chip v3-chip--cancelled">● Not connected');
-    expect(pages).not.toContain("● Not connected ·");
-    expect(pages).not.toContain('class="v3-chip v3-chip--refunded">● Connected to @');
+    const rewardsPage = fs.readFileSync(path.resolve(assets, "../react/pages/rewards/page.tsx"), "utf8");
+    expect(rewardsPage).toContain("Not connected · Connect Kick");
+    expect(rewardsPage).toContain("Not connected · Owner action required");
   });
 
   it("preserves shared boards empty markup while filtering", () => {

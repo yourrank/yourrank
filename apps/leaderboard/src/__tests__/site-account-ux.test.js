@@ -5,8 +5,7 @@ import { UnifiedSettingsPage } from "../pages/account.jsx";
 
 const siteJs = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
 const dashboardAccountJs = readFileSync(new URL("../assets/dashboard/account.js", import.meta.url), "utf8");
-const accountJs = readFileSync(new URL("../assets/account.js", import.meta.url), "utf8");
-const accountPages = readFileSync(new URL("../pages/account-pages.js", import.meta.url), "utf8");
+const settingsPage = readFileSync(new URL("../react/pages/settings/page.tsx", import.meta.url), "utf8");
 const dashboardCss = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
 
 function occurrences(source, value) {
@@ -54,66 +53,55 @@ describe("Site settings creator UX", () => {
 describe("Account settings creator UX", () => {
   it("server-renders the requested tab as current and visible", () => {
     const html = UnifiedSettingsPage({ fragment: true, tab: "connections" }).toString();
-    expect(html).toMatch(/<a class="v3-tab is-on"[^>]*aria-current="page"[^>]*data-settings-tab="connections"/);
-    expect(html).toContain('data-settings-panel="connections"');
-    expect(html).toMatch(/data-settings-panel="account"[^>]*hidden/);
-    expect(html).not.toMatch(/data-settings-panel="connections"[^>]*hidden/);
+    expect(html).toContain('id="acc-app"');
+    expect(html).toContain('data-settings-active="connections"');
   });
 
   it("separates account, selected-site, and health rows without repeating Kick setup", () => {
-    const html = UnifiedSettingsPage({ fragment: true, tab: "connections" }).toString();
-    expect(html).toContain('id="accountConnectionsTitle">Account connections');
-    expect(html).toContain('id="siteConnectionsTitle">Site connections — <span id="siteConnectionName"');
-    expect(html).toContain('id="integrationHealthTitle">Integration health');
-    expect(html).not.toContain("Kick rewards for the selected site");
-    expect(accountJs).toContain('class="account-connection-row"');
-    expect(accountJs).toContain("connection.statusLabel");
-    expect(accountJs).toContain("connection.selectedSite");
-    expect(accountJs).toContain('siteName.textContent = data.selectedSiteName');
-    expect(accountJs).not.toContain("data-integration-test");
-    expect(accountJs).not.toContain("kick.userId");
-    expect(accountJs).not.toContain("telegram.userId");
-    expect(accountJs).not.toContain("telegramChat.chatId");
-    expect(accountJs).not.toContain("Per-board connected apps");
+    expect(settingsPage).toContain('className="account-connection-row"');
+    expect(settingsPage).toContain("connection.statusLabel");
+    expect(settingsPage).toContain("connection.selectedSite");
+    expect(settingsPage).toContain("siteConnectionName");
+    expect(settingsPage).not.toContain("data-integration-test");
+    expect(settingsPage).not.toContain("kick.userId");
+    expect(settingsPage).not.toContain("telegram.userId");
+    expect(settingsPage).not.toContain("telegramChat.chatId");
+    expect(settingsPage).not.toContain("Per-board connected apps");
   });
 
   it("preserves the selected site for account connection links", () => {
-    expect(accountJs).toContain('new URLSearchParams(location.search).get("board")');
-    expect(accountJs).toContain('new URLSearchParams(location.search).get("siteId")');
-    expect(accountJs).toContain("state.ACTIVE_SITE_ID");
-    expect(accountJs).toContain('`?board=${encodeURIComponent(board)}`');
-    expect(accountJs).toContain('siteConnections = connections.filter((connection) => connection.selectedSite)');
+    expect(settingsPage).toContain('new URLSearchParams(location.search).get("board")');
+    expect(settingsPage).toContain('new URLSearchParams(location.search).get("siteId")');
+    expect(settingsPage).toContain("state.ACTIVE_SITE_ID");
+    expect(settingsPage).toContain('`?board=${encodeURIComponent(siteId)}`');
+    expect(settingsPage).toContain('const siteConnections = connections.filter((connection) => connection.selectedSite)');
   });
 
   it("keeps account deletion singular and team removal confirmed", () => {
-    expect(occurrences(accountPages, 'id="deleteAccountModal"')).toBe(1);
-    expect(accountPages).toContain('id="deleteAccountBtn"');
-    expect(accountJs).toContain('showConfirmModal("Remove team member"');
-    expect(accountJs).toContain('showConfirmModal("Revoke invitation"');
-    expect(accountJs).not.toMatch(/\bconfirm\(/);
+    expect(occurrences(settingsPage, 'id="deleteAccountModal"')).toBe(1);
+    expect(settingsPage).toContain('id="deleteAccountBtn"');
+    expect(settingsPage).toContain('"/api/site/team/remove"');
+    expect(settingsPage).toContain('"/api/site/team/invite/revoke"');
+    expect(settingsPage).toContain("confirmAction");
   });
 
   it("presents one fixed Moderator role with canonical seats and owner-only controls", () => {
-    const html = UnifiedSettingsPage({ fragment: true, tab: "team" }).toString();
-    expect(html).toContain('id="teamSeatUsage"');
-    expect(html).toContain('id="teamUpgradeLink"');
-    expect(html).toContain("<summary>Roles &amp; permissions · Compare roles</summary>");
-    expect(html).toContain('class="team-role-compare"');
-    expect(html).not.toContain('id="inviteRole"');
-    expect(html).not.toContain(">Manager<");
-    expect(accountJs).toContain('role: "moderator"');
-    expect(accountJs).toContain('currentRole !== "moderator"');
-    expect(accountJs).not.toContain('"/api/site/team/role"');
+    expect(settingsPage).toContain('id="teamSeatUsage"');
+    expect(settingsPage).toContain('id="teamUpgradeLink"');
+    expect(settingsPage).toContain("Roles &amp; permissions · Compare roles");
+    expect(settingsPage).toContain('className="team-role-compare"');
+    expect(settingsPage).not.toContain('id="inviteRole"');
+    expect(settingsPage).not.toContain(">Manager<");
+    expect(settingsPage).toContain('role: "moderator"');
+    expect(settingsPage).toContain('role !== "moderator"');
+    expect(settingsPage).not.toContain('"/api/site/team/role"');
     expect(dashboardCss).toContain("min-height: 44px");
   });
 
   it("keeps account controls outside the site draft and traps invite-dialog focus", () => {
-    expect(accountJs).toContain('accountRoot?.addEventListener("input", (event) => event.stopPropagation())');
-    expect(accountJs).toContain('accountRoot?.addEventListener("change", (event) => event.stopPropagation())');
-    // The invite modal uses the one shared trap (Escape, focus loop, inert
-    // background, focus return) rather than a second local implementation.
-    expect(accountJs).toContain('window.YRDialog.trap(modal, closeModal)');
-    expect(accountJs).not.toMatch(/_inviteModalKeydown/);
+    expect(settingsPage).toContain('data-settings-root="true"');
+    expect(settingsPage).toContain("<Dialog open={inviteOpen}");
+    expect(settingsPage).toContain("<Dialog open={open}");
   });
 
   it("keeps narrow account and settings structures free of fixed minimum widths", () => {

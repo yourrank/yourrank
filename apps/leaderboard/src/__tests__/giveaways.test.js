@@ -1,32 +1,74 @@
-import { describe, it, expect } from "bun:test";
+import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { handleGiveawayChatroom } from "../handlers/giveaway.js";
-import { GiveawaysPage } from "../pages/giveaways.jsx";
-import { giveawaysHtml, renderGiveawayDrawersHtml, renderGiveawaysContentHtml, renderGiveawaysHtml } from "../pages/giveaway-pages.js";
+import { giveawaysConfig } from "../pages/giveaways.jsx";
+import { GIVEAWAY_TABS, giveawaysHtml, renderGiveawaysContentHtml, renderGiveawaysHtml } from "../pages/giveaway-pages.js";
+import { apiPath } from "../react/lib/api.ts";
+import {
+  actGiveaways,
+  clickGiveaways,
+  document,
+  mountGiveawaysPage,
+  restoreGiveawaysDomGlobals,
+  setGiveawaysInputValue,
+  unmountGiveawaysPage,
+  window,
+} from "./giveaways-react-utils.js";
 
 const gamesSource = readFileSync(new URL("../assets/dashboard/games.js", import.meta.url), "utf8");
 const siteSource = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
 const dashboardSource = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 const previewTabsSource = readFileSync(new URL("../assets/dashboard/preview-tabs.js", import.meta.url), "utf8");
-const giveawaysSource = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
+const giveawaysPageSource = readFileSync(new URL("../react/pages/giveaways/page.tsx", import.meta.url), "utf8");
 const giveawayPagesSource = readFileSync(new URL("../pages/giveaway-pages.js", import.meta.url), "utf8");
-const giveawaysCssSource = readFileSync(new URL("../assets/giveaways.css", import.meta.url), "utf8");
+const apiSource = readFileSync(new URL("../react/lib/api.ts", import.meta.url), "utf8");
+const sheetSource = readFileSync(new URL("../react/components/ui/sheet.tsx", import.meta.url), "utf8");
 const shellSource = readFileSync(new URL("../assets/dashboard/shell.js", import.meta.url), "utf8");
 
-function collectGiveawayClasses(source) {
-  const classes = new Set();
-  for (const match of source.matchAll(/class(?:Name)?\s*=\s*["'`]([^"'`]+)["'`]/g)) {
-    for (const className of match[1].matchAll(/["']?(gw-[A-Za-z0-9_-]+)/g)) {
-      if (!className[1].endsWith("-")) classes.add(className[1]);
-    }
-  }
-  for (const match of source.matchAll(/classList\.(?:add|remove|toggle)\(([^)]*)\)/g)) {
-    for (const className of match[1].matchAll(/["'](gw-[A-Za-z0-9_-]+)["']/g)) {
-      classes.add(className[1]);
-    }
-  }
-  return classes;
+const $id = (id) => document.getElementById(id);
+const emptyChat = {
+  connection: { connected: true, chatReady: true, channelName: "creator" },
+  session: null,
+  entries: [],
+  winner: null,
+  capabilities: { vpnDetection: false },
+};
+
+async function mountChat(chat = emptyChat) {
+  const requests = [];
+  await mountGiveawaysPage({
+    tab: "chat",
+    site: { id: "site-1", name: "Kick Cup", slug: "kick-cup" },
+    deps: {
+      api: async (path, init, siteId) => {
+        requests.push({ path, init, siteId });
+        if (path === "/api/giveaways/chat") return chat;
+        return {};
+      },
+    },
+  });
+  return requests;
 }
+
+async function withSiteQuery(siteId, run) {
+  const originalUrl = window.location.href;
+  const originalState = window.history.state;
+  const url = new URL(originalUrl);
+  url.searchParams.set("siteId", siteId);
+  window.history.replaceState({}, "", url.href);
+  try {
+    await run();
+  } finally {
+    window.history.replaceState(originalState, "", originalUrl);
+  }
+}
+
+afterEach(async () => {
+  await unmountGiveawaysPage();
+});
+afterAll(() => {
+  restoreGiveawaysDomGlobals();
+});
 
 describe("Giveaway Chatroom Handler", () => {
   const allowRateLimit = async () => ({ ok: true, remaining: 59, limit: 60, retryAfter: 0 });
@@ -62,271 +104,516 @@ describe("Giveaway Chatroom Handler", () => {
     expect(res.status).toBe(429);
     expect(fetchCalled).toBe(false);
   });
+});
 
-  it("builds entrant markup without interpolating API values into HTML", () => {
-    const source = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
-    expect(source).not.toContain("tr.innerHTML");
-    expect(source).toContain('message.textContent = manual ? "—" : entrant.message || ""');
-    expect(source).toContain("userName.textContent = entrant.username");
-    expect(source).toContain("safeAvatarUrl(entrant.avatar_url, DEFAULT_AVATAR)");
+describe("Giveaways React migration", () => {
+  it("renders the route mount points and keeps Tournaments on its separate roots", () => {
+    expect(giveawaysHtml).toBe('<div id="giveaway-root" class="yr-react" data-tab="chat"></div>');
+    expect(GIVEAWAY_TABS.map(([tab]) => tab)).toEqual(["chat", "raffles", "preds"]);
+    expect(giveawayPagesSource).not.toContain("chat-entry.js");
+    expect(giveawayPagesSource).toContain('id="tournament-dialogs"');
+    for (const tab of ["chat", "raffles", "preds", "hub"]) {
+      expect(renderGiveawaysHtml(tab)).toContain(`data-tab="${tab}"`);
+    }
+    expect(renderGiveawaysHtml("drops")).toContain('data-tab="chat"');
+
+    const tournaments = renderGiveawaysContentHtml("tournaments");
+    expect(tournaments).toContain('id="tournament-app"');
+    expect(tournaments).toContain('id="tournament-root"');
+    expect(tournaments).toContain('id="tournament-dialogs"');
+    expect(tournaments).not.toContain("giveaway-root");
+    expect(giveawaysConfig.styles).toContain("/assets/react/react.css");
+    expect(giveawaysConfig.scripts).toContain('<script src="/assets/tournaments.js?v=1" type="module"></script>');
   });
 
-  it("keeps giveaway controls visible and exposes dashboard-managed entrants", () => {
-    const html = renderGiveawaysHtml("chat");
-    expect(html).toContain('id="gw-layout"');
-    expect(html).toContain('id="gw-manual-start-hint"');
-    expect(html).toContain('id="gw-add-entrant-form"');
-    expect(html).toContain('id="gw-add-entrant-name" name="username" type="text" maxlength="40"');
-    expect(html.indexOf('id="gw-keyword-field"')).toBeLessThan(html.indexOf('class="gw-actions"'));
-    expect(html.indexOf('class="gw-actions"')).toBeLessThan(html.indexOf('id="gw-rules-panel"'));
-    expect(html).toContain('<details class="gw-rules-panel" id="gw-rules-panel" open>');
-    expect(html).toContain('id="gw-rules-summary"');
-    expect(html.indexOf('id="gw-rules-panel"')).toBeLessThan(html.indexOf('id="gw-settings-note"'));
-    expect(html).toContain('id="gw-manual-rules-note" hidden>Other rules need a connected Kick channel.');
-    expect(giveawaysCssSource).toContain(".gw-layout.is-live .gw-main");
-    expect(giveawaysCssSource).toContain(".gw-layout.is-live .gw-sidebar");
-    const sidebarRules = giveawaysCssSource.match(/[^{}]*\.gw-sidebar[^{}]*\{[^{}]*\}/g) ?? [];
-    const sidebarCss = sidebarRules.join("\n");
-    expect(giveawaysCssSource).not.toContain("overscroll-behavior");
-    expect(sidebarCss).not.toContain("position: sticky;");
-    expect(sidebarCss).not.toContain("max-height:");
-    expect(sidebarCss).not.toContain("overflow: auto;");
-    expect(giveawaysCssSource).toContain("@media (min-width: 961px)");
-    expect(giveawaysCssSource).toContain(".gw-main {\n    position: sticky;");
-    expect(giveawaysCssSource).toContain("--gw-pinned-top");
-    expect(giveawaysCssSource).toContain("overflow-y: auto;");
-    expect(giveawaysCssSource).toContain(".gw-main > * {\n    flex-shrink: 0;");
-    expect(giveawaysCssSource).toContain("max-height: min(60vh, 520px);");
-    const desktopCss = giveawaysCssSource.slice(giveawaysCssSource.indexOf("@media (min-width: 961px)"));
-    expect(desktopCss).toContain(".gw-main > #gw-entrants-card {\n    display: flex;\n    flex-direction: column;\n    flex-shrink: 1;\n    min-height: 0;");
-    expect(desktopCss).toContain("#gw-entrants-card > .v3-table-scroll {\n    flex: 0 1 auto;\n    min-height: 0;\n    max-height: none;\n    overflow-y: auto;");
-    expect(desktopCss).not.toContain("overflow-y: visible;");
-    expect(desktopCss).not.toMatch(/#gw-entrants-card thead th \{\s*position: static;/);
-    const giveawaysSource = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
-    expect(giveawaysSource).toContain('document.querySelector(".gw-subnav")');
-    expect(giveawaysSource).toContain("--gw-pinned-top");
-    expect(giveawaysSource).toContain('window.addEventListener("resize", syncPinnedTop)');
+  it("mounts the current connected-channel surface and selected-site context", async () => {
+    const requests = await mountChat();
+    expect(document.querySelector("h1")?.textContent).toBe("Giveaways");
+    expect(document.querySelector("#engage-scope")?.getAttribute("data-scope")).toBe("site");
+    expect($id("gw-channel-name").textContent).toContain("creator");
+    expect($id("gw-btn-listen").textContent).toContain("Start giveaway");
+    expect($id("gw-rules-summary")).toBeTruthy();
+    expect($id("gw-stage-card")).toBeTruthy();
+    expect($id("gw-entrants-empty").textContent).toContain("No entrants yet");
+    expect(requests.some((request) => request.path === "/api/giveaways/chat" && request.siteId === "site-1")).toBe(true);
   });
 
-  it("runs Chat Giveaways through the connected Kick channel and server API, not the legacy listener", () => {
-    const source = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
+  it("uses the connected-channel API without the legacy chatroom listener", () => {
     for (const legacy of ["connectKickChat", "chat-entry.js", "/api/giveaways/chatroom", "chatroomId", "Resolving Kick chatroom", "Start Listening", "Refreshing will clear"]) {
-      expect(source).not.toContain(legacy);
+      expect(giveawaysPageSource).not.toContain(legacy);
     }
-    expect(source).toContain('sitePath(`/api/giveaways/chat${path}`)');
-    expect(source).toContain('chatApi("/start"');
-    expect(source).toContain('chatApi("/stop"');
-    expect(source).toContain('chatApi("/draw"');
-    expect(source).toContain("const POLL_MS = 4000");
-    expect(source).toContain('label.textContent = "Stop entries"');
-    expect(source).toContain("Start manual giveaway");
-    expect(source).toContain("Start giveaway");
-    // No editable channel: the connected channel is displayed, arbitrary entry is gone.
-    expect(giveawaysHtml).not.toContain('id="gw-channel-input"');
-    expect(giveawaysHtml).toContain('id="gw-channel-name"');
-    expect(giveawaysHtml).toContain("Chat giveaways require a connected Kick channel.");
-    expect(giveawaysHtml).toContain('id="gw-btn-connect-kick" href="/dashboard/settings/connections"');
-    for (const legacy of ["Connect &amp; Start Listening", "chatroom", 'id="gw-chat-feed"', 'id="gw-opt-case"', 'id="gw-opt-exact"', 'id="gw-trust-min"']) {
-      expect(giveawaysHtml).not.toContain(legacy);
+    expect(giveawaysPageSource).toContain('const CHAT_POLL_MS = 4_000');
+    expect(giveawaysPageSource).toContain('apiClient<ChatGiveawayPayload>("/api/giveaways/chat", {}, siteId)');
+    expect(giveawaysPageSource).toContain('apiClient<ChatGiveawayPayload>(`/api/giveaways/chat${path}`');
+    expect(giveawaysPageSource).toContain('chatApi("/start", body)');
+    expect(giveawaysPageSource).toContain('chatApi("/stop"');
+    expect(giveawaysPageSource).toContain('chatApi("/draw"');
+    expect(giveawaysPageSource).toContain('id="gw-channel-name"');
+    expect(giveawaysPageSource).toContain('id="gw-btn-connect-kick" href="/dashboard/settings/connections"');
+    expect(giveawaysPageSource).toContain("Start manual giveaway");
+  });
+
+  it("keeps manual entry controls and the responsive chat layout in the React page", () => {
+    for (const id of [
+      "gw-manual-start-hint",
+      "gw-add-entrant-form",
+      "gw-add-entrant-name",
+      "gw-rules-summary",
+      "gw-advanced-options",
+      "gw-settings-note",
+      "gw-manual-rules-note",
+      "gw-entrants-card",
+      "gw-entrants-list",
+    ]) {
+      expect(giveawaysPageSource).toContain(`id="${id}"`);
     }
+    expect(giveawaysPageSource.indexOf('id="gw-keyword-field"')).toBeLessThan(giveawaysPageSource.indexOf('id="gw-btn-listen"'));
+    expect(giveawaysPageSource.indexOf('id="gw-advanced-options"')).toBeLessThan(giveawaysPageSource.indexOf('id="gw-settings-note"'));
+    expect(giveawaysPageSource).toContain("min-[961px]:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.7fr)]");
+    expect(giveawaysPageSource).toContain("max-[960px]:order-1");
+    expect(giveawaysPageSource).toContain("max-[960px]:order-2");
+    expect(giveawaysPageSource).toContain("min-[961px]:sticky");
+    expect(giveawaysPageSource).toContain("max-h-[min(60vh,520px)] overflow-auto");
+    expect(giveawaysPageSource).toContain("sticky top-0 z-10");
+    expect(giveawaysConfig.styles).not.toContain("/assets/giveaways.css");
   });
 
-  it("loads the server-rendered giveaway tab on initialization", () => {
-    const source = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
-    expect(source).toContain('document.querySelector(".gw-tab-pane.is-active")?.id');
-    expect(source).toContain('if (activeTab === "raffles") loadRaffles();');
-    expect(source).not.toContain("loadCodeDrops");
-    expect(source).not.toContain('"cd-drawer"');
-    expect(source).toContain('if (activeTab === "preds") loadPredictions();');
-    expect(source).not.toContain('querySelectorAll(".gw-tab-btn").forEach((btn) => {');
+  it("renders entrant values as text and rejects unsafe avatar URLs", async () => {
+    const username = '<img src=x onerror="alert(1)">';
+    const message = "<script>steal()</script>";
+    await mountChat({
+      ...emptyChat,
+      entries: [{
+        id: "unsafe-1",
+        giveaway_session_id: "session-1",
+        provider: "kick",
+        provider_user_id: "kick:unsafe",
+        username,
+        avatar_url: "javascript:alert(1)",
+        message,
+        badges: [],
+        entered_at: "2026-09-28T00:00:00Z",
+        eligibility_status: "eligible",
+      }],
+    });
+    const row = $id("gw-entrants-list").querySelector("tr");
+    expect(row.querySelector(".gw-entrant-name").textContent).toBe(username);
+    expect(row.querySelector(".gw-entrant-name img")).toBeNull();
+    expect(row.querySelector(".gw-entrant-msg").textContent).toBe(message);
+    expect(row.querySelector("img").getAttribute("src")).not.toContain("javascript:");
+    expect(giveawaysPageSource).not.toContain("dangerouslySetInnerHTML");
   });
 
-  it("locks prediction entry points and builds stale entitlement recovery safely", () => {
-    expect(giveawayPagesSource).toContain('id="pred-plan-lock"');
-    expect(giveawaysSource).toContain('planLockMarkup("predictions")');
-    expect(giveawaysSource).toContain('button.setAttribute("aria-describedby", "pred-plan-lock")');
-    expect(giveawaysSource).toContain('link.href = "/dashboard/settings/billing?from=predictions"');
-    expect(giveawaysSource).toContain('link.textContent = "Upgrade your plan"');
-    expect(giveawaysSource).toContain('status.classList.add(isError ? "error" : "status--success")');
-    expect(giveawaysSource).not.toContain("status.className = `status${isError ? \" status--error\"");
+  it("keeps winner rules server-backed and scopes predictions to the selected site", async () => {
+    expect(giveawaysPageSource).toContain('id="gw-opt-claim-req"');
+    expect(giveawaysPageSource).toContain('id="gw-opt-claim-duration"');
+    expect(giveawaysPageSource).toContain('id={`gw-winner-repeat-${value}`}');
+    expect(giveawaysPageSource).toContain('apiClient<PredictionsPayload>("/api/predictions", {}, siteId)');
+    expect(giveawaysPageSource).toContain('apiClient<PredictionsPayload>("/api/predictions", post({');
+    expect(apiPath("/api/predictions", "site 1")).toBe("/api/predictions?siteId=site%201");
+    expect(apiPath("/api/events/raffles?state=open", "site-1")).toBe("/api/events/raffles?state=open&siteId=site-1");
+    await mountChat();
+    expect($id("gw-winner-repeat-once")).toBeTruthy();
   });
 
-  it("renders GiveawaysPage properly", () => {
-    const vnode = GiveawaysPage({ user: { id: "u-1", email: "streamer@test.com" } });
-    expect(vnode).toBeTruthy();
-    const html = vnode.toString();
-    expect(html).toContain("Giveaways");
-    expect(html).toContain("gw-setup-form");
-    expect(html).toContain("gw-channel-name");
-    expect(html).toContain("gw-roller");
+  it("sends CSRF with API mutations and uses accessible Radix sheets for drawers", () => {
+    expect(apiSource).toContain('"x-csrf-token"');
+    expect(apiSource).toContain("response.status");
+    expect(apiSource).toContain('credentials: "same-origin"');
+    expect(giveawaysPageSource).toContain('<SheetContent id="pred-drawer"');
+    expect(giveawaysPageSource).toContain('<SheetTitle id="pred-drawer-title">');
+    expect(giveawaysPageSource).toContain('className="max-h-dvh overflow-hidden"');
+    expect(giveawaysPageSource).toContain("min-h-0 flex-1 space-y-5 overflow-y-auto");
+    expect(giveawaysPageSource).toContain('<SheetFooter className="shrink-0">');
+    expect(sheetSource).toContain("DialogPrimitive.Content");
+    expect(sheetSource).toContain("DialogPrimitive.Portal");
+    expect(sheetSource).toContain("DialogPrimitive.Title");
   });
 
-  it("renders each giveaway tab as a deep-linkable active server view", () => {
-    const html = renderGiveawaysHtml("raffles");
-    expect(html).toContain("<h1>Giveaways</h1>");
-    expect(html).not.toContain("engage-back");
-    expect(html).toContain('class="v3-tabs gw-subnav"');
-    expect(html.indexOf("<h1>Giveaways</h1>")).toBeLessThan(html.indexOf("gw-subnav"));
-    expect(html).toContain('id="pane-raffles"');
-    expect(html).toContain('class="gw-tab-pane is-active" id="pane-raffles"');
-    expect(html).toContain('class="gw-tab-pane" id="pane-chat" hidden');
+  it("restores, saves, and discards raffle drawer drafts for the selected site", async () => {
+    await withSiteQuery("site-1", async () => {
+      const key = "yr-engage-draft:site-1:rf-drawer";
+      window.sessionStorage.setItem(key, JSON.stringify({
+        "rf-title": "Community headset",
+        "rf-desc": "For the winner",
+        "rf-cost": "25",
+        "rf-max": "5",
+      }));
+      await mountGiveawaysPage({
+        tab: "raffles",
+        site: { id: "site-1", name: "Kick Cup" },
+        deps: { api: async () => ({ raffles: [] }) },
+      });
+
+      clickGiveaways($id("btn-create-raffle"));
+      await actGiveaways();
+      expect($id("rf-title").value).toBe("Community headset");
+      expect($id("rf-desc").value).toBe("For the winner");
+      expect($id("rf-cost").value).toBe("25");
+      expect($id("rf-max").value).toBe("5");
+
+      setGiveawaysInputValue($id("rf-title"), "Updated headset");
+      await actGiveaways();
+      expect(JSON.parse(window.sessionStorage.getItem(key))).toMatchObject({ "rf-title": "Updated headset" });
+      await actGiveaways(() => $id("rf-title").dispatchEvent(new window.KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      })));
+      expect(JSON.parse(window.sessionStorage.getItem(key))).toMatchObject({ "rf-title": "Updated headset" });
+      clickGiveaways($id("btn-create-raffle"));
+      await actGiveaways();
+      expect($id("rf-title").value).toBe("Updated headset");
+      clickGiveaways($id("rf-cancel"));
+      await actGiveaways();
+      expect(window.sessionStorage.getItem(key)).toBeNull();
+    });
   });
 
-  it("paints Engage refusals in a page-level alert outside the tab panes", () => {
-    const html = renderGiveawaysContentHtml("raffles");
-    const alertIndex = html.indexOf('id="gw-page-alert"');
+  it("keeps the raffle drawer defaults and field guidance", async () => {
+    await withSiteQuery("site-1", async () => {
+      window.sessionStorage.removeItem("yr-engage-draft:site-1:rf-drawer");
+      await mountGiveawaysPage({
+        tab: "raffles",
+        site: { id: "site-1", name: "Kick Cup" },
+        deps: { api: async () => ({ raffles: [] }) },
+      });
+
+      clickGiveaways($id("btn-create-raffle"));
+      await actGiveaways();
+
+      expect($id("rf-cost").value).toBe("30");
+      expect($id("rf-title").placeholder).toBe("e.g. $100 Amazon Gift Card or VIP Role");
+      expect($id("rf-desc").placeholder).toBe("Rules or details for claiming this prize…");
+      expect($id("rf-cost").placeholder).toBe("e.g. 30");
+      expect($id("rf-max").placeholder).toBe("e.g. 5");
+      expect(document.querySelector('label[for="rf-title"]').textContent).toBe("Prize Title *");
+      expect(document.querySelector('label[for="rf-cost"]').textContent).toBe("Ticket Cost (in Credits)");
+      expect(document.querySelector('label[for="rf-title"]').parentElement.textContent).toContain("What will the winner receive?");
+    });
+  });
+
+  it("creates raffles with the existing endpoint, request body, and site scope", async () => {
+    await withSiteQuery("site-1", async () => {
+      const requests = [];
+      await mountGiveawaysPage({
+        tab: "raffles",
+        site: { id: "site-1", name: "Kick Cup" },
+        deps: {
+          api: async (path, init, siteId) => {
+            requests.push({ path, init, siteId });
+            return { raffles: [] };
+          },
+        },
+      });
+
+      clickGiveaways($id("btn-create-raffle"));
+      await actGiveaways();
+      setGiveawaysInputValue($id("rf-title"), "Community headset");
+      setGiveawaysInputValue($id("rf-desc"), "For the winner");
+      setGiveawaysInputValue($id("rf-cost"), "25");
+      setGiveawaysInputValue($id("rf-max"), "5");
+      await actGiveaways();
+      clickGiveaways($id("rf-submit"));
+      await actGiveaways();
+
+      const createRequest = requests.find((request) => request.init?.method === "POST");
+      expect(createRequest.path).toBe("/api/events/raffles");
+      expect(createRequest.siteId).toBe("site-1");
+      expect(JSON.parse(createRequest.init.body)).toEqual({
+        title: "Community headset",
+        description: "For the winner",
+        ticketCost: 25,
+        maxTickets: 5,
+      });
+      expect(window.sessionStorage.getItem("yr-engage-draft:site-1:rf-drawer")).toBeNull();
+    });
+  });
+
+  it("restores prediction drawer fields from the selected site's saved draft", async () => {
+    await withSiteQuery("site-1", async () => {
+      const key = "yr-engage-draft:site-1:pred-drawer";
+      window.sessionStorage.setItem(key, JSON.stringify({
+        "pred-title": "Who scores next?",
+        "pred-opt-1": "Blue",
+        "pred-opt-2": "Red",
+        "pred-min-bet": "20",
+        "pred-max-bet": "800",
+        "pred-lock-min": "12",
+      }));
+      await mountGiveawaysPage({
+        tab: "preds",
+        site: { id: "site-1", name: "Kick Cup" },
+        deps: { api: async () => ({ predictions: [], entitlement: { enabled: true } }) },
+      });
+
+      clickGiveaways($id("btn-open-event-drawer"));
+      await actGiveaways();
+      expect($id("pred-title").value).toBe("Who scores next?");
+      expect($id("pred-opt-1").value).toBe("Blue");
+      expect($id("pred-opt-2").value).toBe("Red");
+      expect($id("pred-min-bet").value).toBe("20");
+      expect($id("pred-max-bet").value).toBe("800");
+      expect($id("pred-lock-min").value).toBe("12");
+
+      clickGiveaways($id("pred-cancel"));
+      await actGiveaways();
+      expect(window.sessionStorage.getItem(key)).toBeNull();
+    });
+  });
+
+  it("creates predictions with the existing endpoint, request body, and site scope", async () => {
+    await withSiteQuery("site-1", async () => {
+      const requests = [];
+      await mountGiveawaysPage({
+        tab: "preds",
+        site: { id: "site-1", name: "Kick Cup" },
+        deps: {
+          api: async (path, init, siteId) => {
+            requests.push({ path, init, siteId });
+            return { predictions: [], entitlement: { enabled: true } };
+          },
+        },
+      });
+
+      clickGiveaways($id("btn-open-event-drawer"));
+      await actGiveaways();
+      setGiveawaysInputValue($id("pred-title"), "Will blue win?");
+      setGiveawaysInputValue($id("pred-opt-1"), "Blue");
+      setGiveawaysInputValue($id("pred-opt-2"), "Red");
+      setGiveawaysInputValue($id("pred-min-bet"), "20");
+      setGiveawaysInputValue($id("pred-max-bet"), "400");
+      setGiveawaysInputValue($id("pred-lock-min"), "12");
+      await actGiveaways();
+      clickGiveaways($id("pred-submit"));
+      await actGiveaways();
+
+      const createRequest = requests.find((request) => request.init?.method === "POST");
+      expect(createRequest.path).toBe("/api/predictions");
+      expect(createRequest.siteId).toBe("site-1");
+      expect(JSON.parse(createRequest.init.body)).toEqual({
+        title: "Will blue win?",
+        options: [{ id: "yes", label: "Blue" }, { id: "no", label: "Red" }],
+        minBet: 20,
+        maxBet: 400,
+        lockMinutes: 12,
+      });
+      expect(window.sessionStorage.getItem("yr-engage-draft:site-1:pred-drawer")).toBeNull();
+    });
+  });
+
+  it("renders active and historical raffle rows as a responsive table", async () => {
+    const active = {
+      id: "raffle-live",
+      title: "Live prize",
+      ticket_cost: 25,
+      max_tickets_per_viewer: 5,
+      status: "active",
+      total_tickets: 8,
+      participant_count: 4,
+      created_at: "2026-09-28T00:00:00Z",
+    };
+    const past = {
+      ...active,
+      id: "raffle-past",
+      title: "Past prize",
+      status: "completed",
+      winner_name: "Casey",
+      winner_ticket_number: 4,
+      drawn_at: "2026-09-29T00:00:00Z",
+    };
+    await mountGiveawaysPage({
+      tab: "raffles",
+      site: { id: "site-1", name: "Kick Cup" },
+      deps: { api: async () => ({ raffles: [active, past] }) },
+    });
+
+    expect($id("rf-active-list").querySelector('[data-raffle-id="raffle-live"] h3').textContent).toBe("Live prize");
+    expect($id("rf-past-list").querySelector("table")).toBeTruthy();
+    expect($id("rf-past-list").textContent).toContain("Casey");
+    expect($id("rf-past-list").textContent).toContain("Ticket #4");
+    expect($id("rf-past-list").querySelector(".gw-table")).toBeNull();
+  });
+
+  it("renders settled prediction history using the React table", async () => {
+    await mountGiveawaysPage({
+      tab: "preds",
+      site: { id: "site-1", name: "Kick Cup" },
+      deps: {
+        api: async () => ({
+          predictions: [{
+            id: "prediction-past",
+            title: "Who scored?",
+            options: [{ id: "yes", label: "Blue" }, { id: "no", label: "Red" }],
+            status: "settled",
+            winning_option_id: "yes",
+            total_pool: 120,
+            min_bet: 10,
+            max_bet: 50,
+            created_at: "2026-09-28T00:00:00Z",
+          }],
+          entitlement: { enabled: true },
+        }),
+      },
+    });
+
+    expect($id("pred-past-list").querySelector("table")).toBeTruthy();
+    expect($id("pred-past-list").textContent).toContain("Who scored?");
+    expect($id("pred-past-list").textContent).toContain("settled");
+    expect($id("pred-past-list").querySelector(".gw-table")).toBeNull();
+  });
+
+  it("keeps Engage refusals in an accessible page-level alert", () => {
+    const alertIndex = giveawaysPageSource.indexOf('id="gw-page-alert"');
+    const tabContentIndex = giveawaysPageSource.indexOf('{tab === "chat" &&');
     expect(alertIndex).toBeGreaterThan(-1);
-    // Ahead of every pane, so a refusal on any tab is visible rather than being
-    // written into a hidden pane.
-    expect(alertIndex).toBeLessThan(html.indexOf('class="gw-tab-pane'));
-    expect(html).toContain('<p class="gw-page-alert" id="gw-page-alert" role="alert"');
-    // Styled as an error by the stylesheet the page actually loads, so the
-    // refusal does not render as ordinary body copy.
-    expect(giveawaysCssSource).toContain(".gw-page-alert {");
-
-    expect(giveawaysSource).toContain('function showEngageError(message)');
-    expect(giveawaysSource).toContain('const alert = $("gw-page-alert")');
-    // The Kick connection badge (gw-status-text, inside the chat pane) stays a
-    // connection indicator and is never used as the Engage error surface.
-    expect(giveawaysSource).not.toContain('fallbackId');
+    expect(alertIndex).toBeLessThan(tabContentIndex);
+    expect(giveawaysPageSource).toContain('role="alert">{pageAlert}</StatusMessage>');
+    expect(giveawaysPageSource).toContain('onAlert(errorMessage(error, "Network error starting the giveaway."))');
+    expect(giveawaysPageSource).not.toContain("fallbackId");
   });
 
-  it("keeps the single OBS copy action in the overlay designer, not the shell", () => {
-    const designerSource = readFileSync(new URL("../assets/dashboard/overlay-designer.js", import.meta.url), "utf8");
-    expect(designerSource).toContain('$("odCopy")');
-    for (const id of ["odCopy", "ov-btn-copy-pred-hud", "ov-btn-copy-alerts", "ov-btn-copy-ticker"]) {
-      expect(shellSource).not.toContain(id);
-    }
-    // The standalone HUD/alerts/ticker copy cards left the Share page.
-    for (const id of ["ov-btn-copy-pred-hud", "ov-btn-copy-alerts", "ov-btn-copy-ticker"]) {
-      expect(siteSource).not.toContain(id);
-    }
+  it("announces a rejected manual giveaway start above the active page", async () => {
+    await mountGiveawaysPage({
+      tab: "chat",
+      site: { id: "site-1", name: "Kick Cup" },
+      deps: {
+        api: async (path) => {
+          if (path === "/api/giveaways/chat") {
+            return { ...emptyChat, connection: { connected: false, chatReady: false, channelName: null } };
+          }
+          if (path === "/api/giveaways/chat/start") throw new Error("The server declined this giveaway.");
+          return {};
+        },
+      },
+    });
+
+    clickGiveaways($id("gw-btn-listen"));
+    await actGiveaways();
+    expect($id("gw-page-alert").textContent).toContain("The server declined this giveaway.");
+    expect($id("gw-page-alert").getAttribute("role")).toBe("alert");
   });
 
-  it("keeps giveaway history tables on the canonical table markup", () => {
-    expect(giveawaysHtml).not.toContain('class="gw-table"');
-    expect(giveawaysHtml).not.toContain('class="gw-table-wrap"');
-    expect(giveawaysHtml.match(/<table\b/g)).toHaveLength(3);
-    expect(giveawaysHtml.match(/<div class="v3-table-scroll">\s*<table class="v3-table">/g)).toHaveLength(3);
-    // The tournaments pane ships only its client mount points; the workspace
-    // (entries list included) is rendered by tournaments.js.
-    expect(giveawaysHtml).toContain('id="tournament-app"');
-    expect(giveawaysHtml).toContain('id="tournament-root"');
-    expect(giveawaysHtml).toContain('id="tournament-dialogs"');
+  it("keeps linked-account labels and bulk exclusion in the React entrant list", async () => {
+    const chat = {
+      ...emptyChat,
+      session: {
+        id: "session-1",
+        status: "active",
+        provider: "manual",
+        rules: {
+          entryMode: "chat",
+          subscriberOnly: false,
+          vipOnly: false,
+          excludePreviousWinners: false,
+          winnerRepeat: "once",
+          onePerIp: false,
+          vpnDetection: false,
+          winnerMustRespond: false,
+          responseTimeout: 60,
+          autoReroll: false,
+        },
+        draws: [],
+        winner_entry_id: null,
+        drawn_at: null,
+      },
+      entries: [
+        {
+          id: "entry-first",
+          giveaway_session_id: "session-1",
+          provider: "manual",
+          provider_user_id: "manual:first",
+          username: "first",
+          avatar_url: null,
+          message: "",
+          badges: [],
+          entered_at: "2026-09-28T00:00:00Z",
+          eligibility_status: "eligible",
+          eligibility_reason: null,
+          linked: [{ username: "later", reasons: ["same_device"] }],
+        },
+        {
+          id: "entry-later",
+          giveaway_session_id: "session-1",
+          provider: "manual",
+          provider_user_id: "manual:later",
+          username: "later",
+          avatar_url: null,
+          message: "",
+          badges: [],
+          entered_at: "2026-09-28T00:01:00Z",
+          eligibility_status: "eligible",
+          eligibility_reason: null,
+          linked: [{ username: "first", reasons: ["same_identity"] }],
+        },
+        {
+          id: "entry-excluded",
+          giveaway_session_id: "session-1",
+          provider: "manual",
+          provider_user_id: "manual:excluded",
+          username: "excluded",
+          avatar_url: null,
+          message: "",
+          badges: [],
+          entered_at: "2026-09-28T00:02:00Z",
+          eligibility_status: "rejected",
+          eligibility_reason: "excluded_linked_account",
+          linked: [],
+        },
+      ],
+    };
+    const requests = [];
+    await mountGiveawaysPage({
+      tab: "chat",
+      site: { id: "site-1", name: "Kick Cup" },
+      deps: {
+        api: async (path, init, siteId) => {
+          requests.push({ path, init, siteId });
+          if (path === "/api/giveaways/chat") return chat;
+          if (path.endsWith("/entries/exclude")) return { ...chat, excluded: ["entry-later"] };
+          return { ...chat, included: ["entry-excluded"] };
+        },
+      },
+    });
+
+    expect($id("gw-linked-banner-text").textContent).toContain("3 entrants are linked");
+    expect($id("entrant-entry-first").querySelector(".gw-linked-badge").textContent).toContain("Linked · later");
+    expect($id("entrant-entry-first").querySelector(".gw-linked-badge").title).toBe("later: Same device");
+    expect($id("gw-linked-exclude-all").textContent).toContain("Exclude linked duplicates (1)");
+    expect($id("entrant-entry-excluded").textContent).toContain("Include again");
+
+    clickGiveaways($id("gw-linked-exclude-all"));
+    await actGiveaways();
+    expect($id("gw-page-alert").textContent).toContain("Excluded 1 linked entrant");
+    clickGiveaways([...$id("entrant-entry-excluded").querySelectorAll("button")].find((button) => button.textContent.includes("Include again")));
+    await actGiveaways();
+
+    const excludeRequest = requests.find((request) => request.path.endsWith("/entries/exclude"));
+    expect(excludeRequest.siteId).toBe("site-1");
+    expect(JSON.parse(excludeRequest.init.body)).toEqual({
+      entryIds: ["entry-later"],
+      sessionId: "session-1",
+      siteId: "site-1",
+    });
+    const includeRequest = requests.find((request) => request.path.endsWith("/entries/include"));
+    expect(includeRequest.siteId).toBe("site-1");
+    expect(JSON.parse(includeRequest.init.body)).toEqual({
+      entryId: "entry-excluded",
+      sessionId: "session-1",
+      siteId: "site-1",
+    });
   });
 
-  it("keeps nested advanced options behind their disclosure", () => {
-    expect(giveawaysHtml).toContain('id="gw-settings"');
-    expect(giveawaysHtml).toContain('Entry Mode');
-    expect(giveawaysHtml).toContain('<b>Members only</b>');
-    expect(giveawaysHtml).toContain('Verified Entry');
-    expect(giveawaysHtml).toContain('id="gw-opt-subscriber"');
-    expect(giveawaysHtml).toContain('id="gw-opt-vip"');
-    expect(giveawaysHtml).toContain('id="gw-opt-skip-past"');
-    expect(giveawaysHtml).toContain('id="gw-opt-ip"');
-    expect(giveawaysHtml).toContain('Requires Verified Entry');
-    expect(giveawaysHtml).toContain('VPN / Proxy detection');
-    expect(giveawaysHtml).toContain('Duplicate device detection');
-    expect(giveawaysHtml).toContain('Winner verification');
-    expect(giveawaysHtml).toContain('id="gw-opt-claim-req"');
-    expect(giveawaysHtml).toContain('id="gw-advanced-options"');
-    expect(giveawaysHtml).not.toContain('<details class="gw-setup-advanced" id="gw-advanced-options" open');
-    expect(giveawaysHtml).toContain('id="gw-winner-repeat-once" value="once" checked');
-    expect(giveawaysHtml).toContain('Exclude past giveaway winners');
-    expect(giveawaysHtml).not.toContain('>Exclude previous winners<');
-    expect(giveawaysHtml).toContain('id="gw-opt-claim-duration"');
-    expect(giveawaysHtml).toContain('<option value="60" selected>60 seconds</option>');
-    expect(giveawaysHtml).not.toContain('id="gw-opt-claim-req" checked');
-    expect(giveawaysHtml).toContain('id="gw-custom-rule-text"');
-    expect(giveawaysHtml.indexOf('id="gw-custom-rule-text"')).toBeGreaterThan(giveawaysHtml.indexOf('id="gw-advanced-options"'));
-    expect(giveawaysHtml).toContain('id="gw-roller-track"');
-    expect(giveawaysHtml).toContain('id="gw-winner-stage" role="status" aria-live="polite"');
-    expect(giveawaysHtml).toContain('id="gw-roller-track" aria-hidden="true"');
-    expect(giveawaysCssSource).toContain(".gw-roller-track--spinning");
-    expect(giveawaysCssSource).toContain("color: var(--ws-success)");
-    expect(giveawaysCssSource).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(giveawaysCssSource).toContain(".gw-winner-stage");
-    expect(giveawaysCssSource).toContain(".gw-winner-crown");
-    expect(giveawaysSource).toContain('classList.toggle("gw-roulette-track--blur"');
-    expect(giveawaysSource).toContain('classList.remove("gw-roulette-track--blur")');
-    expect(giveawaysCssSource).toContain(".gw-roulette-track--blur");
-    expect(giveawaysCssSource).toContain(".gw-roulette-centerline");
-    expect(giveawaysHtml).not.toContain('id="gw-roller-track" aria-live="polite"');
-    expect(giveawaysHtml).toContain('id="gw-stat-time"');
-    expect(giveawaysHtml).not.toContain("نعم");
-    expect(giveawaysHtml).not.toContain("لا");
-    expect(giveawaysHtml).not.toContain('style="');
-    expect(giveawaysSource).toContain('|| "Yes"');
-    expect(giveawaysSource).toContain('|| "No"');
-    expect(giveawaysHtml).not.toContain("🎉");
-    expect(giveawaysHtml).not.toContain("💬");
-    expect(giveawaysSource).not.toContain("🎉");
-    expect(giveawaysSource).not.toContain("⚡");
-  });
-
-  it("keeps Giveaway client lookups aligned with the rendered controls", () => {
-    const renderedIds = new Set([...giveawaysHtml.matchAll(/id="([^"]+)"/g)].map((match) => match[1]));
-    const lookupIds = new Set([...giveawaysSource.matchAll(/\$\("([^"]+)"\)/g)].map((match) => match[1]));
-    const missingIds = [...lookupIds].filter((id) => !renderedIds.has(id)).sort();
-
-    expect(missingIds).toEqual([]);
-    expect(giveawaysSource).toContain('$("gw-btn-roll")?.addEventListener("click"');
-    expect(giveawaysSource).toContain('$("gw-btn-reroll")?.addEventListener("click"');
-    expect(giveawaysSource).toContain('$("gw-btn-copy-winner")?.addEventListener("click"');
-    expect(giveawaysSource).toContain('$("gw-search-entrants")?.addEventListener("input"');
-    expect(giveawaysSource).not.toContain('$("gw-roll-btn")');
-    expect(giveawaysSource).not.toContain('$("gw-reroll-btn")');
-    expect(giveawaysSource).not.toContain('$("gw-copy-winner")');
-    expect(giveawaysSource).not.toContain('$("gw-search-input")');
-    expect(giveawaysSource).not.toContain('$("gw-clear-btn")');
-    expect(giveawaysSource).not.toContain("clearChatFeed");
-    expect(giveawaysSource).not.toContain("lastChild.textContent");
-    expect(giveawaysSource).not.toContain('"gw-claim-bar-fill"');
-    expect(giveawaysSource).toContain('$("gw-winner-stage")');
-    expect(giveawaysSource).toContain('$("gw-stage-idle")');
-    expect(giveawaysSource).toContain('$("gw-listen-btn-label")');
-    expect(giveawaysHtml).toContain('id="gw-roller-track"');
-    expect(giveawaysHtml).toContain('id="gw-stat-time"');
-    expect(giveawaysHtml).toContain('id="gw-opt-claim-duration"');
-    expect(giveawaysHtml).toContain('id="gw-opt-claim-req"');
-    expect(giveawaysHtml).toContain('id="gw-custom-rule-text"');
-  });
-
-  it("keeps Giveaway classes aligned with the canonical stylesheet", () => {
-    const renderedClasses = collectGiveawayClasses(
-      giveawaysHtml + GiveawaysPage({ user: { id: "u-1" } }).toString(),
-    );
-    const controllerClasses = collectGiveawayClasses(giveawaysSource);
-    const stylesheetClasses = new Set(
-      [...giveawaysCssSource.matchAll(/(?<![\w-])\.(gw-[A-Za-z0-9_-]+)/g)].map(
-        (match) => match[1],
-      ),
-    );
-    const missingClasses = [
-      ...new Set([...renderedClasses, ...controllerClasses]),
-    ].filter((className) => !stylesheetClasses.has(className)).sort();
-
-    expect(missingClasses).toEqual([]);
-  });
-
-  it("keeps dynamic Giveaway states on stylesheet classes", () => {
-    expect(giveawaysSource).not.toContain("style.color");
-    expect(giveawaysSource).not.toContain("style.fontStyle");
-    expect(giveawaysSource).toContain("gw-claim-status--confirmed");
-    expect(giveawaysSource).toContain("gw-claim-status--expired");
-    expect(giveawaysCssSource).toContain(".gw-claim-status--confirmed");
-    expect(giveawaysCssSource).toContain(".gw-claim-status--expired");
-    expect(giveawaysSource).toContain("flashButtonLabel(button, \"Copied!\")");
-    expect(giveawaysSource).not.toContain("Copied! ✓");
-    expect(giveawaysSource).not.toContain("✓ Copied");
-    expect(giveawaysHtml).not.toMatch(/<h2 id="pred-drawer-title"><svg/);
-    expect(giveawaysHtml).toContain("Draw Random Winner");
+  it("keeps the prediction entitlement lock and upgrade recovery controls", () => {
+    expect(giveawaysPageSource).toContain('id="pred-plan-lock"');
+    expect(giveawaysPageSource).toContain('aria-describedby={!enabled ? "pred-plan-lock" : undefined}');
+    expect(giveawaysPageSource).toContain('href="/dashboard/settings/billing?from=predictions"');
+    expect(giveawaysPageSource).toContain("if (!enabled) return;");
   });
 
   it("keeps preview frame navigations out of browser history", () => {
     expect(gamesSource).toContain("loadSimulatorFrame(iframe, embedUrl);");
     expect(gamesSource).toContain('loadSimulatorFrame(iframe, iframe.dataset.currentSrc + "&_t=" + Date.now());');
-
     const resetIndex = siteSource.indexOf("if (!resetPreviewFrame(mount)) return;");
     const submitIndex = siteSource.indexOf("local.form.submit()");
     expect(resetIndex).toBeGreaterThanOrEqual(0);
@@ -338,109 +625,23 @@ describe("Giveaway Chatroom Handler", () => {
     expect(previewTabsSource).not.toContain("stopImmediatePropagation");
   });
 
-  it("adds CSRF only to Engage mutations and keeps drawers accessible", () => {
-    expect(giveawaysSource).toContain('headers.set("x-csrf-token", csrf)');
-    expect(giveawaysSource).toContain('if (!["GET", "HEAD", "OPTIONS"].includes(method))');
-    expect(giveawaysSource).toContain('responseData(res)');
-    expect(giveawaysSource).toContain("showConfirmModal");
-    expect(giveawaysSource).toContain("trapEventDrawerFocus");
-    expect(giveawaysSource).toContain("sessionStorage.setItem");
-    expect(giveawaysSource).not.toMatch(/\b(?:alert|confirm)\s*\(/);
-    for (const id of ["rf-drawer", "pred-drawer", "settle-drawer"]) {
-      expect(giveawaysHtml).toContain(`id="${id}"`);
-      expect(giveawaysHtml).toContain('role="dialog" aria-modal="true" aria-labelledby=');
+  it("keeps the single OBS copy action in the overlay designer, not the shell", () => {
+    const designerSource = readFileSync(new URL("../assets/dashboard/overlay-designer.js", import.meta.url), "utf8");
+    expect(designerSource).toContain('$("odCopy")');
+    for (const id of ["odCopy", "ov-btn-copy-pred-hud", "ov-btn-copy-alerts", "ov-btn-copy-ticker"]) {
+      expect(shellSource).not.toContain(id);
     }
-    expect(giveawaysHtml).toContain('id="rf-status"');
-    expect(giveawaysHtml).toContain('id="pred-status"');
-    expect(giveawaysHtml).toContain('id="settle-status"');
-  });
-
-  it("keeps every event drawer's fields scrollable while actions stay pinned above the app", () => {
-    for (const id of ["rf-drawer", "pred-drawer", "settle-drawer"]) {
-      const drawer = giveawaysHtml.match(
-        new RegExp(`<div class="gw-drawer-backdrop" id="${id}"[\\s\\S]*?</div>\\n</div>`, "m"),
-      )?.[0];
-      expect(drawer).toBeTruthy();
-      const fieldsStart = drawer.indexOf('<div class="gw-drawer-fields">');
-      const footerStart = drawer.indexOf('<div class="gw-drawer-footer">');
-      expect(fieldsStart).toBeGreaterThan(0);
-      expect(footerStart).toBeGreaterThan(fieldsStart);
-      expect(drawer.slice(fieldsStart, footerStart)).toContain("gw-drawer-fields");
-      expect(drawer.slice(footerStart)).toContain("gw-drawer-footer");
-    }
-
-    const cssRules = new Map();
-    for (const [, selector, declarations] of giveawaysCssSource.matchAll(
-      /(\.gw-drawer-(?:backdrop|body|fields|footer))\s*\{([^}]*)\}/g,
-    )) {
-      if (cssRules.has(selector)) continue;
-      cssRules.set(
-        selector,
-        new Map([...declarations.matchAll(/([\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()])),
-      );
-    }
-    expect(cssRules.get(".gw-drawer-body")?.get("overflow")).toBe("hidden");
-    expect(cssRules.get(".gw-drawer-fields")?.get("overflow-y")).toBe("auto");
-    expect(cssRules.get(".gw-drawer-footer")?.get("flex")).toBe("0 0 auto");
-  });
-
-  it("mounts event drawers outside the content stacking context", () => {
-    const content = renderGiveawaysContentHtml("raffles");
-    const drawers = renderGiveawayDrawersHtml("raffles");
-    expect(content).not.toContain('id="rf-drawer"');
-    expect(drawers).toContain('id="rf-drawer"');
-
-    const page = GiveawaysPage({ user: { id: "u-1", email: "streamer@test.com" }, tab: "raffles" }).toString();
-    const bentoStart = page.indexOf('<div class="lb-bento"');
-    const firstDrawer = page.indexOf('class="gw-drawer-backdrop" id="pred-drawer"');
-    const bentoEnd = page.lastIndexOf("</div>", firstDrawer);
-    expect(bentoStart).toBeGreaterThanOrEqual(0);
-    expect(bentoEnd).toBeGreaterThan(bentoStart);
-    for (const id of ["pred-drawer", "settle-drawer", "rf-drawer"]) {
-      expect(page.indexOf(`id="${id}"`)).toBeGreaterThan(bentoEnd);
+    for (const id of ["ov-btn-copy-pred-hud", "ov-btn-copy-alerts", "ov-btn-copy-ticker"]) {
+      expect(siteSource).not.toContain(id);
     }
   });
 
-  it("renders truthful unverified and resend controls", () => {
+  it("keeps truthful unverified and resend controls", () => {
     const dashboardPage = readFileSync(new URL("../pages/dashboard.jsx", import.meta.url), "utf8");
     expect(dashboardPage).toContain('id="verifyBannerEmail"');
     expect(dashboardPage).toContain('id="verifyResend"');
     expect(dashboardPage).toContain('id="verifyDismiss"');
     expect(siteSource).toContain("/api/auth/resend-verification");
     expect(dashboardPage).toContain("Visitors cannot open your published leaderboard");
-    expect(siteSource).toContain("/api/auth/resend-verification");
-  });
-});
-
-describe("linked-account giveaway UI", () => {
-  it("renders the banner, badge and include/exclude controls", () => {
-    expect(giveawaysHtml).toContain('id="gw-linked-banner"');
-    expect(giveawaysHtml).toContain('id="gw-linked-banner-text"');
-    expect(giveawaysHtml).toContain('id="gw-linked-exclude-all"');
-    expect(giveawaysCssSource).toContain(".gw-linked-badge");
-    expect(giveawaysCssSource).toContain(".gw-linked-banner");
-    expect(giveawaysSource).toContain("Linked · ");
-    expect(giveawaysSource).toContain("Excluded: linked account");
-    expect(giveawaysSource).toContain("Include again");
-    expect(giveawaysSource).toContain("Exclude linked duplicates (");
-  });
-
-  it("keeps only eligible entries in the bulk-exclude plan and sorts by real dates", () => {
-    // The keeper is the earliest *eligible* entrant per component; entries
-    // already rejected for another reason (vpn_detected, duplicate_ip, …)
-    // must never be excluded or count as the keeper.
-    expect(giveawaysSource).toContain('entry.eligibility_status === "eligible"');
-    expect(giveawaysSource).toContain("eligible.slice(1)");
-    expect(giveawaysSource).toContain("new Date(a.entered_at) - new Date(b.entered_at)");
-    // Banner copy pluralizes.
-    expect(giveawaysSource).toContain('linkedCount === 1 ? " is" : "s are"');
-  });
-});
-
-describe("prediction dashboard requests", () => {
-  it("scopes prediction history and creation to the selected site", () => {
-    expect(giveawaysSource).toContain('dashboardFetch(sitePath("/api/predictions", siteId))');
-    expect(giveawaysSource).toContain('dashboardFetch(sitePath("/api/predictions", siteId), {');
-    expect(giveawaysSource).not.toMatch(/dashboardFetch\(["']\/api\/predictions["']/);
   });
 });

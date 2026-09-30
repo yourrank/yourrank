@@ -2,6 +2,15 @@
 
 Maintained to prevent architecture drift.
 
+## Rewards and Audience implementation ownership
+
+The Audience dynamic section remains booted by `people.js` and mounts one React
+island for Members, Activity, Reviews, and Linked accounts. `credits.js` owns
+the Rewards React island and the existing `siteConnections` OAuth behavior.
+Audience retains its API contracts, member actions and drawers, bulk
+award/export, operation retry identity, site-change guards, query handling,
+review decisions, linked-account actions, and leave teardown. No backend
+handler, route, or response shape changes.
 ## Creator login and registration — 2026-09-28
 
 Owner clarified the initial Home redesign request to mean login and registration

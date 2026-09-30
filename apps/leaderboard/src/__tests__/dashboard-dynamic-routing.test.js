@@ -207,8 +207,8 @@ describe("dynamic section shell integration", () => {
   it("re-routes the reward edit flow through the entry point with force", () => {
     // One call for both modes: the entry point re-routes in place inside the
     // shell and falls back to a document load on standalone pages.
-    const creditsJs = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
-    expect(creditsJs).toMatch(/requestDashboardRoute\("rewards", "rules", \{ query: .*force: true \}\)/);
-    expect(creditsJs).not.toContain("yr-nav");
+    const rewardsPage = readFileSync(new URL("../react/pages/rewards/page.tsx", import.meta.url), "utf8");
+    expect(rewardsPage).toMatch(/requestDashboardRoute\("rewards", "rules", \{ query: .*force: true \}\)/);
+    expect(rewardsPage).not.toContain("yr-nav");
   });
 });

@@ -1,94 +1,120 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  actAndFlush,
+  document,
+  mountSettingsPage,
+  unmountSettingsPage,
+  window,
+} from "./settings-react-utils.js";
 
-const source = readFileSync(new URL("../assets/account.js", import.meta.url), "utf8");
-const teamSource = source.slice(source.indexOf("function renderTeam("), source.indexOf("function wireTeam("));
-
-function setup({ request = async () => ({ ok: false, data: {} }), confirm = async () => false, search = "", activeSiteId = "" } = {}) {
-  const elements = new Map();
-  const buttons = new Map();
-  const $ = (id) => {
-    if (!elements.has(id)) elements.set(id, { hidden: false, textContent: "", innerHTML: "" });
-    return elements.get(id);
-  };
-  const document = {
-    querySelectorAll(selector) {
-      if (!buttons.has(selector)) buttons.set(selector, {
-        getAttribute: () => 'fixture-target',
-        addEventListener(_type, callback) { this.click = callback; },
-      });
-      return [buttons.get(selector)];
-    },
-  };
-  const run = new Function("$", "document", "jsonReq", "showConfirmModal", "state", "location", "esc", "fmtDateTime", "setStatus", "copyToClipboard", "flashButton", `
-    let teamSiteId = "", teamSiteName = "", teamSelectedSiteId = "", teamLoadVersion = 0;
-    const teamInviteLinks = new Map();
-    ${teamSource}
-    return { renderTeam, loadTeam, leave: () => { teamLoadVersion++; } };
-  `);
-  const client = run($, document, request, confirm, { ACTIVE_SITE_ID: activeSiteId }, { search }, String, String, () => {}, async () => {}, () => {});
-  return { ...client, $, button: (selector) => buttons.get(selector) };
-}
-
-const team = (siteId, name, role = 'owner') => ({
-  ok: true, siteId, siteName: name, currentRole: role, canManageTeam: role === 'owner',
-  members: [{ userId: 'fixture-target', email: 'helper@example.test', role: 'moderator' }],
-  invites: [{ id: 'fixture-target', email: 'invite@example.test' }],
-  seats: { plan: 'team', used: 3, limit: 5 },
+const team = (siteId, name, role = "owner") => ({
+  ok: true,
+  siteId,
+  siteName: name,
+  currentRole: role,
+  canManageTeam: role === "owner",
+  members: [{ userId: "fixture-target", email: "helper@example.test", role: "moderator" }],
+  invites: [{ id: "fixture-target", email: "invite@example.test" }],
+  seats: { plan: "team", used: 3, limit: 5 },
 });
 
-describe('Team client scope and recovery', () => {
-  it('shows the authorized site name, pooled seats and Moderator read-only state', () => {
-    const client = setup();
-    client.renderTeam(team('alpha', 'Atlas Community', 'moderator'));
-    expect(client.$('teamSiteSelector').value).toBe('alpha');
-    expect(client.$('teamSeatUsage').textContent).toBe('3 used · 2 available');
-    expect(client.$('teamReadOnlyNotice').hidden).toBe(false);
-    expect(client.$('btnOpenInviteModal').hidden).toBe(true);
-    expect(client.$('teamPendingSection').hidden).toBe(true);
-    expect(client.$('teamMembersList').innerHTML).not.toContain('team-remove-btn');
+async function mountTeam({ request, confirm, url, user = { email: "owner@example.test", boards: [{ id: "alpha", name: "Atlas Community" }, { id: "beta", name: "Rif Community" }] } } = {}) {
+  await mountSettingsPage({
+    user,
+    ...(url ? { url } : {}),
+    deps: {
+      request: request || (async (method, path) => {
+        if (path === "/api/auth/me") return { ok: true, data: { ok: true, user } };
+        return { ok: true, data: team("alpha", "Atlas Community") };
+      }),
+      confirm: confirm || (async () => false),
+    },
+  });
+}
+
+describe("Team client scope and recovery", () => {
+  it("shows the authorized site name, pooled seats and Moderator read-only state", async () => {
+    await mountTeam({ request: async (method, path) => path === "/api/auth/me"
+      ? { ok: true, data: { ok: true, user: { email: "owner@example.test", boards: [{ id: "alpha", name: "Atlas Community" }] } } }
+      : { ok: true, data: team("alpha", "Atlas Community", "moderator") } });
+    expect(document.getElementById("teamSiteSelector").value).toBe("alpha");
+    expect(document.getElementById("teamSeatUsage").textContent).toBe("3 used · 2 available");
+    expect(document.getElementById("teamReadOnlyNotice").hidden).toBe(false);
+    expect(document.getElementById("btnOpenInviteModal").hidden).toBe(true);
+    expect(document.getElementById("teamPendingSection").hidden).toBe(true);
+    expect(document.getElementById("teamMembersList").innerHTML).not.toContain("team-remove-btn");
+    await unmountSettingsPage();
   });
 
-  for (const [selector, endpoint] of [['.team-remove-btn', '/api/site/team/remove'], ['.team-revoke-invite-btn', '/api/site/team/invite/revoke']]) {
+  for (const [selector, endpoint] of [[".team-remove-btn", "/api/site/team/remove"], [".team-revoke-invite-btn", "/api/site/team/invite/revoke"]]) {
     it(`keeps the confirmed site when another team renders during ${endpoint}`, async () => {
       let resolveConfirmation;
+      let teamRequest = 0;
       const calls = [];
-      const client = setup({
+      const user = { email: "owner@example.test", boards: [{ id: "alpha", name: "Atlas Community" }, { id: "beta", name: "Rif Community" }] };
+      await mountTeam({
+        user,
         confirm: async (_title, description) => {
-          expect(description).toContain('Atlas Community');
-          return new Promise(resolve => { resolveConfirmation = resolve; });
+          expect(description).toContain("Atlas Community");
+          return new Promise((resolve) => { resolveConfirmation = resolve; });
         },
-        request: async (...args) => { calls.push(args); return { ok: false, data: {} }; },
+        request: async (method, path, body) => {
+          if (path === "/api/auth/me") return { ok: true, data: { ok: true, user } };
+          if (path.startsWith("/api/site/team?siteId=")) {
+            teamRequest += 1;
+            return { ok: true, data: team(teamRequest === 1 ? "alpha" : "beta", teamRequest === 1 ? "Atlas Community" : "Rif Community") };
+          }
+          calls.push([method, path, body]);
+          return { ok: false, data: {} };
+        },
       });
-      client.renderTeam(team('alpha', 'Atlas Community'));
-      const pending = client.button(selector).click();
-      client.renderTeam(team('beta', 'Rif Community'));
+      document.querySelector(selector).click();
+      await actAndFlush(() => {
+        const select = document.getElementById("teamSiteSelector");
+        select.value = "beta";
+        select.dispatchEvent(new window.Event("change", { bubbles: true }));
+      });
       resolveConfirmation(true);
-      await pending;
-      expect(calls).toHaveLength(1);
-      expect(calls[0][1]).toBe(endpoint);
-      expect(calls[0][2].siteId).toBe('alpha');
+      await actAndFlush();
+      const mutationCalls = calls.filter(([, path]) => path === endpoint);
+      expect(mutationCalls).toHaveLength(1);
+      expect(mutationCalls[0][2].siteId).toBe("alpha");
+      await unmountSettingsPage();
     });
   }
 
-  it('prefers an explicit site URL and clears stale controls after a failed request', async () => {
+  it("prefers an explicit site URL and clears stale controls after a failed request", async () => {
     const calls = [];
-    const client = setup({ search: '?siteId=beta', activeSiteId: 'alpha', request: async (...args) => { calls.push(args); throw new Error('offline'); } });
-    client.renderTeam(team('alpha', 'Atlas Community'));
-    await client.loadTeam();
-    expect(calls[0][1]).toBe('/api/site/team?siteId=beta');
-    expect(client.$('teamSiteSelector').value).toBe('');
-    expect(client.$('btnOpenInviteModal').hidden).toBe(true);
-    expect(client.$('teamSeatUsage').textContent).toBe('Operator seats unavailable');
+    await mountTeam({
+      url: "/dashboard/settings/team?siteId=beta",
+      request: async (method, path) => {
+        if (path === "/api/auth/me") return { ok: true, data: { ok: true, user: { email: "owner@example.test", boards: [{ id: "alpha", name: "Atlas Community" }, { id: "beta", name: "Rif Community" }] } } };
+        calls.push([method, path]);
+        throw new Error("offline");
+      },
+    });
+    expect(calls[0][1]).toBe("/api/site/team?siteId=beta");
+    expect(document.getElementById("teamSiteSelector").value).toBe("");
+    expect(document.getElementById("btnOpenInviteModal").hidden).toBe(true);
+    expect(document.getElementById("teamSeatUsage").textContent).toBe("Operator seats unavailable");
+    expect(document.getElementById("teamSeatContext").textContent).toBe("Reload to try again.");
+    expect(document.getElementById("teamMembersList").textContent).toContain("Could not load this site's team. Reload to try again.");
+    expect(document.getElementById("teamInvitesList").textContent).toBe("Unavailable");
+    await unmountSettingsPage();
   });
 
-  it('does not render a response that arrives after leaving the settings page', async () => {
+  it("does not render a response that arrives after leaving the settings page", async () => {
     let resolveRequest;
-    const client = setup({ request: () => new Promise(resolve => { resolveRequest = resolve; }) });
-    const pending = client.loadTeam();
-    client.leave();
-    resolveRequest({ ok: true, data: team('alpha', 'Atlas Community') });
-    await pending;
-    expect(client.$('teamSiteSelector').value).toBeUndefined();
+    const user = { email: "owner@example.test", boards: [{ id: "alpha", name: "Atlas Community" }] };
+    await mountTeam({
+      request: (method, path) => {
+        if (path === "/api/auth/me") return Promise.resolve({ ok: true, data: { ok: true, user } });
+        return new Promise((resolve) => { resolveRequest = resolve; });
+      },
+    });
+    await unmountSettingsPage();
+    resolveRequest({ ok: true, data: team("alpha", "Atlas Community") });
+    await actAndFlush();
+    expect(document.getElementById("teamSiteSelector")).toBeNull();
   });
 });

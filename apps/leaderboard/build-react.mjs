@@ -17,6 +17,15 @@ const entries = fs.readdirSync(pagesDir, { withFileTypes: true })
     path: path.join(pagesDir, item.name, "entry.tsx"),
   }))
   .filter((item) => fs.existsSync(item.path));
+const dashboardRuntime = {
+  name: "dashboard-runtime",
+  setup(build) {
+    build.onResolve({ filter: /^\.\.\/\.\.\/\.\.\/assets\/dashboard\/[^/]+\.js$/ }, ({ path: importPath }) => ({
+      path: `../dashboard/${path.basename(importPath)}`,
+      external: true,
+    }));
+  },
+};
 
 fs.rmSync(outdir, { recursive: true, force: true });
 fs.mkdirSync(outdir, { recursive: true });
@@ -37,6 +46,7 @@ try {
     entryNames: "[name]",
     chunkNames: "[name]-[hash]",
     define: { "process.env.NODE_ENV": '"production"' },
+    plugins: [dashboardRuntime],
     metafile: true,
   });
   outputSizes = Object.entries(result.metafile.outputs)
@@ -62,6 +72,7 @@ try {
       minify: true,
       naming: { entry: "[name].[ext]", chunk: "[name]-[hash].[ext]" },
       define: { "process.env.NODE_ENV": '"production"' },
+      plugins: [dashboardRuntime],
     });
     if (!result.success) {
       for (const log of result.logs) console.error(log);

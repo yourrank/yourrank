@@ -9,7 +9,7 @@ import { DASHBOARD_ROUTES, DASHBOARD_ROUTE_ALIASES, resolveAliasRedirect, resolv
 import { NAV_OWNER_MAP, navOwner, dashboardNavItems } from "@yourrank/shared/dashboard-nav";
 import { dashboardChromeStateForLocation } from "@yourrank/shared/dashboard-chrome-state";
 import { DYNAMIC_SECTIONS, parseDynamicPath } from "../assets/dashboard/routes.js";
-import { renderGiveawaysContentHtml, GIVEAWAY_TABS } from "../pages/giveaway-pages.js";
+import { renderGiveawaysContentHtml, GIVEAWAY_TABS, ENGAGE_FEATURES } from "../pages/giveaway-pages.js";
 import { ROUTES } from "../routes.js";
 import worker, { resolveFragment } from "../index.js";
 
@@ -65,25 +65,20 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
       expect(html, tab).not.toContain('id="btn-create-drop"');
       expect(html, tab).not.toContain(LEGACY_DROPS);
     }
-    // An unknown/removed tab falls back to the primary Chat giveaways pane.
-    expect(renderGiveawaysContentHtml("drops")).toContain('id="pane-chat"');
+    // An unknown/removed tab falls back to the primary Chat giveaways island.
+    expect(renderGiveawaysContentHtml("drops")).toContain('data-tab="chat"');
 
-    const controller = read("../assets/giveaways.js");
-    expect(controller).not.toContain("/api/events/drops");
-    expect(controller).not.toContain("loadCodeDrops");
-    expect(controller).not.toContain("handleCreateDropSubmit");
-    expect(controller).not.toContain("cd-drawer");
-
-    const css = read("../assets/giveaways.css");
-    expect(css).not.toContain(".gw-drops-container");
-    expect(css).not.toContain("#pane-drops");
-    expect(css).not.toContain(".gw-code-input");
+    const page = read("../react/pages/giveaways/page.tsx");
+    expect(page).not.toContain("/api/events/drops");
+    expect(page).not.toContain("loadCodeDrops");
+    expect(page).not.toContain("handleCreateDropSubmit");
+    expect(page).not.toContain("cd-drawer");
   });
 
   it("keeps Activities as the owner of Code Drop creation and lifecycle", () => {
-    const activities = read("../assets/activities.js");
-    expect(activities).toContain('sitePath("/api/events/drops", activeSiteId)');
-    expect(activities).toContain('sitePath("/api/activities/close", activeSiteId)');
+    const activities = read("../react/pages/activities/page.tsx");
+    expect(activities).toContain('"/api/events/drops"');
+    expect(activities).toContain('"/api/activities/close"');
 
     const registered = (path, method) => ROUTES.some((r) => r.path === path && r.method === method);
     expect(registered("/api/activities", "GET")).toBe(true);
@@ -102,7 +97,7 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
       "../assets/dashboard/shell.js",
       "../assets/dashboard.js",
       "../pages/dashboard-shell.jsx",
-      "../assets/activity-pages.js",
+      "../react/pages/activities/page.tsx",
     ]) {
       expect(read(rel), rel).not.toContain(LEGACY_DROPS);
       expect(read(rel), rel).not.toContain('"giveaways", "drops"');
@@ -113,17 +108,15 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
 
   it("keeps the Giveaways panes reachable through the Engage hub rows", () => {
     const html = renderGiveawaysContentHtml("chat");
-    expect(html).toContain('id="pane-chat"');
+    expect(html).toContain('data-tab="chat"');
     expect(html).not.toContain("gw-tab-btn");
     expect(html).not.toContain("data-tabs-more");
     const hub = renderGiveawaysContentHtml("hub");
-    for (const [feature, href] of [
+    expect(hub).toContain('data-tab="hub"');
+    expect(ENGAGE_FEATURES.map(({ feature, href }) => [feature, href])).toEqual([
       ["activities", "/dashboard/activities"],
       ["giveaways", "/dashboard/giveaways/chat"],
       ["tournaments", "/dashboard/giveaways/tournaments"],
-    ]) {
-      expect(hub).toContain(`data-feature="${feature}"`);
-      expect(hub).toContain(`href="${href}"`);
-    }
+    ]);
   });
 });

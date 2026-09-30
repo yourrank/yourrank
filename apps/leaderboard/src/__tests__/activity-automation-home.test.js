@@ -53,8 +53,9 @@ describe("Wave K Home operational ownership", () => {
     expect(projections).not.toMatch(/prediction|raffle|wager|payout|settlement/i);
     const dashboardCss = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
     expect(dashboardCss).toContain(".ov-attention-row .btn,");
-    const activitiesCss = readFileSync(new URL("../assets/activities.css", import.meta.url), "utf8");
-    expect(activitiesCss).toContain(".act-item.is-attention { background: var(--ws-warning-soft); }");
-    expect(activitiesCss).toContain(".act-item__copy strong { overflow-wrap: anywhere;");
+    const activitiesClient = readFileSync(new URL("../react/pages/activities/page.tsx", import.meta.url), "utf8");
+    expect(activitiesClient).toContain('attention && "is-attention bg-amber-50/60 dark:bg-amber-950/20"');
+    expect(activitiesClient).toContain('<strong className="wrap-anywhere text-sm">{template.name}</strong>');
+    expect(activitiesClient).toContain('<strong className="wrap-anywhere text-sm">{schedule.templateName}</strong>');
   });
 });
