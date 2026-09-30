@@ -10,6 +10,10 @@ import { renderSite } from "@yourrank/shared/site-render";
 import { hasCreatorContactMethod } from "@yourrank/shared/creator-contact";
 import { viewerDashboardPage } from "../pages/viewer-dashboard.js";
 import { helpSupportPage } from "../pages/help.js";
+import {
+  installViewerAccountDomGlobals,
+  restoreViewerAccountDomGlobals,
+} from "./viewer-account-react-utils.js";
 
 const assets = join(import.meta.dir, "../assets");
 const sources = Object.fromEntries(["viewer-app.js", "site-shell.js", "viewer-dashboard.js", "viewer-support.js"].map((name) => [name, readFileSync(join(assets, name), "utf8")]));
@@ -50,6 +54,7 @@ function communityHtml(contact) {
 async function openBrowser({ page = "account", community = null, siteContact = undefined, publicSite = "ok", contact = () => ({ status: 200, body: { ok: true, receiptId: "r-1" } }) } = {}) {
   const url = page === "account" ? `${ORIGIN}/me${community ? `?community=${community.slug}` : ""}` : `${ORIGIN}/creator`;
   const window = new Window({ url, settings: { disableJavaScriptEvaluation: true, disableCSSFileLoading: true, disableErrorCapturing: true, handleDisabledFileLoadingAsSuccess: true } });
+  installViewerAccountDomGlobals(window);
   const { document } = window;
   document.documentElement.innerHTML = page === "account" ? await accountHtml(community) : await communityHtml(siteContact);
   const calls = [];
@@ -72,6 +77,8 @@ async function openBrowser({ page = "account", community = null, siteContact = u
     if (requested.pathname.startsWith("/assets/")) return new window.Response("", { status: 200, headers: { "content-type": "text/javascript" } });
     return json(404, {});
   };
+  globalThis.fetch = window.fetch;
+  window.__yrViewerAccountBundleLoader = () => import("../react/pages/viewer-account/entry.tsx");
   const globals = ["window", "document", "location", "history", "fetch", "DOMParser", "Event", "URL", "AbortController", "navigator", "crypto"];
   const run = (source) => new Function(...globals, source)(window, document, window.location, window.history, window.fetch, window.DOMParser, window.Event, window.URL, window.AbortController, window.navigator, globalThis.crypto);
   const originalAppend = document.body.appendChild.bind(document.body);
@@ -91,6 +98,13 @@ async function openBrowser({ page = "account", community = null, siteContact = u
 async function settle(window) {
   for (let i = 0; i < 12; i++) await new Promise((resolve) => setTimeout(resolve, 0));
   await window.happyDOM.waitUntilComplete();
+}
+
+async function closeBrowser(browser) {
+  if (!browser) return;
+  browser.document.dispatchEvent(new browser.window.Event("yr:viewer-unmount"));
+  await settle(browser.window);
+  await browser.window.happyDOM.close();
 }
 
 function click(window, element) {
@@ -129,7 +143,11 @@ const DATA_LINK = "#vd-data a.btn--danger";
 
 describe("viewer support modal", () => {
   let browser;
-  afterEach(async () => { await browser?.window.happyDOM.close(); browser = null; });
+  afterEach(async () => {
+    await closeBrowser(browser);
+    browser = null;
+    restoreViewerAccountDomGlobals();
+  });
 
   it("opens from Help & contact without leaving the account page", async () => {
     browser = await openBrowser();
@@ -210,7 +228,7 @@ describe("viewer support modal", () => {
     expect(dialog.querySelector("a[data-support-creator]").getAttribute("href")).toBe("/creator/contact");
     expect(browser.lookups).toHaveLength(0);
 
-    await browser.window.happyDOM.close();
+    await closeBrowser(browser);
     browser = await openBrowser({ page: "community" });
     expect(browser.document.body.dataset.creatorContact).toBe("false");
     const empty = await openFrom(browser, HELP_LINK);

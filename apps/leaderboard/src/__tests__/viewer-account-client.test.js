@@ -1,107 +1,9 @@
 // The global /me page owns the Viewer Account and the membership list only.
 // Creator-branded My Community pages own per-membership Rewards, credits and
 // Claims, so this client must not grow a second site detail or redemption flow.
-import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { afterEach, describe, expect, it } from "bun:test";
 import { viewerDashboardPage } from "../pages/viewer-dashboard.js";
-
-const clientSource = readFileSync(new URL("../assets/viewer-dashboard.js", import.meta.url), "utf8");
-
-function makeElement(document, id = "") {
-  const listeners = {};
-  return {
-    id,
-    hidden: false,
-    disabled: false,
-    textContent: "",
-    innerHTML: "",
-    className: "",
-    src: "",
-    alt: "",
-    dataset: {},
-    attributes: {},
-    get href() { return this.attributes.href; },
-    classList: { add() {}, remove() {} },
-    setAttribute(name, value) { this.attributes[name] = value; },
-    removeAttribute(name) { delete this.attributes[name]; },
-    addEventListener(type, listener) { (listeners[type] ||= []).push(listener); },
-    append(...parts) {
-      for (const part of parts) this.textContent += typeof part === "string" ? part : part.textContent;
-    },
-    async click() { await Promise.all((listeners.click || []).map((listener) => listener())); },
-    async submit() { await Promise.all((listeners.submit || []).map((listener) => listener({ preventDefault() {} }))); },
-    focus() { document.activeElement = this; },
-  };
-}
-
-function makeEnvironment({ response, url = "https://yourrank.site/me", auth = "unauthenticated" }) {
-  const elements = new Map();
-  const navigation = [];
-  const bodyClasses = new Set(["viewer-shell", "viewer-account-page", `viewer-auth-${auth}`]);
-  const document = {
-    body: {
-      classList: {
-        contains: (name) => bodyClasses.has(name),
-        add: (...names) => names.forEach((name) => bodyClasses.add(name)),
-        remove: (...names) => names.forEach((name) => bodyClasses.delete(name)),
-      },
-    },
-    activeElement: null,
-    cookie: "__csrf=token",
-    createElement: () => makeElement(document),
-    querySelectorAll(selector) {
-      if (selector === ".viewer-destinations a") return navigation;
-      throw new Error(`Unhandled selector: ${selector}`);
-    },
-    getElementById(id) {
-      if (!elements.has(id)) elements.set(id, makeElement(document, id));
-      return elements.get(id);
-    },
-  };
-  for (const [id, hash] of [
-    ["viewer-account-link", "vd-profile"],
-    ["connections-link", "vd-connections"],
-    ["notifications-link", "vd-notifications"],
-    ["security-link", "vd-security"],
-    ["data-link", "vd-data"],
-  ]) {
-    const link = document.getElementById(id);
-    link.setAttribute("href", `/me#${hash}`);
-    navigation.push(link);
-  }
-  const calls = [];
-  const fetch = async (path, opts = {}) => {
-    calls.push({ path, method: opts.method || "GET" });
-    const result = await (typeof response === "function" ? response(path, opts) : response);
-    return {
-      ok: (result.status || 200) < 400,
-      status: result.status || 200,
-      json: async () => result.body || {},
-    };
-  };
-  const location = new URL(url);
-  const listeners = {};
-  const window = {
-    addEventListener(type, listener) { (listeners[type] ||= []).push(listener); },
-    location,
-    history: { replaceState(_state, _title, next) { location.href = new URL(next, location.href).href; } },
-  };
-  const run = new Function("window", "document", "fetch", "location", clientSource);
-  run(window, document, fetch, location);
-  return {
-    $: (id) => document.getElementById(id),
-    activeElement: () => document.activeElement,
-    authState: () => ["authenticated", "unauthenticated", "unresolved"].find((state) => bodyClasses.has(`viewer-auth-${state}`)),
-    calls,
-    location,
-    navigation,
-    navigateHash(hash) {
-      location.hash = hash;
-      for (const listener of listeners.hashchange || []) listener();
-    },
-    ready: () => window.__yrViewerReady,
-  };
-}
+import { makeViewerAccountEnvironment } from "./viewer-account-react-utils.js";
 
 const ACCOUNT = {
   viewer: {
@@ -121,9 +23,30 @@ const ACCOUNT = {
   }],
 };
 
+const signedInDocument = {
+  state: "authenticated",
+  viewer: {
+    id: "v1",
+    kick_username: "member",
+    avatar_url: null,
+    created_at: "2026-01-02T00:00:00.000Z",
+  },
+};
+
+const environments = [];
+afterEach(async () => {
+  for (const environment of environments.splice(0).reverse()) await environment.close();
+});
+
+async function makeEnvironment(options) {
+  const environment = await makeViewerAccountEnvironment(options);
+  environments.push(environment);
+  return environment;
+}
+
 describe("global Viewer Account client", () => {
   it("renders one account and links each membership to its creator-branded owner", async () => {
-    const env = makeEnvironment({ response: { body: ACCOUNT } });
+    const env = await makeEnvironment({ response: { body: ACCOUNT } });
     await env.ready();
 
     expect(env.$("vd-login-card").hidden).toBe(true);
@@ -137,44 +60,56 @@ describe("global Viewer Account client", () => {
     expect(env.$("vd-communities").innerHTML).toContain("1 Claim needs creator action");
     expect(env.$("vd-communities").innerHTML).toContain('href="/alpha"');
     expect(env.$("vd-communities").innerHTML).not.toContain("Member since");
-    expect(env.calls).toEqual([{ path: "/api/viewer/me", method: "GET" }]);
+    expect(env.calls.map(({ path, method }) => ({ path, method }))).toEqual([
+      { path: "/api/viewer/me", method: "GET" },
+    ]);
   });
 
   it("shows the truthful empty membership state", async () => {
-    const env = makeEnvironment({ response: { body: { ...ACCOUNT, communities: [] } } });
+    const env = await makeEnvironment({ response: { body: { ...ACCOUNT, communities: [] } } });
     await env.ready();
     expect(env.$("vd-communities-empty").hidden).toBe(false);
     expect(env.$("vd-communities").innerHTML).toBe("");
   });
 
   it("keeps the initial until an avatar loads and restores it after an image failure", async () => {
-    const env = makeEnvironment({ response: { body: { ...ACCOUNT, viewer: { ...ACCOUNT.viewer, avatarUrl: "https://example.invalid/avatar.png" } } } });
+    const env = await makeEnvironment({
+      response: {
+        body: {
+          ...ACCOUNT,
+          viewer: { ...ACCOUNT.viewer, avatarUrl: "https://example.invalid/avatar.png" },
+        },
+      },
+    });
     await env.ready();
     expect(env.$("vd-avatar").hidden).toBe(true);
     expect(env.$("vd-avatar-fallback").hidden).toBe(false);
-    env.$("vd-avatar").onload();
+    await env.fire(env.$("vd-avatar"), "load");
     expect(env.$("vd-avatar").hidden).toBe(false);
     expect(env.$("vd-avatar-fallback").hidden).toBe(true);
-    env.$("vd-avatar").onerror();
+    const topAvatar = env.$("viewer-top-mark").querySelector("img");
+    expect(topAvatar?.getAttribute("src")).toBe("https://example.invalid/avatar.png");
+    await env.navigateHash("vd-data");
+    expect(env.$("viewer-top-mark").querySelector("img")?.getAttribute("src"))
+      .toBe("https://example.invalid/avatar.png");
+    await env.navigateHash("vd-profile");
+    await env.fire(env.$("vd-avatar"), "error");
     expect(env.$("vd-avatar").hidden).toBe(true);
     expect(env.$("vd-avatar-fallback").hidden).toBe(false);
   });
 
   it("never shows sign-in UI while the session is still unresolved", async () => {
     let resolve;
-    const env = makeEnvironment({
-      auth: "authenticated",
+    const env = await makeEnvironment({
+      auth: signedInDocument,
       url: "https://yourrank.site/me#vd-data",
       response: () => new Promise((done) => { resolve = done; }),
     });
-    // Pre-resolution: the document is still exactly what the Worker rendered.
-    env.$("vd-login-card").hidden = true;
-    await Promise.resolve();
     expect(env.$("vd-login-card").hidden).toBe(true);
     expect(env.$("vd-loading").hidden).toBe(false);
     expect(env.$("vd-title").textContent).not.toContain("Sign in");
     expect(env.$("viewer-top-name").textContent).not.toBe("Sign in");
-    env.navigateHash("vd-security");
+    await env.navigateHash("vd-security");
     expect(env.$("vd-title").textContent).not.toContain("Sign in");
     expect(env.activeElement()).not.toBe(env.$("vd-login-card"));
     expect(env.$("vd-login-card").hidden).toBe(true);
@@ -189,8 +124,10 @@ describe("global Viewer Account client", () => {
   });
 
   it("reports a load failure on the account, not inside a hidden sign-in card, when the document is signed in", async () => {
-    const env = makeEnvironment({ auth: "authenticated", response: { status: 500, body: { error: "boom" } } });
-    env.$("vd-login-card").hidden = true;
+    const env = await makeEnvironment({
+      auth: signedInDocument,
+      response: { status: 500, body: { error: "boom" } },
+    });
     await env.ready();
     expect(env.authState()).toBe("authenticated");
     expect(env.$("vd-login-card").hidden).toBe(true);
@@ -199,8 +136,10 @@ describe("global Viewer Account client", () => {
   });
 
   it("only resolves to sign-in once the session is definitively absent", async () => {
-    const env = makeEnvironment({ auth: "unresolved", response: { status: 401, body: { error: "unauthorized" } } });
-    env.$("vd-login-card").hidden = true;
+    const env = await makeEnvironment({
+      auth: { state: "unresolved", viewer: null },
+      response: { status: 401, body: { error: "unauthorized" } },
+    });
     await env.ready();
     expect(env.authState()).toBe("unauthenticated");
     expect(env.$("vd-login-card").hidden).toBe(false);
@@ -209,7 +148,7 @@ describe("global Viewer Account client", () => {
   });
 
   it("shows sign-in when the Viewer Account session is absent", async () => {
-    const env = makeEnvironment({ response: { status: 401, body: { error: "unauthorized" } } });
+    const env = await makeEnvironment({ response: { status: 401, body: { error: "unauthorized" } } });
     await env.ready();
     expect(env.$("vd-login-card").hidden).toBe(false);
     expect(env.$("viewer-account-link").hidden).toBe(true);
@@ -218,35 +157,40 @@ describe("global Viewer Account client", () => {
   });
 
   it("gates account settings for a guest instead of focusing a hidden section", async () => {
-    const env = makeEnvironment({ response: { status: 401, body: { error: "unauthorized" } }, url: "https://yourrank.site/me?community=alpha#vd-data" });
-    env.$("vd-login-kick").setAttribute("href", "/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha");
-    env.$("vd-login-discord").setAttribute("href", "/api/viewer/auth/discord?returnTo=%2Fme%3Fcommunity%3Dalpha");
-    await env.ready();
+    const env = await makeEnvironment({
+      community: { slug: "alpha", name: "Alpha", href: "/alpha" },
+      response: { status: 401, body: { error: "unauthorized" } },
+      url: "https://yourrank.site/me?community=alpha#vd-data",
+    });
     const sections = ["vd-profile", "vd-connections", "vd-notifications", "vd-security", "vd-data"];
-    expect(sections.every(id => env.$(id).hidden)).toBe(true);
+    await env.ready();
+    expect(sections.every((id) => env.$(id).hidden)).toBe(true);
     expect(env.$("vd-login-card").hidden).toBe(false);
     expect(env.activeElement()).toBe(env.$("vd-login-card"));
     expect(env.$("vd-title").textContent).toBe("Sign in to open Data & Account");
     expect(env.$("vd-subtitle").textContent).toContain("come straight back to it");
-    expect(env.$("vd-login-kick").href).toBe("/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha%23vd-data");
-    expect(env.$("vd-login-discord").href).toBe("/api/viewer/auth/discord?returnTo=%2Fme%3Fcommunity%3Dalpha%23vd-data");
-    expect(env.navigation.filter(link => link.attributes["aria-current"] === "page").map(link => link.href)).toEqual(["/me#vd-data"]);
+    expect(env.$("vd-login-kick").getAttribute("href")).toBe("/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha%23vd-data");
+    expect(env.$("vd-login-discord").getAttribute("href")).toBe("/api/viewer/auth/discord?returnTo=%2Fme%3Fcommunity%3Dalpha%23vd-data");
+    expect(env.navigation.filter((link) => link.getAttribute("aria-current") === "page").map((link) => link.getAttribute("href"))).toEqual(["/me?community=alpha#vd-data"]);
 
-    env.navigateHash("vd-security");
-    expect(sections.every(id => env.$(id).hidden)).toBe(true);
+    await env.navigateHash("vd-security");
+    expect(sections.every((id) => env.$(id).hidden)).toBe(true);
     expect(env.$("vd-title").textContent).toBe("Sign in to open Privacy & Security");
-    expect(env.$("vd-login-kick").href).toBe("/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha%23vd-security");
+    expect(env.$("vd-login-kick").getAttribute("href")).toBe("/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha%23vd-security");
     expect(env.activeElement()).toBe(env.$("vd-login-card"));
 
-    env.navigateHash("");
+    await env.navigateHash("");
     expect(env.$("vd-title").textContent).toBe("Your Viewer Account");
     expect(env.$("vd-subtitle").textContent).toBe("Sign in to access your communities, rewards and balances.");
-    expect(env.$("vd-login-kick").href).toBe("/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha");
-    expect(env.navigation.every(link => !link.attributes["aria-current"])).toBe(true);
+    expect(env.$("vd-login-kick").getAttribute("href")).toBe("/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha");
+    expect(env.navigation.every((link) => !link.hasAttribute("aria-current"))).toBe(true);
   });
 
   it("opens the requested section once the provider returns a signed-in member", async () => {
-    const env = makeEnvironment({ response: { body: ACCOUNT }, url: "https://yourrank.site/me#vd-connections" });
+    const env = await makeEnvironment({
+      response: { body: ACCOUNT },
+      url: "https://yourrank.site/me#vd-connections",
+    });
     await env.ready();
     expect(env.$("vd-connections").hidden).toBe(false);
     expect(env.$("vd-login-card").hidden).toBe(true);
@@ -255,17 +199,16 @@ describe("global Viewer Account client", () => {
   });
 
   it("clears the previous account's memberships before another login", async () => {
-    const env = makeEnvironment({
-      response: (path, opts) => opts.method === "POST"
+    const env = await makeEnvironment({
+      response: (_path, options) => options.method === "POST"
         ? { body: { ok: true } }
         : { body: ACCOUNT },
     });
     await env.ready();
     expect(env.$("vd-communities").innerHTML).toContain("Alpha Community");
 
-    await env.$("vd-logout").click();
+    await env.click(env.$("vd-logout"));
     expect(env.$("viewer-account-link").hidden).toBe(true);
-
     expect(env.activeElement()).toBe(env.$("vd-login-card"));
     expect(env.$("vd-profile").hidden).toBe(true);
     expect(env.$("vd-communities-card").hidden).toBe(true);
@@ -275,7 +218,7 @@ describe("global Viewer Account client", () => {
 
   it("keeps an account failure visible and retryable", async () => {
     let failed = true;
-    const env = makeEnvironment({
+    const env = await makeEnvironment({
       response: () => failed
         ? { status: 500, body: { error: "boom" } }
         : { body: ACCOUNT },
@@ -283,29 +226,31 @@ describe("global Viewer Account client", () => {
     await env.ready();
     expect(env.$("vd-login-status").textContent).toContain("We couldn't load your Viewer Account.");
     failed = false;
-    // The DOM double keeps appended controls in text; the source assertion
-    // below proves the retry invokes the same canonical account request.
-    expect(clientSource).toContain('retry();');
-    expect(clientSource).toContain('api("GET", "/api/viewer/me")');
+    await env.click(env.$("vd-login-status").querySelector(".vd-retry"));
+    expect(env.calls.filter((call) => call.path === "/api/viewer/me")).toHaveLength(2);
+    expect(env.$("vd-login-status").textContent).toBe("");
+    expect(env.$("vd-communities").textContent).toContain("Alpha Community");
   });
 
   it("selects each account section without showing another section or community balance", async () => {
-    const env = makeEnvironment({ response: { body: ACCOUNT } });
+    const env = await makeEnvironment({ response: { body: ACCOUNT } });
     await env.ready();
     const sections = ["vd-profile", "vd-connections", "vd-notifications", "vd-security", "vd-data"];
     for (const section of sections) {
-      env.navigateHash(section);
-      expect(sections.filter(id => !env.$(id).hidden)).toEqual([section]);
+      await env.navigateHash(section);
+      expect(sections.filter((id) => !env.$(id).hidden)).toEqual([section]);
       expect(env.$("vd-communities-card").hidden).toBe(true);
-      const active = env.navigation.filter(link => link.attributes["aria-current"] === "page");
-      expect(active.map(link => link.href)).toEqual([`/me#${section}`]);
+      const active = env.navigation.filter((link) => link.getAttribute("aria-current") === "page");
+      const destination = env.navigation.find((link) => new URL(link.href).hash === `#${section}`);
+      expect(active.map((link) => link.getAttribute("href")))
+        .toEqual(destination ? [destination.getAttribute("href")] : []);
       expect(env.activeElement()).toBe(env.$("vd-title"));
     }
-    env.navigateHash("");
-    expect(sections.every(id => env.$(id).hidden)).toBe(true);
+    await env.navigateHash("");
+    expect(sections.every((id) => env.$(id).hidden)).toBe(true);
     expect(env.$("vd-communities-card").hidden).toBe(false);
-    expect(env.navigation.every(link => !link.attributes["aria-current"])).toBe(true);
-    expect(env.$("viewer-communities-link").attributes["aria-current"]).toBe("page");
+    expect(env.navigation.every((link) => !link.hasAttribute("aria-current"))).toBe(true);
+    expect(env.$("viewer-communities-link").getAttribute("aria-current")).toBe("page");
   });
 });
 
@@ -378,11 +323,13 @@ describe("global Viewer Account ownership", () => {
     expect(page).not.toContain(">My credits<");
   });
 
-  it("does not duplicate a creator's membership product", () => {
-    expect(clientSource).not.toContain("/api/viewer/site");
-    expect(clientSource).not.toContain("/api/viewer/redeem");
-    expect(clientSource).not.toContain("/api/events/drops/claim");
-    expect(clientSource).not.toContain("window.YRDialog");
+  it("does not duplicate a creator's membership product", async () => {
+    const env = await makeEnvironment({ response: { body: ACCOUNT } });
+    await env.ready();
+    expect(env.calls.map((call) => call.path)).toEqual(["/api/viewer/me"]);
+    for (const id of ["vd-site-card", "vd-shop-list", "vd-redemptions-list", "vd-drop-claim"]) {
+      expect(env.document.getElementById(id)).toBeNull();
+    }
     expect(page).not.toContain("vd-site-card");
     expect(page).not.toContain("vd-shop-list");
     expect(page).not.toContain("vd-redemptions-list");
@@ -415,61 +362,75 @@ describe("global Viewer Account ownership", () => {
 
 describe("viewer login recovery", () => {
   it("opens a named or pasted YourRank community from the directory without creating a membership", async () => {
-    const env = makeEnvironment({ response: { body: { ...ACCOUNT, communities: [] } } });
+    const env = await makeEnvironment({ response: { body: { ...ACCOUNT, communities: [] } } });
     await env.ready();
     expect(env.$("vd-communities-empty").hidden).toBe(false);
-    env.$("vd-community-name").value = " Atlas-Community ";
-    await env.$("vd-open-community").submit();
-    expect(env.location.pathname).toBe("/atlas-community");
+    await env.input(env.$("vd-community-name"), " Atlas-Community ");
+    await env.submit(env.$("vd-open-community"));
+    expect(env.window.location.pathname).toBe("/atlas-community");
     // Existing slugify truncates after trimming, so a stored slug can end in '-'.
     const truncatedSlug = "a".repeat(39) + "-";
-    env.$("vd-community-name").value = truncatedSlug;
-    await env.$("vd-open-community").submit();
-    expect(env.location.pathname).toBe(`/${truncatedSlug}`);
-    env.$("vd-community-name").value = "https://yourrank.site/atlas-community/shop";
-    await env.$("vd-open-community").submit();
-    expect(env.location.pathname).toBe("/atlas-community");
-    expect(env.calls.every(call => call.method === "GET")).toBe(true);
+    await env.input(env.$("vd-community-name"), truncatedSlug);
+    await env.submit(env.$("vd-open-community"));
+    expect(env.window.location.pathname).toBe(`/${truncatedSlug}`);
+    await env.input(env.$("vd-community-name"), "https://yourrank.site/atlas-community/shop");
+    await env.submit(env.$("vd-open-community"));
+    expect(env.window.location.pathname).toBe("/atlas-community");
+    expect(env.calls.every((call) => call.method === "GET")).toBe(true);
   });
 
   it("rejects a URL or path entered as a community name", async () => {
-    const env = makeEnvironment({ response: { body: { ...ACCOUNT, communities: [] } } });
+    const env = await makeEnvironment({ response: { body: { ...ACCOUNT, communities: [] } } });
     await env.ready();
     for (const invalid of ["https://other.example", "../dashboard", "alpha/me", ""]) {
-      env.$("vd-community-name").value = invalid;
-      await env.$("vd-open-community").submit();
-      expect(env.location.pathname).toBe("/me");
-      expect(env.$("vd-community-name").attributes["aria-invalid"]).toBe("true");
+      await env.input(env.$("vd-community-name"), invalid);
+      await env.submit(env.$("vd-open-community"));
+      expect(env.window.location.pathname).toBe("/me");
+      expect(env.$("vd-community-name").getAttribute("aria-invalid")).toBe("true");
       expect(env.activeElement()).toBe(env.$("vd-community-name"));
     }
   });
 
   it("keeps a signed-out account deep link on a visible sign-in panel", async () => {
-    const env = makeEnvironment({ url: "https://yourrank.site/me#vd-profile", response: { status: 401, body: { error: "unauthorized" } } });
+    const env = await makeEnvironment({
+      response: { status: 401, body: { error: "unauthorized" } },
+      url: "https://yourrank.site/me#vd-profile",
+    });
     await env.ready();
     expect(env.$("vd-login-card").hidden).toBe(false);
-    expect(env.$("viewer-account-link").attributes.href).toBe("/me#vd-login-card");
+    expect(env.$("viewer-account-link").getAttribute("href")).toBe("/me#vd-login-card");
     expect(env.activeElement()).toBe(env.$("vd-login-card"));
   });
 
   it("keeps signed-in account navigation inside the viewer experience", async () => {
-    const env = makeEnvironment({ url: "https://yourrank.site/me#vd-profile", response: { body: ACCOUNT } });
+    const env = await makeEnvironment({
+      response: { body: ACCOUNT },
+      url: "https://yourrank.site/me#vd-profile",
+    });
     await env.ready();
     expect(env.$("vd-profile").hidden).toBe(false);
-    expect(env.$("viewer-account-link").attributes.href).toBe("/me#vd-profile");
+    expect(env.$("viewer-account-link").getAttribute("href")).toBe("/me#vd-profile");
     expect(env.activeElement()).toBe(env.$("vd-profile"));
   });
 
   it("keeps a provider cancellation visible after the account request finishes", async () => {
-    const env = makeEnvironment({ url: "https://yourrank.site/me?error=access_denied", response: { status: 401, body: { error: "unauthorized" } } });
+    const env = await makeEnvironment({
+      response: { status: 401, body: { error: "unauthorized" } },
+      url: "https://yourrank.site/me?error=access_denied",
+    });
     await env.ready();
     expect(env.$("vd-login-status").textContent).toBe("Sign-in was cancelled.");
   });
 
   it("does not claim a login switch succeeded when sign-out fails", async () => {
-    const env = makeEnvironment({ url: "https://yourrank.site/me#vd-profile", response: (_path, opts) => opts.method === "POST" ? { status: 500, body: { error: "failed" } } : { body: ACCOUNT } });
+    const env = await makeEnvironment({
+      response: (_path, options) => options.method === "POST"
+        ? { status: 500, body: { error: "failed" } }
+        : { body: ACCOUNT },
+      url: "https://yourrank.site/me#vd-profile",
+    });
     await env.ready();
-    await env.$("vd-switch").click();
+    await env.click(env.$("vd-switch"));
     expect(env.$("vd-profile").hidden).toBe(false);
     expect(env.$("vd-account-status").textContent).toContain("We couldn't switch your login.");
     expect(env.$("vd-switch").disabled).toBe(false);
