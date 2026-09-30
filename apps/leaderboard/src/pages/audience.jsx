@@ -3,16 +3,9 @@
 
 import { raw } from "hono/html";
 import { subnavHtml } from "@yourrank/shared/dashboard-ui";
-import { membersPage, memberActivityPage } from "./audience-credits-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
 
-// Audience is the creator-facing audience area. Members (who earn and spend
-// credits) are managed here; site visitors (anonymous traffic) already have
-// their canonical view under Insights, so the page links there as an action
-// instead of duplicating the view or adding a tab that teleports to another
-// product area.
-const VISITOR_ANALYTICS_CARD = `<aside class="cr-audience-note"><div><h2>Looking for visitor trends?</h2><p>Anonymous visits and traffic sources live in Insights.</p></div><a class="btn btn--sm" href="/dashboard/analytics">Open Insights</a></aside>`;
 export const PEOPLE_TABS = [
   { key: "viewers", label: "Members", href: "/dashboard/audience/members" },
   { key: "activity", label: "Activity", href: "/dashboard/audience/activity" },
@@ -23,161 +16,51 @@ export const PEOPLE_TABS = [
 function PeopleTabs({ tab }) {
   return raw(subnavHtml({ items: PEOPLE_TABS, active: tab, label: "Audience pages" }));
 }
-const MEMBER_HISTORY_DRAWER = `
-  <div class="cr-member-history-backdrop" id="cr-member-history-backdrop" hidden></div>
-  <aside class="cr-member-history-drawer" id="cr-member-history-drawer" role="dialog" aria-modal="true" aria-labelledby="cr-member-history-title" aria-describedby="cr-member-history-site" hidden>
-    <header class="cr-member-history-head">
-      <div>
-        <h2 id="cr-member-history-title">Member details</h2>
-        <p id="cr-member-history-site">Membership in the selected site.</p>
-      </div>
-      <button class="cr-drawer-close" id="cr-member-history-close" type="button" aria-label="Close member details">×</button>
-    </header>
-    <div class="cr-member-history-body">
-      <section class="cr-member-detail-section" aria-labelledby="cr-member-identity-heading">
-        <div class="cr-member-detail-identity">
-          <span class="cr-viewer-avatar cr-viewer-avatar--fallback" id="cr-member-history-avatar" aria-hidden="true">M</span>
-          <div><h3 id="cr-member-identity-heading">Member</h3><p id="cr-member-history-identity-summary">Site membership</p></div>
-        </div>
-        <dl class="cr-member-context-facts">
-          <div><dt>Last active</dt><dd id="cr-member-history-active">—</dd></div>
-        </dl>
-      </section>
-      <section class="cr-member-detail-section" aria-labelledby="cr-member-connections-heading">
-        <div class="cr-member-history-section-head"><h3 id="cr-member-connections-heading">Account connection</h3></div>
-        <div class="cr-member-connections" id="cr-member-history-connections"></div>
-        <p class="cr-member-detail-note" id="cr-member-history-connection-note"></p>
-      </section>
-      <section class="cr-member-detail-section" aria-labelledby="cr-member-credits-heading">
-        <div class="cr-member-history-section-head"><h3 id="cr-member-credits-heading">Credits</h3></div>
-        <dl class="cr-member-history-facts" aria-label="Member credits summary">
-          <div><dt>Balance</dt><dd id="cr-member-history-balance">—</dd></div>
-          <div><dt>Earned</dt><dd id="cr-member-history-earned">—</dd></div>
-          <div><dt>Spent</dt><dd id="cr-member-history-spent">—</dd></div>
-        </dl>
-      </section>
-      <section class="cr-member-detail-section" aria-labelledby="cr-member-activity-heading">
-        <div class="cr-member-history-section-head"><h3 id="cr-member-activity-heading">Recent credit activity</h3><a class="btn btn--sm btn--ghost" id="cr-member-history-activity-all" href="/dashboard/audience/activity" hidden>Open full activity</a></div>
-        <p class="status" id="cr-member-history-status" role="status" aria-live="polite"></p>
-        <ol class="cr-member-history-list" id="cr-member-history-list" aria-live="polite"></ol>
-        <div class="v3-empty" id="cr-member-history-empty" hidden></div>
-      </section>
-      <section class="cr-member-detail-section" aria-labelledby="cr-member-moderation-heading">
-        <div class="cr-member-history-section-head"><h3 id="cr-member-moderation-heading">Site status</h3></div>
-        <div class="cr-member-moderation-row"><div><strong id="cr-member-history-moderation">Active</strong><p id="cr-member-history-moderation-reason">No restrictions on this site.</p></div><button class="btn btn--sm btn--danger" id="cr-member-history-block" type="button">Block member</button></div>
-      </section>
-      <div class="cr-member-detail-actions"><button class="btn btn--accent" id="cr-member-history-tip" type="button">Tip credits</button></div>
-    </div>
-  </aside>`;
 
-export function AudienceMembersPage({ activePath, user, fragment } = {}) {
+function AudienceTabPage({ activePath, user, fragment, tab }) {
+  const chromeTab = tab === "history" ? "activity" : tab;
   const content = <div class="cr-workspace-content">
-    <PeopleTabs tab="viewers" />
-    <div id="cr-loading" class="ui-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner"></div><span class="sr-only">Loading members…</span></div>
-    <div id="cr-app" data-cr-tab="viewers" hidden dangerouslySetInnerHTML={{ __html: membersPage + MEMBER_HISTORY_DRAWER + VISITOR_ANALYTICS_CARD }}></div>
-    <div id="cr-empty" class="empty cr-loading-state" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><p>Loading your members…</p></div>
+    <PeopleTabs tab={chromeTab} />
+    <div id="audience-app" data-audience-tab={tab}></div>
   </div>;
-  const chrome = chromeStateFor("audience", "viewers");
+  const chrome = chromeStateFor("audience", chromeTab);
   if (fragment) return content;
   return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="selector" crumbs={chrome.crumbs} footer="rewards" rootId="cr-dash" user={user}>
     {content}
   </DashboardShell>;
 }
 
-export function AudienceActivityPage({ activePath, user, fragment } = {}) {
-  const content = <div class="cr-workspace-content">
-    <PeopleTabs tab="activity" />
-    <div id="cr-loading" class="ui-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner"></div><span class="sr-only">Loading activity…</span></div>
-    <div id="cr-app" data-cr-tab="history" hidden dangerouslySetInnerHTML={{ __html: memberActivityPage }}></div>
-    <div id="cr-empty" class="empty cr-loading-state" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><p>Loading member activity…</p></div>
-  </div>;
-  const chrome = chromeStateFor("audience", "activity");
-  if (fragment) return content;
-  return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="selector" crumbs={chrome.crumbs} footer="rewards" rootId="cr-dash" user={user}>
-    {content}
-  </DashboardShell>;
+export function AudienceMembersPage(props = {}) {
+  return AudienceTabPage({ ...props, tab: "viewers" });
 }
 
-export function AudienceReviewsPage({ activePath, user, fragment } = {}) {
-  const content = <div class="cr-workspace-content">
-    <PeopleTabs tab="reviews" />
-    <div class="people-reviews" id="people-reviews-app" data-people-tab="reviews">
-      <header class="v3-head people-reviews__head">
-        <div><h1>Reviews</h1><p class="v3-head-sub">Human decisions needed for your community.</p></div>
-        <div class="people-review-count" aria-live="polite"><strong id="people-reviews-pending-count">—</strong><span>need attention</span></div>
-      </header>
-      <section class="people-review-queue" aria-labelledby="people-review-queue-title">
-        <div class="people-review-toolbar">
-          <div><h2 id="people-review-queue-title">Review queue</h2><p>Resolve eligibility exceptions for this site. Decisions apply only to the named signup.</p></div>
-          <div class="people-review-filters" role="group" aria-label="Review status">
-            <button class="btn btn--sm is-active" type="button" data-review-filter="pending" aria-pressed="true">Needs review</button>
-            <button class="btn btn--sm" type="button" data-review-filter="resolved" aria-pressed="false">Resolved</button>
-          </div>
-        </div>
-        <div class="people-review-feedback"><p class="status" id="people-reviews-status" role="status" aria-live="polite"></p><button class="btn btn--sm" id="people-reviews-retry" type="button" hidden>Try again</button></div>
-        <div class="people-review-table-wrap" id="people-reviews-table-wrap">
-          <table class="v3-table people-review-table">
-            <thead><tr><th scope="col">Participant</th><th scope="col">Review reason</th><th scope="col">Signup</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
-            <tbody id="people-reviews-list" aria-live="polite"></tbody>
-          </table>
-        </div>
-        <div class="v3-empty people-review-empty" id="people-reviews-empty" hidden>
-          <h3>No reviews need your attention.</h3><p>New eligibility exceptions for this site will appear here.</p>
-        </div>
-      </section>
-      <div class="people-review-backdrop" id="people-review-backdrop" hidden></div>
-      <aside class="people-review-drawer" id="people-review-drawer" role="dialog" aria-modal="true" aria-labelledby="people-review-title" aria-describedby="people-review-description" hidden>
-        <header class="people-review-drawer__head"><div><p class="people-review-eyebrow">Participant eligibility</p><h2 id="people-review-title">Review</h2><p id="people-review-description">Zero-cost tournament signup.</p></div><button class="people-review-close" id="people-review-close" type="button" aria-label="Close review">×</button></header>
-        <div class="people-review-drawer__body" id="people-review-detail"></div>
-        <footer class="people-review-actions" id="people-review-actions">
-          <p>Choose only for this tournament signup.</p>
-          <p class="status" id="people-review-decision-status" role="status" aria-live="polite"></p>
-          <div><button class="btn" id="people-review-exclude" type="button">Exclude signup</button><button class="btn btn--accent" id="people-review-allow" type="button">Allow signup</button></div>
-        </footer>
-      </aside>
-    </div>
-    <div id="people-reviews-loading" class="people-review-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><span>Loading reviews…</span></div>
-  </div>;
-  const chrome = chromeStateFor("audience", "reviews");
-  if (fragment) return content;
-  return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="selector" crumbs={chrome.crumbs} footer="rewards" rootId="cr-dash" user={user}>
-    {content}
-  </DashboardShell>;
+export function AudienceActivityPage(props = {}) {
+  return AudienceTabPage({ ...props, tab: "history" });
 }
 
-export function AudienceLinkedAccountsPage({ activePath, user, fragment } = {}) {
-  const content = <div class="cr-workspace-content">
-    <PeopleTabs tab="linked" />
-    <div class="people-reviews people-linked" id="people-linked-app" data-people-tab="linked">
-      <header class="v3-head people-reviews__head">
-        <div><h1>Linked accounts</h1><p class="v3-head-sub">Accounts that look like they belong to the same person. Nothing is restricted automatically.</p></div>
-        <div class="people-review-count" aria-live="polite"><strong id="people-linked-pending-count">—</strong><span>need attention</span></div>
-      </header>
-      <section class="people-review-queue" aria-labelledby="people-linked-title">
-        <div class="people-review-toolbar">
-          <div><h2 id="people-linked-title">Likely links</h2><p>Review pairs flagged from shared devices, linked accounts, IPs, or claim timing. Viewers never see this.</p></div>
-          <div class="people-review-filters" role="group" aria-label="Link status">
-            <button class="btn btn--sm is-active" type="button" data-linked-filter="active" aria-pressed="true">Active</button>
-            <button class="btn btn--sm" type="button" data-linked-filter="dismissed" aria-pressed="false">Dismissed</button>
-          </div>
-        </div>
-        <div class="people-review-feedback"><p class="status" id="people-linked-status" role="status" aria-live="polite"></p><button class="btn btn--sm" id="people-linked-retry" type="button" hidden>Try again</button></div>
-        <div class="people-linked-groups" id="people-linked-groups" aria-live="polite"></div>
-        <div class="v3-empty people-review-empty" id="people-linked-empty" hidden>
-          <h3>No linked accounts to review.</h3><p>Accounts that look operated by the same person will appear here when detected.</p>
-        </div>
-      </section>
-    </div>
-    <div id="people-linked-loading" class="people-review-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><span>Loading linked accounts…</span></div>
-  </div>;
-  const chrome = chromeStateFor("audience", "linked");
-  if (fragment) return content;
-  return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="selector" crumbs={chrome.crumbs} footer="rewards" rootId="cr-dash" user={user}>
-    {content}
-  </DashboardShell>;
+export function AudienceReviewsPage(props = {}) {
+  return AudienceTabPage({ ...props, tab: "reviews" });
 }
 
-const audienceConfigBase = { styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css", "/assets/people.css"], scripts: ['<script src="/assets/people.js?v=1" type="module"></script>', '<script src="/assets/shell-nav.js?v=4" defer></script>'], nav: false, footer: false, wide: true, bootWatchdog: true };
+export function AudienceLinkedAccountsPage(props = {}) {
+  return AudienceTabPage({ ...props, tab: "linked" });
+}
+
+const audienceConfigBase = {
+  styles: [
+    "/assets/app.css",
+    "/assets/shell-nav.css",
+    "/assets/ui.css",
+    "/assets/dashboard-v4.css",
+    "/assets/react/react.css",
+    "/assets/react/audience.css",
+  ],
+  scripts: ['<script src="/assets/people.js?v=2" type="module"></script>', '<script src="/assets/shell-nav.js?v=4" defer></script>'],
+  nav: false,
+  footer: false,
+  wide: true,
+  bootWatchdog: true,
+};
 
 export const audienceMembersPage = {
   config: { ...audienceConfigBase, title: chromeStateFor("audience", "viewers").documentTitle, canonical: "https://yourrank.site/dashboard/audience/members" },

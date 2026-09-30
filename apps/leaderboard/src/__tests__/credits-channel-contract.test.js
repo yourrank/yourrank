@@ -5,6 +5,11 @@ import path from "node:path";
 const pageSource = fs.readFileSync(path.resolve(import.meta.dir, "../react/pages/rewards/page.tsx"), "utf8");
 const entrySource = fs.readFileSync(path.resolve(import.meta.dir, "../react/pages/rewards/entry.tsx"), "utf8");
 const dispatcherSource = fs.readFileSync(path.resolve(import.meta.dir, "../assets/credits.js"), "utf8");
+const audiencePageSource = fs.readFileSync(path.resolve(import.meta.dir, "../react/pages/audience/page.tsx"), "utf8");
+const audienceEntrySource = fs.readFileSync(path.resolve(import.meta.dir, "../react/pages/audience/entry.tsx"), "utf8");
+const audienceShimSource = fs.readFileSync(path.resolve(import.meta.dir, "../assets/people.js"), "utf8");
+const audienceMarkupSource = fs.readFileSync(path.resolve(import.meta.dir, "../pages/audience.jsx"), "utf8");
+const dashboardRoutesSource = fs.readFileSync(path.resolve(import.meta.dir, "../assets/dashboard/routes.js"), "utf8");
 const kickAuthSource = fs.readFileSync(path.resolve(import.meta.dir, "../handlers/kick-auth.js"), "utf8");
 
 describe("React Kick channel card contract", () => {
@@ -18,12 +23,20 @@ describe("React Kick channel card contract", () => {
     expect(pageSource).toContain("delivery.label");
   });
 
-  it("routes Audience tabs to the legacy controller and Rewards tabs to the React island", () => {
-    expect(dispatcherSource).toContain('tab === "viewers" || tab === "history"');
-    expect(dispatcherSource).toContain('import("./audience-credits.js")');
+  it("keeps Audience on the people dynamic boot and leaves credits for Rewards", () => {
+    expect(dispatcherSource).not.toContain("audience-credits.js");
     expect(dispatcherSource).toContain('import("./react/rewards.js")');
     expect(entrySource).toContain("defineIsland");
     expect(entrySource).toContain('getAttribute("data-cr-tab")');
+    expect(audienceMarkupSource).toContain('rootId="cr-dash"');
+    expect(audienceMarkupSource).toContain('id="audience-app" data-audience-tab={tab}');
+    expect(dashboardRoutesSource).toContain('audience: dynamicSection("audience", { boot: "people", boardContext: "selector", rootId: "cr-dash" })');
+    expect(audienceEntrySource).toContain('defineIsland("audience-app"');
+    expect(audiencePageSource).toContain('id="cr-bulk-award"');
+    expect(audienceEntrySource).toContain('getAttribute("data-audience-tab")');
+    expect(audienceShimSource).toContain('import("./react/audience.js")');
+    expect(audienceShimSource).toContain("if (!window.__yrSpaShell)");
+    expect(audienceShimSource).toContain("document.addEventListener(\"DOMContentLoaded\", boot");
   });
 
   it("writes OAuth errors into the channel status and removes one-time query parameters", () => {

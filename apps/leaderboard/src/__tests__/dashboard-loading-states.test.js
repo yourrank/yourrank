@@ -129,14 +129,15 @@ describe("dashboard loading states", () => {
 
   it("uses loading and confirmed-empty treatments on Rewards and Audience lists", () => {
     const utils = read("dashboard/utils.js");
-    const audienceCredits = read("audience-credits.js");
+    const audiencePage = fs.readFileSync(path.resolve(assets, "../react/pages/audience/page.tsx"), "utf8");
     const rewardsPage = fs.readFileSync(path.resolve(assets, "../react/pages/rewards/page.tsx"), "utf8");
     expect(utils).toContain("setRowsLoading");
     expect(utils).toContain("renderEmpty(this.emptyEl, this.emptySpec)");
     expect(rewardsPage).toContain('loading ? <div role="status" aria-live="polite" aria-busy="true"');
     expect(rewardsPage).toContain('all: { title: "No claims yet"');
-    expect(audienceCredits).toContain('emptyEl: $("cr-viewer-empty")');
-    expect(audienceCredits).toContain('$("cr-history-feed-empty")');
+    expect(audiencePage).toContain('function LoadingRows(');
+    expect(audiencePage).toContain('id="cr-viewer-empty"');
+    expect(audiencePage).toContain('id="cr-history-feed-empty"');
   });
 
   it("resets error presentation before retrying into a normal empty state", () => {
@@ -151,11 +152,13 @@ describe("dashboard loading states", () => {
     expect(performance).toContain('node.removeAttribute("aria-current")');
   });
 
-  it("keeps credits load failures plain and retryable", () => {
-    const audienceCredits = read("audience-credits.js");
+  it("keeps Audience and Rewards load failures plain and retryable", () => {
+    const audiencePage = fs.readFileSync(path.resolve(assets, "../react/pages/audience/page.tsx"), "utf8");
     const rewardsPage = fs.readFileSync(path.resolve(assets, "../react/pages/rewards/page.tsx"), "utf8");
-    expect(audienceCredits).toContain('title: "Couldn\'t load members"');
-    expect(audienceCredits).toContain('body: "People for the selected site could not be loaded."');
+    expect(audiencePage).toContain('title="Couldn\'t load members"');
+    expect(audiencePage).toContain('body="People for the selected site could not be loaded."');
+    expect(audiencePage).toContain('>Try again</Button>');
+    expect(audiencePage).not.toContain("err.message}</p>");
     expect(rewardsPage).toContain("Couldn't load your credits dashboard");
     expect(rewardsPage).toContain("Your rewards data could not be loaded.");
     expect(rewardsPage).toContain(">Try again</Button>");

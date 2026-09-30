@@ -279,12 +279,12 @@ describe("manifest parity: navigation-state query parameters", () => {
   });
 
   it("keeps one-shot parameters out of the manifest and in the audit", () => {
-    const audienceCredits = readFileSync(new URL("../assets/audience-credits.js", import.meta.url), "utf8");
+    const audiencePage = readFileSync(new URL("../react/pages/audience/page.tsx", import.meta.url), "utf8");
     const rewardsPage = readFileSync(new URL("../react/pages/rewards/page.tsx", import.meta.url), "utf8");
     // The audit's one-shot classifications reflect real consumption sites.
     expect(rewardsPage).toContain('get("edit")');
     expect(rewardsPage).toContain('get("new")');
-    expect(audienceCredits).toContain('get("viewer")');
+    expect(audiencePage).toContain('get("viewer")');
     expect(rewardsPage).toContain('searchParams.delete("kick_connected")');
     expect(rewardsPage).toContain('searchParams.delete("error")');
     expect(rewardsPage).toContain('params.delete("new")');
