@@ -673,8 +673,8 @@ ${giveawaysSubnavHtml(active)}`}
   <!-- The tournament client renders everything into #tournament-root; the
        skeleton keeps one page h1 and a loading cue until it boots. Dialogs
        mount into #tournament-dialogs so re-renders can't destroy them. -->
-  <section id="tournament-app" class="tn" aria-label="Tournament workspace">
-    <div id="tournament-root">
+  <section id="tournament-app" aria-label="Tournament workspace">
+    <div id="tournament-root" class="yr-react">
       <div class="tn-loading" role="status" aria-busy="true">
         <${active === "tournaments" ? "h1" : "h2"} class="tn-loading-title">Tournaments</${active === "tournaments" ? "h1" : "h2"}>
         <span class="tn-loading-bar"></span>

@@ -36,6 +36,7 @@ let mode = 'populated';
 
 // Tournament fixture variants: real buildBracket() output, no hand-written
 // rows. FIXTURE_TOURNAMENT selects the shape; `empty` mode still wins.
+// setup — unstarted tournament with eligible entries and no bracket.
 // completed8 — finished 8-player bracket with a champion.
 // live{4,8,16,32} — active bracket with size-1 participants (exactly one
 // round-1 BYE) and generated round-1 results.
@@ -45,7 +46,11 @@ function buildTournamentFixture(empty) {
   let matches = [];
   let participants = [];
   const live = /^live(\d+)$/.exec(tournamentVariant);
-  if (live) {
+  const setup = tournamentVariant === 'setup';
+  if (setup) {
+    tournament.status = 'draft';
+    participants = ['seed_1', 'seed_2', 'seed_3', 'seed_4', 'seed_5'];
+  } else if (live) {
     const size = Number(live[1]);
     tournament.bracket_size = size;
     tournament.status = 'active';
@@ -102,7 +107,7 @@ function buildTournamentFixture(empty) {
   }
   // API rows carry ids; give the in-memory fixture stable ones for score ops.
   for (const m of matches) m.id = m.id || `m-${m.round_number}-${m.match_index}`;
-  const fixtureEntries = participants.map((name, i) => ({ id: `e${i + 1}`, display_name: name, source: 'chat', status: 'selected', eligible: true, alt_flag: false, alt_reason: null }));
+  const fixtureEntries = participants.map((name, i) => ({ id: `e${i + 1}`, display_name: name, source: 'chat', status: setup ? 'pending' : 'selected', eligible: true, alt_flag: false, alt_reason: null }));
   return { tournament, matches: empty ? [] : matches, fixtureEntries };
 }
 // Built once so PATCH /score mutations persist across requests.
