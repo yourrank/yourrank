@@ -385,7 +385,12 @@ describe("dashboard chrome ownership", () => {
       expect(violations.markup.sidebar, `${route.path} sidebar`).not.toBe("");
       expect(violations.markup.topbar, `${route.path} topbar`).not.toBe("");
       if (route.hasSubnav) {
-        expect(violations.markup.subnav, `${route.path} subnav`).not.toBe("");
+        if (route.render === "giveaways") {
+          expect(markup).toContain('id="giveaway-root"');
+          expect(markup).toContain(`data-tab="${route.tab}"`);
+        } else {
+          expect(violations.markup.subnav, `${route.path} subnav`).not.toBe("");
+        }
       }
       if (route.hasBreadcrumbs) {
         expect(violations.markup.breadcrumbs, `${route.path} breadcrumbs`).not.toBe("");
@@ -454,14 +459,14 @@ describe("dashboard chrome ownership", () => {
 
   it("gives Giveaways and Rewards their own tab strips", () => {
     const strip = (html, className) => region(html, new RegExp(`<nav\\b[^>]*class="[^"]*${className}`), "nav");
-    const marks = (html) =>
-      [...strip(html, "gw-subnav").matchAll(/<a\b[^>]*class="v3-tab[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</g)]
-        .map((match) => ({ href: match[1], label: match[2], current: match[0].includes('aria-current="page"') }));
 
     // Activities is a rail destination of its own: no page-level tab strip.
     const activities = PAGES.activities.Component({ user }).toString();
     expect(strip(activities, "gw-subnav")).toBe("");
     expect(strip(activities, "engage-tabs")).toBe("");
+    expect(activities).toContain('id="activities-root"');
+    const activitiesClient = readFileSync(new URL("../react/pages/activities/page.tsx", import.meta.url), "utf8");
+    expect(activitiesClient).toContain('role="tablist" aria-label="Activities"');
 
     const shop = PAGES.rewardsShop.Component({ user }).toString();
     const shopTabs = [...strip(shop, "rewards-tabs").matchAll(/<a\b[^>]*class="v3-tab[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</g)]
@@ -474,8 +479,12 @@ describe("dashboard chrome ownership", () => {
     expect(shop).not.toContain("gw-subnav");
 
     const giveaways = PAGES.giveaways.Component({ user }).toString();
-    expect(marks(giveaways).map((t) => t.label)).toEqual(["Chat Giveaway", "Raffle", "Prediction"]);
-    expect(marks(giveaways).find((t) => t.current)?.href).toBe("/dashboard/giveaways/chat");
+    expect(giveaways).toContain('id="giveaway-root"');
+    expect(giveaways).toContain('data-tab="chat"');
+    expect(GIVEAWAY_TABS.map(([, label]) => label)).toEqual(["Chat Giveaway", "Raffle", "Prediction"]);
+    const giveawaysPageSource = readFileSync(new URL("../react/pages/giveaways/page.tsx", import.meta.url), "utf8");
+    expect(giveawaysPageSource).toContain('<nav className="v3-tabs gw-subnav" aria-label="Giveaways">');
+    expect(giveawaysPageSource).toContain('aria-current={active === key ? "page" : undefined}');
 
     // The Kick channel connection belongs to Settings → Connections, so the
     // Engage and Rewards strips must not appear there.

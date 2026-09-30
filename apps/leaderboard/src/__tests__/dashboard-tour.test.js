@@ -1,5 +1,7 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
+import { buildHomeViewModel } from "../assets/dashboard/overview.js";
+import { mountHome, restoreOverviewDomGlobals, unmountHomePage } from "./overview-react-utils.js";
 import {
   MAX_TOUR_STEPS,
   NO_TARGET,
@@ -117,16 +119,29 @@ describe("tour steps", () => {
     expect(src).toContain("document.querySelector(");
   });
 
-  it("targets only elements rendered on the Home surface", () => {
+  it("renders the Home tour targets and retains the Community target", async () => {
     const dashboardSrc = readFileSync(
       new URL("../pages/dashboard.jsx", import.meta.url),
       "utf8",
     );
-    for (const selector of ["#ovSetup", "#ovQuickActions", "#overlayDesignerCard"]) {
-      const needle = selector.startsWith("#")
-        ? `id="${selector.slice(1)}"`
-        : selector.slice(1);
-      expect(dashboardSrc.includes(needle), selector).toBe(true);
+    const vm = buildHomeViewModel({
+      state: { ACTIVE_SITE_ID: "site-1", SLUG: "night-owls", BOARDS: [], ME: { emailVerified: true }, CREDITS: {} },
+      status: { live: false, published: false, emailVerified: true },
+      steps: { brand: false, players: false, publish: false },
+      sections: {
+        activities: { status: "idle", data: null, error: null },
+        giveaway: { status: "idle", data: null, error: null },
+        insights: { status: "idle", data: null, error: null },
+        recent: { status: "idle", data: null, error: null },
+      },
+    });
+    const { root } = await mountHome(vm);
+    for (const selector of ["#ovSetup", "#ovQuickActions"]) {
+      expect(root.querySelector(selector), selector).not.toBeNull();
     }
+    expect(dashboardSrc).toContain('id="overlayDesignerCard"');
   });
 });
+
+afterEach(async () => unmountHomePage());
+afterAll(() => restoreOverviewDomGlobals());

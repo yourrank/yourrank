@@ -1,3 +1,14 @@
+/**
+ * @typedef {Object} DeliveryState
+ * @property {boolean} [verified]
+ * @property {Record<string, string>} [events]
+ * @property {string[]} [required]
+ * @property {string[]} [requiredLabels]
+ */
+
+/**
+ * @param {{connected?: boolean, deliveryFailed?: boolean, status?: string, delivery?: DeliveryState | null}} [options]
+ */
 export function kickDeliveryPresentation({ connected = false, deliveryFailed = false, status = "", delivery = null } = {}) {
   if (!connected) return { label: "—", detail: "" };
   if (deliveryFailed) return { label: "Setup failed", detail: "" };

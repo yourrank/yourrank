@@ -1,0 +1,137 @@
+.yr-react .tfa-loading {
+  color: var(--ink-soft, #55565a);
+  margin: 4rem auto;
+  max-width: 25rem;
+  text-align: center;
+}
+
+.yr-react .tfa-wrap {
+  color: var(--ink, #242426);
+  margin: 3.75rem auto;
+  max-width: 25rem;
+  padding: 1.9rem 1.5rem;
+  text-align: center;
+}
+
+.yr-react .tfa-wrap h1,
+.yr-react .tfa-wrap h2 {
+  letter-spacing: -0.02em;
+  margin: 0 0 0.45rem;
+}
+
+.yr-react .tfa-wrap h1 {
+  font-size: 1.25rem;
+}
+
+.yr-react .tfa-wrap h2 {
+  font-size: 1rem;
+}
+
+.yr-react .tfa-wrap p {
+  color: var(--ink-soft, #4f5054);
+  font-size: 0.82rem;
+  margin: 0 0 1.5rem;
+}
+
+.yr-react .tfa-icon {
+  display: inline-flex;
+  margin-right: 0.35rem;
+  vertical-align: -0.2rem;
+}
+
+.yr-react .tfa-code-input {
+  background: var(--panel, #fff);
+  border: 2px solid var(--line-2, #d9d9d5);
+  border-radius: 0.75rem;
+  color: var(--ink, #242426);
+  display: block;
+  font: 1.75rem/1.1 var(--mono, "JetBrains Mono", monospace);
+  letter-spacing: 0.75rem;
+  margin: 0 auto 1rem;
+  max-width: 16.25rem;
+  padding: 1rem;
+  text-align: center;
+  width: 100%;
+}
+
+.yr-react .tfa-code-input:focus-visible {
+  border-color: var(--accent, #3b23f4);
+  outline: 2px solid var(--accent, #3b23f4);
+  outline-offset: 2px;
+}
+
+.yr-react .tfa-code-input:disabled {
+  opacity: 0.6;
+}
+
+.yr-react .tfa-err {
+  color: #b42336;
+  font-size: 0.82rem;
+  min-height: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+.yr-react .tfa-button {
+  max-width: 16.25rem;
+  width: 100%;
+}
+
+.yr-react .tfa-hint {
+  margin: 1rem 0 0;
+}
+
+.yr-react .tfa-hint a {
+  color: var(--accent-foreground, #4056b9);
+}
+
+.yr-react .tfa-setup {
+  margin-top: 2rem;
+  text-align: left;
+}
+
+.yr-react .tfa-setup .tfa-qr-wrap {
+  background: #fff;
+  border-radius: 0.75rem;
+  display: inline-block;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+}
+
+.yr-react .tfa-setup .tfa-secret-box {
+  background: var(--panel-2, #f7f7f5);
+  border: 1px solid var(--line-2, #d9d9d5);
+  border-radius: 0.5rem;
+  color: var(--accent-foreground, #4056b9);
+  display: block;
+  font: 0.75rem/1.4 var(--mono, "JetBrains Mono", monospace);
+  margin: 0.5rem 0;
+  overflow-wrap: anywhere;
+  padding: 0.65rem 0.75rem;
+}
+
+.yr-react .tfa-recovery-list {
+  display: grid;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 1rem 0 1.5rem;
+  padding: 0;
+}
+
+.yr-react .tfa-recovery-list code {
+  background: var(--panel-2, #f7f7f5);
+  border: 1px solid var(--line-2, #d9d9d5);
+  border-radius: 0.45rem;
+  display: block;
+  font: 0.85rem/1.4 var(--mono, "JetBrains Mono", monospace);
+  padding: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yr-react .tfa-wrap *,
+  .yr-react .tfa-wrap *::before,
+  .yr-react .tfa-wrap *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

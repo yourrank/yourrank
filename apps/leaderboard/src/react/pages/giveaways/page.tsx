@@ -1,0 +1,2361 @@
+import * as React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  Check,
+  ChevronRight,
+  Crown,
+  Gift,
+  Loader2,
+  RefreshCw,
+  Search,
+  Ticket,
+  Trophy,
+  Users,
+  X,
+} from "lucide-react";
+import { engageCardState } from "../../../assets/dashboard/engage-hub-state.js";
+import { withDashboardTimeout } from "../../../assets/dashboard/request.js";
+import { ENGAGE_FEATURES, GIVEAWAY_TABS } from "../../../pages/giveaway-pages.js";
+import { api } from "../../lib/api";
+import { cn } from "../../lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { Checkbox } from "../../components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../../components/ui/dialog";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "../../components/ui/sheet";
+import { Textarea } from "../../components/ui/textarea";
+import type {
+  BoardShell,
+  ChatGiveawayPayload,
+  GiveawayDraw,
+  GiveawayEntrant,
+  GiveawayPageDependencies,
+  GiveawayRules,
+  GiveawayWinner,
+  Prediction,
+  PredictionsPayload,
+  Raffle,
+  RafflesPayload,
+} from "./types";
+
+declare global {
+  interface Window {
+    webkitAudioContext?: typeof AudioContext;
+    __yrBoot?: {
+      fail: (message: string) => void;
+      signal: () => void;
+    };
+  }
+}
+
+const BOARD_SHELL_MODULE = "/assets/dashboard/board-shell.js";
+const DEFAULT_AVATAR = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#e2e8f0"/><circle cx="32" cy="24" r="12" fill="#94a3b8"/><path d="M10 60c2-13 10-20 22-20s20 7 22 20" fill="#94a3b8"/></svg>')}`;
+const CHAT_POLL_MS = 4_000;
+const HUB_UNAVAILABLE = {
+  tone: "neutral",
+  status: "unavailable",
+  label: "Status unavailable",
+  meta: "Couldn't load status. Open the page to check.",
+};
+
+type ActiveTab = "chat" | "raffles" | "preds" | "hub" | "tournaments";
+type ApiErrorData = ChatGiveawayPayload & { error?: string; code?: string };
+type EngageRowState = {
+  tone: string;
+  status: string;
+  label: string;
+  meta: string;
+};
+type Confirmation = {
+  title: string;
+  description: string;
+  action: string;
+  destructive?: boolean;
+};
+type DrawerDraft = Record<string, string>;
+
+type PageDependencies = GiveawayPageDependencies;
+type GiveawayPageProps = {
+  initialTab?: string;
+  dependencies?: Partial<PageDependencies>;
+};
+
+const DEFAULT_DEPENDENCIES: PageDependencies = {
+  api: <T = unknown>(
+    path: string,
+    options: Parameters<PageDependencies["api"]>[1] = {},
+    siteId = "",
+  ) => withDashboardTimeout((signal: AbortSignal) => api<T>(path, { ...options, signal }, siteId)),
+  loadBoardShell: async () => {
+    const shell = await import(BOARD_SHELL_MODULE) as { loadBoardShell: () => Promise<BoardShell> };
+    return shell.loadBoardShell();
+  },
+};
+
+const EMPTY_CONNECTION = { connected: false, chatReady: false, channelName: null };
+const DEFAULT_RULES: GiveawayRules = {
+  entryMode: "chat",
+  subscriberOnly: false,
+  vipOnly: false,
+  excludePreviousWinners: false,
+  winnerRepeat: "once",
+  onePerIp: false,
+  vpnDetection: false,
+  winnerMustRespond: false,
+  responseTimeout: 60,
+  autoReroll: false,
+};
+const RAFFLE_DRAFT_DEFAULTS: DrawerDraft = {
+  "rf-title": "",
+  "rf-desc": "",
+  "rf-cost": "30",
+  "rf-max": "10",
+};
+const PREDICTION_DRAFT_DEFAULTS: DrawerDraft = {
+  "pred-title": "",
+  "pred-opt-1": "Yes",
+  "pred-opt-2": "No",
+  "pred-min-bet": "10",
+  "pred-max-bet": "500",
+  "pred-lock-min": "5",
+};
+
+function drawerDraftKey(formId: string) {
+  const siteId = new URLSearchParams(window.location.search).get("siteId") || "default";
+  return `yr-engage-draft:${siteId}:${formId}`;
+}
+
+function readDrawerDraft(formId: string, defaults: DrawerDraft): DrawerDraft {
+  try {
+    const parsed: unknown = JSON.parse(window.sessionStorage.getItem(drawerDraftKey(formId)) || "{}");
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return { ...defaults };
+    const stored = parsed as Record<string, unknown>;
+    return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [
+      key,
+      typeof stored[key] === "string" ? stored[key] : fallback,
+    ]));
+  } catch {
+    return { ...defaults };
+  }
+}
+
+function useDrawerDraft(formId: string, defaults: DrawerDraft) {
+  const storageKey = drawerDraftKey(formId);
+  const [draft, setDraft] = useState(() => readDrawerDraft(formId, defaults));
+  const currentStorageKey = useRef(storageKey);
+  const skipNextWrite = useRef(false);
+
+  useEffect(() => {
+    if (currentStorageKey.current === storageKey) return;
+    currentStorageKey.current = storageKey;
+    skipNextWrite.current = true;
+    setDraft(readDrawerDraft(formId, defaults));
+  }, [defaults, formId, storageKey]);
+
+  useEffect(() => {
+    if (skipNextWrite.current) {
+      skipNextWrite.current = false;
+      return;
+    }
+    try { window.sessionStorage.setItem(storageKey, JSON.stringify(draft)); } catch { /* storage unavailable */ }
+  }, [draft, storageKey]);
+
+  const discardDraft = useCallback(() => {
+    try { window.sessionStorage.removeItem(storageKey); } catch { /* storage unavailable */ }
+  }, [storageKey]);
+
+  const clearDraftAfterSubmit = useCallback(() => {
+    skipNextWrite.current = true;
+    discardDraft();
+  }, [discardDraft]);
+
+  return { draft, setDraft, discardDraft, clearDraftAfterSubmit };
+}
+
+function post(body: object): RequestInit {
+  return { method: "POST", body: JSON.stringify(body) };
+}
+
+function errorData(error: unknown): ApiErrorData {
+  if (!(error instanceof Error) || !("data" in error)) return {};
+  const data = error.data;
+  if (typeof data !== "object" || data === null) return {};
+  const result: ApiErrorData = {};
+  if ("error" in data && typeof data.error === "string") result.error = data.error;
+  if ("code" in data && typeof data.code === "string") result.code = data.code;
+  if ("connection" in data && typeof data.connection === "object" && data.connection !== null) result.connection = data.connection as ChatGiveawayPayload["connection"];
+  if ("session" in data && (data.session === null || typeof data.session === "object")) result.session = data.session as ChatGiveawayPayload["session"];
+  if ("entries" in data && Array.isArray(data.entries)) result.entries = data.entries as GiveawayEntrant[];
+  if ("winner" in data && (data.winner === null || typeof data.winner === "object")) result.winner = data.winner as GiveawayWinner | null;
+  if ("draws" in data && Array.isArray(data.draws)) result.draws = data.draws as GiveawayDraw[];
+  return result;
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return errorData(error).error || (error instanceof Error && error.message) || fallback;
+}
+
+function errorStatus(error: unknown) {
+  return error instanceof Error && "status" in error && typeof error.status === "number" ? error.status : 0;
+}
+
+function formatEnteredAt(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function safeAvatarUrl(value: string | null | undefined) {
+  try {
+    const url = new URL(String(value || ""), window.location.origin);
+    if (url.protocol === "https:" && url.hostname === "files.kick.com") return url.href;
+  } catch {
+    return DEFAULT_AVATAR;
+  }
+  return DEFAULT_AVATAR;
+}
+
+function safeKickProfileUrl(username: string) {
+  return `https://kick.com/${encodeURIComponent(username)}`;
+}
+
+function playWinnerSound() {
+  try {
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextConstructor) return;
+    const context = new AudioContextConstructor();
+    [523.25, 659.25, 783.99, 1046.5].forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "triangle";
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.15, context.currentTime + index * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + index * 0.1 + 0.6);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(context.currentTime + index * 0.1);
+      oscillator.stop(context.currentTime + index * 0.1 + 0.6);
+    });
+  } catch {}
+}
+
+function formatRulesSummary(rules: GiveawayRules) {
+  const parts = [
+    rules.entryMode === "members" ? "Members only" : rules.entryMode === "verified" ? "Verified entry" : "Anyone in chat",
+    rules.winnerRepeat === "again" ? "Can win again" : "Win once",
+  ];
+  if (rules.subscriberOnly || rules.vipOnly) {
+    parts.push([rules.subscriberOnly && "Subscribers", rules.vipOnly && "VIPs"].filter(Boolean).join(" and ") + " only");
+  }
+  if (rules.excludePreviousWinners) parts.push("Exclude past winners");
+  if (rules.onePerIp) parts.push("One entry per IP");
+  if (rules.vpnDetection) parts.push("VPN blocked");
+  parts.push(rules.winnerMustRespond ? "Winner response required" : "No chat response");
+  return parts.join(" · ");
+}
+
+function formatAdvancedSummary(rules: GiveawayRules) {
+  const enabled = [
+    rules.subscriberOnly && "Subscriber only",
+    rules.vipOnly && "VIP only",
+    rules.excludePreviousWinners && "Exclude past winners",
+    rules.onePerIp && "One per IP",
+    rules.vpnDetection && "VPN blocked",
+  ].filter(Boolean);
+  return enabled.length ? enabled.join(" · ") : "Off";
+}
+
+function isEligible(entrant: GiveawayEntrant) {
+  return entrant.eligibility_status === "eligible";
+}
+
+function linkedReasonLabel(code: string) {
+  return ({
+    same_device: "Same device",
+    same_identity: "Same account",
+    same_ip_24h: "Same IP",
+    same_time_claims: "Same-time claims",
+  } as Record<string, string>)[code] || code.replaceAll("_", " ");
+}
+
+function linkedExcludePlan(entries: GiveawayEntrant[]) {
+  const linked = entries.filter((entry) => Array.isArray(entry.linked) && entry.linked.length > 0);
+  const parent = new Map<string, string>();
+  const find = (value: string): string => {
+    const previous = parent.get(value);
+    if (!previous || previous === value) return value;
+    const root = find(previous);
+    parent.set(value, root);
+    return root;
+  };
+  const join = (left: string, right: string) => {
+    parent.set(left, find(left));
+    parent.set(right, find(right));
+    parent.set(find(left), find(right));
+  };
+  for (const entry of linked) parent.set(entry.id, entry.id);
+  const byUsername = new Map(entries.map((entry) => [entry.username.toLowerCase(), entry.id]));
+  for (const entry of linked) {
+    for (const link of entry.linked || []) {
+      const otherId = byUsername.get(link.username.toLowerCase());
+      if (otherId) join(entry.id, otherId);
+    }
+  }
+  const components = new Map<string, GiveawayEntrant[]>();
+  for (const entry of linked) {
+    const root = find(entry.id);
+    components.set(root, [...(components.get(root) || []), entry]);
+  }
+  const excludable: GiveawayEntrant[] = [];
+  for (const group of components.values()) {
+    const eligible = group
+      .filter(isEligible)
+      .sort((left, right) => new Date(left.entered_at).getTime() - new Date(right.entered_at).getTime());
+    excludable.push(...eligible.slice(1));
+  }
+  return excludable;
+}
+
+function StatusMessage({
+  children,
+  tone = "neutral",
+  role = "status",
+  className,
+  id,
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "error" | "success";
+  role?: "status" | "alert";
+  className?: string;
+  id?: string;
+}) {
+  return (
+    <div
+      id={id}
+      className={cn(
+        "rounded-lg border px-4 py-3 text-sm",
+        tone === "error" && "border-destructive/30 bg-destructive/5 text-destructive",
+        tone === "success" && "border-emerald-600/25 bg-emerald-600/5 text-emerald-800",
+        tone === "neutral" && "border-border bg-muted/40 text-muted-foreground",
+        className,
+      )}
+      role={role}
+      aria-live={role === "alert" ? "assertive" : "polite"}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ConfirmAction({
+  confirmation,
+  onConfirm,
+  onCancel,
+}: {
+  confirmation: Confirmation | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <AlertDialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{confirmation?.title}</AlertDialogTitle>
+          <AlertDialogDescription>{confirmation?.description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className={confirmation?.destructive ? "bg-destructive text-white hover:bg-destructive/90" : ""}
+            onClick={onConfirm}
+          >
+            {confirmation?.action}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+export function GiveawaysPage({ initialTab, dependencies }: GiveawayPageProps) {
+  const deps = useMemo(() => ({ ...DEFAULT_DEPENDENCIES, ...dependencies }), [dependencies]);
+  const [tab, setTab] = useState<ActiveTab>(() => {
+    const routeTab = initialTab || document.getElementById("giveaway-root")?.getAttribute("data-tab") || "chat";
+    return (["chat", "raffles", "preds", "hub", "tournaments"].includes(routeTab) ? routeTab : "chat") as ActiveTab;
+  });
+  const [siteId, setSiteId] = useState("");
+  const [siteName, setSiteName] = useState("");
+  const [bootReady, setBootReady] = useState(false);
+  const [bootError, setBootError] = useState("");
+  const [pageAlert, setPageAlert] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void deps.loadBoardShell().then((shell) => {
+      if (!active) return;
+      setSiteId(shell.activeSiteId || "");
+      setSiteName(shell.board?.name || shell.board?.slug || "");
+      setBootReady(true);
+    }).catch((error: unknown) => {
+      if (!active) return;
+      setBootError(errorMessage(error, "The dashboard shell could not be loaded."));
+      window.__yrBoot?.fail(errorMessage(error, "The dashboard shell could not be loaded."));
+    });
+    return () => { active = false; };
+  }, [deps]);
+
+  const setTabFromRoot = useCallback(() => {
+    const routeTab = document.getElementById("giveaway-root")?.getAttribute("data-tab") || initialTab || "chat";
+    if (["chat", "raffles", "preds", "hub", "tournaments"].includes(routeTab)) setTab(routeTab as ActiveTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    setTabFromRoot();
+  }, [setTabFromRoot]);
+
+  useEffect(() => {
+    if (bootReady && !bootError) window.__yrBoot?.signal();
+  }, [bootReady, bootError]);
+
+  const alert = (message: string) => setPageAlert(message);
+  const clearAlert = () => setPageAlert("");
+
+  if (bootError) {
+    return (
+      <div className="mx-auto max-w-5xl p-5 md:p-8">
+        <StatusMessage tone="error" role="alert">{bootError}</StatusMessage>
+      </div>
+    );
+  }
+
+  if (!bootReady) {
+    return <div className="mx-auto max-w-5xl p-5 md:p-8"><StatusMessage>Loading your engagement workspace…</StatusMessage></div>;
+  }
+
+  if (tab === "tournaments") return null;
+
+  if (tab === "hub") {
+    return (
+      <div className="space-y-6">
+        <PageHeading
+          title="Engage"
+          description="What is running for this community right now, and where to run more."
+          scopeName={siteName}
+        />
+        {pageAlert && <StatusMessage id="gw-page-alert" tone="error" role="alert">{pageAlert}</StatusMessage>}
+        <EngageHub apiClient={deps.api} siteId={siteId} />
+      </div>
+    );
+  }
+
+  const activeLabel = GIVEAWAY_TABS.find(([key]) => key === tab)?.[1] || "Chat Giveaway";
+  const description = {
+    chat: "Collect chat entries, draw a winner, and confirm the result live.",
+    raffles: "Sell Credit tickets, draw a winner, and keep completed raffles together.",
+    preds: "Run live prediction pools and settle them when the outcome is known.",
+  }[tab];
+
+  return (
+    <div className="space-y-6">
+      <PageHeading title="Giveaways" description={`${activeLabel} · ${description}`} />
+      <GiveawaysSubnav active={tab} />
+      {pageAlert && <StatusMessage id="gw-page-alert" tone="error" role="alert">{pageAlert}</StatusMessage>}
+      {tab === "chat" && <ChatGiveaway apiClient={deps.api} siteId={siteId} onAlert={alert} onClearAlert={clearAlert} />}
+      {tab === "raffles" && <Raffles apiClient={deps.api} siteId={siteId} onAlert={alert} onClearAlert={clearAlert} />}
+      {tab === "preds" && <Predictions apiClient={deps.api} siteId={siteId} onAlert={alert} onClearAlert={clearAlert} />}
+    </div>
+  );
+}
+
+function PageHeading({ title, description, scopeName }: { title: string; description: string; scopeName?: string }) {
+  return (
+    <header className="v3-head v3-head--row">
+      <div className="v3-head-col">
+        <h1>{title}</h1>
+        <p className="v3-head-sub">{description}</p>
+      </div>
+      <div id="engage-scope" className="v3-scope" data-scope="site" aria-label={scopeName ? `Site: ${scopeName}` : "Site"}>
+        {scopeName && <span className="v3-scope-name">{scopeName}</span>}
+      </div>
+    </header>
+  );
+}
+
+function GiveawaysSubnav({ active }: { active: "chat" | "raffles" | "preds" }) {
+  const hrefs = { chat: "/dashboard/giveaways/chat", raffles: "/dashboard/giveaways/raffles", preds: "/dashboard/giveaways/predictions" };
+  return (
+    <nav className="v3-tabs gw-subnav" aria-label="Giveaways">
+      {GIVEAWAY_TABS.map(([key, label]) => (
+        <a
+          key={key}
+          className={cn("v3-tab", active === key && "is-on")}
+          href={hrefs[key as keyof typeof hrefs]}
+          aria-current={active === key ? "page" : undefined}
+        >
+          {label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+function EngageHub({ apiClient, siteId }: { apiClient: PageDependencies["api"]; siteId: string }) {
+  const [states, setStates] = useState<Record<string, EngageRowState>>({});
+  useEffect(() => {
+    let active = true;
+    const settle = <T,>(promise: Promise<T>) => promise.catch(() => undefined);
+    void Promise.all([
+      settle(apiClient("/api/activities?state=open&limit=100", {}, siteId)),
+      settle(apiClient<ChatGiveawayPayload>("/api/giveaways/chat", {}, siteId)),
+      settle(apiClient<RafflesPayload>("/api/events/raffles", {}, siteId)),
+      settle(apiClient<PredictionsPayload>("/api/predictions", {}, siteId)),
+      settle(apiClient("/api/tournaments", {}, siteId)),
+    ]).then(([activities, chat, raffles, predictions, tournaments]) => {
+      if (!active) return;
+      const next: Record<string, EngageRowState> = {};
+      next.activities = activities ? engageCardState("activities", activities) as EngageRowState : HUB_UNAVAILABLE;
+      next.giveaways = engageCardState("giveaways", { chat, raffles, predictions }) as EngageRowState || HUB_UNAVAILABLE;
+      next.tournaments = tournaments ? engageCardState("tournaments", tournaments) as EngageRowState : HUB_UNAVAILABLE;
+      setStates(next);
+    });
+    return () => { active = false; };
+  }, [apiClient, siteId]);
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="border-b pb-4">
+        <CardTitle className="text-base">Engage destinations</CardTitle>
+        <CardDescription>Live activity across your community.</CardDescription>
+      </CardHeader>
+      <ul className="divide-y">
+        {ENGAGE_FEATURES.map((feature) => {
+          const state = states[feature.feature] || {
+            tone: "neutral",
+            status: "pending",
+            label: "Checking…",
+            meta: feature.idle.meta,
+          };
+          const Icon = feature.feature === "activities" ? Gift : feature.feature === "giveaways" ? Ticket : Trophy;
+          return (
+            <li key={feature.feature} className="engage-row" data-feature={feature.feature} data-status={state.status}>
+              <a className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:px-6" href={feature.href}>
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted/50 text-muted-foreground" aria-hidden="true">
+                  <Icon className="size-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold text-foreground">{feature.title}</span>
+                  <span className="block text-sm text-muted-foreground">{feature.desc}</span>
+                </span>
+                <span className="hidden text-right sm:block">
+                  <Badge
+                    className={cn(
+                      "mb-1 rounded-full",
+                      state.tone === "success" && "border-emerald-700/25 bg-emerald-600/5 text-emerald-800",
+                      state.tone === "warning" && "border-amber-700/25 bg-amber-500/10 text-amber-900",
+                    )}
+                    data-status={state.status}
+                    data-tone={state.tone}
+                  >
+                    {state.label}
+                  </Badge>
+                  <span className="block max-w-72 text-xs text-muted-foreground" data-status-meta>{state.meta}</span>
+                </span>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+function ChatGiveaway({
+  apiClient,
+  siteId,
+  onAlert,
+  onClearAlert,
+}: {
+  apiClient: PageDependencies["api"];
+  siteId: string;
+  onAlert: (message: string) => void;
+  onClearAlert: () => void;
+}) {
+  const [data, setData] = useState<ChatGiveawayPayload>({
+    connection: EMPTY_CONNECTION,
+    entries: [],
+    session: null,
+    winner: null,
+  });
+  const [rules, setRules] = useState<GiveawayRules>(DEFAULT_RULES);
+  const [keyword, setKeyword] = useState("!win");
+  const [search, setSearch] = useState("");
+  const [manualName, setManualName] = useState("");
+  const [manualError, setManualError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(false);
+  const [savingResponseRules, setSavingResponseRules] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [isRolling, setIsRolling] = useState(false);
+  const [rouletteNames, setRouletteNames] = useState<string[]>([]);
+  const [roulettePosition, setRoulettePosition] = useState(0);
+  const [rouletteBlur, setRouletteBlur] = useState(false);
+  const [winnerOpen, setWinnerOpen] = useState(false);
+  const [winnerJustDrawn, setWinnerJustDrawn] = useState(false);
+  const [winnerAction, setWinnerAction] = useState("");
+  const [customRule, setCustomRule] = useState("");
+  const [responseRemaining, setResponseRemaining] = useState(0);
+  const [clock, setClock] = useState(Date.now());
+  const [advancedOpen, setAdvancedOpen] = useState(() => {
+    try { return window.localStorage.getItem("yr:gw-advanced-open") === "1"; } catch { return false; }
+  });
+  const manualInputRef = useRef<HTMLInputElement>(null);
+  const ruleSessionIdRef = useRef<string | null>(null);
+  const autoRerollKeyRef = useRef("");
+  const session = data.session || null;
+  const entries = data.entries || [];
+  const connection = data.connection || EMPTY_CONNECTION;
+  const capabilities = data.capabilities || {};
+  const winner = data.winner || null;
+  const winnerId = winner?.id || null;
+  const active = session?.status === "active";
+  const settingsLocked = active || Boolean(session?.winner_entry_id && !session.winner_finalized_at);
+  const manualSetup = !connection.connected && !active;
+  const manualUi = manualSetup || session?.provider === "manual";
+  const eligibleEntries = entries.filter(isEligible);
+  const filteredEntries = entries.filter((entry) => entry.username.toLowerCase().includes(search.trim().toLowerCase()));
+  const linkedCount = entries.filter((entry) =>
+    (entry.linked?.length || 0) > 0 || entry.eligibility_reason === "excluded_linked_account").length;
+  const excludePlan = useMemo(() => linkedExcludePlan(entries), [entries]);
+  const winnerClaimed = Boolean(session?.winner_confirmed_at);
+  const responseRequired = Boolean(session?.winner_response_required ?? session?.rules?.winnerMustRespond);
+  const responseTimeout = Number(session?.winner_response_timeout_seconds || session?.rules?.responseTimeout || 60);
+  const responseRulesEditable = Boolean(session && session.provider === "kick" && session.status !== "cancelled" && !session.winner_finalized_at);
+  const claimExpired = responseRequired && !winnerClaimed && responseRemaining <= 0 && Boolean(session?.drawn_at);
+  const finalized = Boolean(session?.winner_finalized_at);
+  const autoRerollExhausted = Boolean(session?.auto_reroll_exhausted_at) && !finalized && !winnerClaimed;
+  const canConfirm = Boolean(winner && !finalized && (!responseRequired || winnerClaimed));
+
+  const refresh = useCallback(async () => {
+    try {
+      const next = await apiClient<ChatGiveawayPayload>("/api/giveaways/chat", {}, siteId);
+      setData((previous) => ({
+        ...previous,
+        ...next,
+        connection: next.connection || previous.connection || EMPTY_CONNECTION,
+        entries: next.entries || [],
+      }));
+      setLoading(false);
+    } catch {
+      setLoading(false);
+    }
+  }, [apiClient, siteId]);
+
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, CHAT_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+
+  useEffect(() => {
+    if (session?.id && ruleSessionIdRef.current !== session.id) {
+      ruleSessionIdRef.current = session.id;
+      setRules({ ...DEFAULT_RULES, ...session.rules });
+      setKeyword(session.keyword || "!win");
+      return;
+    }
+    if (!session && ruleSessionIdRef.current) {
+      ruleSessionIdRef.current = null;
+      setRules(DEFAULT_RULES);
+    }
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (!session?.started_at) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [session?.started_at, session?.stopped_at, session?.status]);
+
+  useEffect(() => {
+    if (!session?.drawn_at || !responseRequired || winnerClaimed) {
+      setResponseRemaining(0);
+      return;
+    }
+    const deadline = session.winner_response_deadline
+      ? Date.parse(session.winner_response_deadline)
+      : Date.parse(session.drawn_at) + responseTimeout * 1_000;
+    setResponseRemaining(Number.isFinite(deadline) ? Math.max(0, Math.ceil((deadline - clock) / 1_000)) : 0);
+  }, [clock, session?.drawn_at, session?.winner_response_deadline, responseRequired, responseTimeout, winnerClaimed]);
+
+  useEffect(() => {
+    const deadline = session?.winner_response_deadline ? Date.parse(session.winner_response_deadline) : Number.NaN;
+    if (
+      !session?.id
+      || !session.drawn_at
+      || !session.rules?.autoReroll
+      || session.winner_confirmed_at
+      || session.winner_finalized_at
+      || !Number.isFinite(deadline)
+      || deadline > clock
+    ) return;
+    const key = `${session.id}:${session.drawn_at}`;
+    if (autoRerollKeyRef.current === key) return;
+    autoRerollKeyRef.current = key;
+    void (async () => {
+      try {
+        const response = await apiClient<ChatGiveawayPayload>("/api/giveaways/chat/draw", post({
+          sessionId: session.id,
+          siteId: siteId || undefined,
+          automatic: true,
+          expectedWinnerEntryId: session.winner_entry_id,
+          expectedDrawnAt: session.drawn_at,
+        }), siteId);
+        applyState(response);
+      } catch (error) {
+        const payload = errorData(error);
+        if (payload.session) applyState(payload);
+        if (payload.error) onAlert(payload.error);
+        else onAlert("Network error during auto re-roll.");
+      }
+    })();
+  }, [apiClient, clock, onAlert, session, siteId]);
+
+  useEffect(() => {
+    if (winnerJustDrawn && winnerId && !finalized) {
+      const timer = window.setTimeout(() => setWinnerOpen(true), 950);
+      return () => window.clearTimeout(timer);
+    }
+  }, [winnerJustDrawn, winnerId, session?.drawn_at, finalized]);
+
+  useEffect(() => {
+    if (!winnerJustDrawn || !winnerId) return;
+    const stage = document.getElementById("gw-winner-stage");
+    if (!stage) return;
+    if (typeof stage.scrollIntoView === "function") {
+      stage.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    const animation = typeof stage.animate === "function"
+      ? stage.animate(
+        [{ opacity: 0, transform: "scale(.9)" }, { opacity: 1, transform: "scale(1)" }],
+        { duration: 400, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      )
+      : null;
+    if (animation) void animation.finished.catch(() => undefined);
+    return () => animation?.cancel();
+  }, [winnerJustDrawn, winnerId, session?.drawn_at]);
+
+  const applyState = (next: ChatGiveawayPayload) => {
+    setData((previous) => ({
+      ...previous,
+      ...next,
+      connection: next.connection || previous.connection || EMPTY_CONNECTION,
+      entries: next.entries || previous.entries || [],
+    }));
+  };
+
+  const chatApi = (path: string, body?: object) =>
+    apiClient<ChatGiveawayPayload>(`/api/giveaways/chat${path}`, body ? post(body) : {}, siteId);
+
+  const updateRule = (key: keyof GiveawayRules, value: string | boolean | number) => {
+    setRules((previous) => {
+      const next = { ...previous, [key]: value };
+      if (key === "entryMode" && value !== "verified") {
+        next.onePerIp = false;
+        next.vpnDetection = false;
+      }
+      if (key === "winnerMustRespond" && value === false) next.autoReroll = false;
+      return next;
+    });
+  };
+
+  const saveResponseRules = async (nextRules = rules) => {
+    if (!responseRulesEditable || !session || savingResponseRules) return;
+    setSavingResponseRules(true);
+    try {
+      const response = await chatApi("/response-rules", {
+        sessionId: session.id,
+        winnerMustRespond: Boolean(nextRules.winnerMustRespond),
+        responseTimeout: Number(nextRules.responseTimeout || 60),
+        autoReroll: Boolean(nextRules.autoReroll),
+        siteId: siteId || undefined,
+      });
+      applyState(response);
+    } catch (error) {
+      const payload = errorData(error);
+      if (payload.session) applyState(payload);
+      const persistedRules = payload.session?.rules || session.rules;
+      setRules((current) => ({
+        ...current,
+        winnerMustRespond: Boolean(persistedRules?.winnerMustRespond),
+        responseTimeout: Number(persistedRules?.responseTimeout || 60),
+        autoReroll: Boolean(persistedRules?.autoReroll),
+      }));
+      onAlert(errorMessage(error, "Could not save winner response rules."));
+    } finally {
+      setSavingResponseRules(false);
+    }
+  };
+
+  const setRule = (key: keyof GiveawayRules, value: string | boolean | number) => {
+    updateRule(key, value);
+    if (responseRulesEditable && ["winnerMustRespond", "responseTimeout", "autoReroll"].includes(key)) {
+      const next = { ...rules, [key]: value } as GiveawayRules;
+      if (key === "winnerMustRespond" && value === false) next.autoReroll = false;
+      void saveResponseRules(next);
+    }
+  };
+
+  const toggleGiveaway = async (event: FormEvent) => {
+    event.preventDefault();
+    onClearAlert();
+    if (active) {
+      setStarting(true);
+      try {
+        applyState(await chatApi("/stop", { sessionId: session?.id, siteId: siteId || undefined }));
+      } catch (error) {
+        onAlert(errorMessage(error, "Network error stopping entries."));
+      } finally {
+        setStarting(false);
+      }
+      return;
+    }
+    const trimmedKeyword = keyword.trim();
+    if (!manualSetup && !trimmedKeyword) {
+      onAlert("Enter the keyword viewers should type.");
+      return;
+    }
+    if (!manualSetup && !connection.connected) {
+      onAlert("Chat giveaways require a connected Kick channel.");
+      return;
+    }
+    const nextRules = {
+      ...rules,
+      entryMode: manualSetup ? "chat" : rules.entryMode || "chat",
+      subscriberOnly: manualSetup ? false : Boolean(rules.subscriberOnly),
+      vipOnly: manualSetup ? false : Boolean(rules.vipOnly),
+      onePerIp: manualSetup ? false : Boolean(rules.onePerIp),
+      vpnDetection: manualSetup ? false : Boolean(rules.vpnDetection),
+      winnerMustRespond: manualSetup ? false : Boolean(rules.winnerMustRespond),
+      autoReroll: manualSetup ? false : Boolean(rules.autoReroll),
+    };
+    setStarting(true);
+    try {
+      const body = manualSetup
+        ? { mode: "manual", rules: nextRules, siteId: siteId || undefined }
+        : { keyword: trimmedKeyword, rules: nextRules, siteId: siteId || undefined };
+      applyState(await chatApi("/start", body));
+    } catch (error) {
+      onAlert(errorMessage(error, "Network error starting the giveaway."));
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const addEntrant = async (event: FormEvent) => {
+    event.preventDefault();
+    onClearAlert();
+    setManualError("");
+    if (!active || !session) {
+      const message = "Start a giveaway before adding entrants.";
+      onAlert(message);
+      setManualError(message);
+      return;
+    }
+    setAdding(true);
+    try {
+      applyState(await chatApi("/entries/add", {
+        sessionId: session.id,
+        username: manualName,
+        siteId: siteId || undefined,
+      }));
+      setManualName("");
+      manualInputRef.current?.focus();
+    } catch (error) {
+      const message = errorMessage(error, "Network error adding entrant.");
+      onAlert(message);
+      setManualError(message);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const mutateEntry = async (path: string, body: object, fallback: string) => {
+    if (!session) return;
+    onClearAlert();
+    try {
+      const result = await chatApi(path, { ...body, sessionId: session.id, siteId: siteId || undefined });
+      applyState(result);
+      if (path === "/entries/exclude") {
+        const count = Array.isArray(result.excluded) ? result.excluded.length : 0;
+        onAlert(`Excluded ${count} linked entrant${count === 1 ? "" : "s"}. Use Include again to undo.`);
+      }
+    } catch (error) {
+      onAlert(errorMessage(error, fallback));
+    }
+  };
+
+  const drawWinner = async () => {
+    if (!session || isRolling) return;
+    onClearAlert();
+    setIsRolling(true);
+    setWinnerJustDrawn(false);
+    try {
+      const result = await chatApi("/draw", {
+        sessionId: session.id,
+        expectedWinnerEntryId: session.winner_entry_id ?? null,
+        expectedDrawnAt: session.drawn_at ?? null,
+        siteId: siteId || undefined,
+      });
+      if (!result.winner) {
+        applyState(result);
+        onAlert(result.message || "Could not draw a winner.");
+        return;
+      }
+      const visualPool = eligibleEntries.filter((entry) =>
+        session.rules?.winnerRepeat === "again" || entry.id !== session.winner_entry_id,
+      );
+      await runRoulette(visualPool, result.winner);
+      applyState(result);
+      setClock(Date.now());
+      setWinnerJustDrawn(true);
+      playWinnerSound();
+    } catch (error) {
+      const payload = errorData(error);
+      if (payload.session) applyState(payload);
+      onAlert(errorMessage(error, "Network error drawing a winner."));
+    } finally {
+      setIsRolling(false);
+    }
+  };
+
+  const runRoulette = async (pool: GiveawayEntrant[], drawnWinner: GiveawayWinner) => {
+    const names = [...new Set(pool.map((entry) => entry.username))];
+    if (!names.includes(drawnWinner.username)) names.push(drawnWinner.username);
+    const pick = () => names[Math.floor(Math.random() * names.length)];
+    const sequence: string[] = [];
+    let previous: string | null = null;
+    for (let index = 0; index < 22; index += 1) {
+      let name = pick();
+      while (names.length > 1 && name === previous) name = pick();
+      sequence.push(name);
+      previous = name;
+    }
+    let decoy = pick();
+    while (names.length > 1 && decoy === drawnWinner.username) decoy = pick();
+    sequence.push(decoy, drawnWinner.username);
+    setRouletteNames(sequence);
+    setRoulettePosition(0);
+    setRouletteBlur(false);
+
+    const winnerIndex = sequence.length - 1;
+    const decoyIndex = winnerIndex - 1;
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      setRoulettePosition(winnerIndex);
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      return;
+    }
+
+    const animate = (from: number, to: number, duration: number, easing: (progress: number) => number) =>
+      new Promise<void>((resolve) => {
+        const start = performance.now();
+        let lastTime = start;
+        let lastProgress = from;
+        const step = (time: number) => {
+          const progress = Math.min(1, (time - start) / duration);
+          const position = from + (to - from) * easing(progress);
+          const velocity = Math.abs(position - lastProgress) / Math.max(1, time - lastTime) * 1_000;
+          setRouletteBlur(velocity > 6);
+          setRoulettePosition(position);
+          lastTime = time;
+          lastProgress = position;
+          if (progress < 1) window.requestAnimationFrame(step);
+          else {
+            setRouletteBlur(false);
+            resolve();
+          }
+        };
+        window.requestAnimationFrame(step);
+      });
+
+    await animate(0, decoyIndex, 2_600, (progress) => 1 - Math.pow(1 - progress, 5));
+    await new Promise((resolve) => window.setTimeout(resolve, 380));
+    await animate(decoyIndex, winnerIndex, 620, (progress) => 1 - Math.pow(1 - progress, 3));
+    await new Promise((resolve) => window.setTimeout(resolve, 260));
+  };
+
+  const confirmWinner = async () => {
+    if (!winner || !session || finalized || (responseRequired && !winnerClaimed)) return;
+    onClearAlert();
+    setWinnerAction("confirming");
+    try {
+      applyState(await chatApi("/finalize", {
+        sessionId: session.id,
+        winnerEntryId: session.winner_entry_id,
+        drawnAt: session.drawn_at,
+        siteId: siteId || undefined,
+      }));
+      setWinnerOpen(false);
+    } catch (error) {
+      const payload = errorData(error);
+      if (payload.session) applyState(payload);
+      else if (errorStatus(error) === 409) void refresh();
+      onAlert(errorMessage(error, "Network error confirming the winner."));
+    } finally {
+      setWinnerAction("");
+    }
+  };
+
+  const rerollWinner = async () => {
+    if (!session) return;
+    setWinnerAction("rerolling");
+    setWinnerOpen(false);
+    await drawWinner();
+    setWinnerAction("");
+  };
+
+  const exportCsv = () => {
+    const sanitize = (value: string | null | undefined) => {
+      const clean = String(value || "").replace(/"/g, '""');
+      return /^[=+\-@]/.test(clean) ? `'${clean}` : clean;
+    };
+    const rows = [
+      ["Index", "Kick Username", "Status", "Chat Message", "Entered At", "Profile URL"],
+      ...entries.map((entry, index) => [
+        String(index + 1),
+        sanitize(entry.username),
+        sanitize(entry.eligibility_status || "eligible"),
+        sanitize(entry.provider === "manual" ? "—" : entry.message),
+        sanitize(entry.entered_at),
+        sanitize(safeKickProfileUrl(entry.username)),
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `kick-giveaway-entrants-${connection.channelName || "stream"}-${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copyWinner = async () => {
+    if (!winner) return;
+    const text = `Winner: ${winner.username}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      onAlert("Winner info copied.");
+    } catch {
+      onAlert("Could not copy winner info.");
+    }
+  };
+
+  const updateAdvancedOpen = (open: boolean) => {
+    setAdvancedOpen(open);
+    try { window.localStorage.setItem("yr:gw-advanced-open", open ? "1" : "0"); } catch { /* storage unavailable */ }
+  };
+
+  const elapsed = session?.started_at
+    ? (() => {
+      const start = Date.parse(session.started_at || "");
+      const end = session.status === "active" ? Date.now() : Date.parse(session.stopped_at || session.started_at || "");
+      const seconds = Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.floor((end - start) / 1000)) : 0;
+      return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+    })()
+    : "00:00";
+  const statusLabel = active
+    ? "LIVE"
+    : !connection.connected
+      ? "Kick not connected"
+      : !connection.chatReady
+        ? "Chat events unavailable"
+        : session?.status === "stopped"
+          ? "Entries closed"
+          : session?.status === "completed"
+            ? "Winner drawn"
+            : loading
+              ? "Checking…"
+              : "Ready";
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 min-[961px]:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.7fr)]">
+        <div className={cn("space-y-6", active && "max-[960px]:order-2")}>
+          <Card id="gw-setup-card">
+            <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+              <div>
+                <CardTitle className="text-lg">Start collecting entries</CardTitle>
+                <CardDescription className="mt-2">Collect entries from Kick chat, or add viewer names yourself.</CardDescription>
+              </div>
+              <Badge className={cn("shrink-0 rounded-full", active ? "border-emerald-700/25 bg-emerald-600/10 text-emerald-800" : "")} aria-live="polite">
+                <span className={cn("mr-1.5 size-1.5 rounded-full bg-muted-foreground", active && "bg-emerald-600")} />
+                {statusLabel}
+              </Badge>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {connection.connected ? (
+                <div id="gw-channel-connected" className="rounded-lg border bg-muted/30 p-3 text-sm">
+                  <span className="text-muted-foreground">Kick channel</span>
+                  <div id="gw-channel-name" className="mt-1 flex items-center gap-2 font-semibold">
+                    {connection.channelName || ""}
+                    <Badge className="border-emerald-700/25 bg-emerald-600/5 text-emerald-800">✓ Connected</Badge>
+                  </div>
+                  {connection.chatReady === false && (
+                    <p id="gw-chat-events-notice" className="mt-2 text-xs text-amber-800">
+                      Kick did not confirm chat events for this channel yet. Reconnect Kick in Connections to enable Chat giveaways.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div id="gw-channel-disconnected" className="rounded-lg border border-amber-700/20 bg-amber-500/5 p-3">
+                  <p className="text-sm font-medium">Chat giveaways require a connected Kick channel.</p>
+                  <a className="mt-3 inline-flex text-sm font-semibold text-primary underline-offset-4 hover:underline" id="gw-btn-connect-kick" href="/dashboard/settings/connections">Connect Kick</a>
+                  {manualSetup && <p id="gw-manual-start-hint" className="mt-3 text-sm text-muted-foreground">Or run it manually — add viewer names yourself.</p>}
+                </div>
+              )}
+              <form id="gw-setup-form" className="space-y-4" onSubmit={toggleGiveaway}>
+                {!manualSetup && session?.provider !== "manual" && (
+                  <div id="gw-keyword-field" className="space-y-2">
+                    <Label htmlFor="gw-keyword-input">Keyword</Label>
+                    <Input
+                      id="gw-keyword-input"
+                      name="keyword"
+                      value={keyword}
+                      maxLength={64}
+                      placeholder="e.g. !win, !enter, YOURRANK"
+                      readOnly={settingsLocked}
+                      onChange={(event) => setKeyword(event.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">Viewers who type this word in chat are entered once each. Matching ignores upper/lowercase.</p>
+                  </div>
+                )}
+                <Button
+                  id="gw-btn-listen"
+                  type="submit"
+                  disabled={starting || (!active && !(connection.connected && connection.chatReady) && !manualSetup)}
+                  variant={active ? "destructive" : "default"}
+                  className="w-full"
+                >
+                  {starting && <Loader2 className="animate-spin" />}
+                  <span id="gw-listen-btn-label">{active ? "Stop entries" : manualSetup ? "Start manual giveaway" : "Start giveaway"}</span>
+                </Button>
+                <p className="text-xs text-muted-foreground">Entries keep collecting on our servers even if you close or refresh this page.</p>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card id="gw-rules-card">
+            <CardHeader>
+              <CardTitle className="text-lg">Giveaway rules</CardTitle>
+              <CardDescription id="gw-rules-summary">{formatRulesSummary(rules)}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <fieldset id="gw-settings" disabled={settingsLocked} className="space-y-5">
+                <fieldset id="gw-entry-modes" disabled={settingsLocked} hidden={manualUi} className="space-y-3">
+                  <legend id="gw-entry-mode-legend" hidden={manualUi} className="text-sm font-semibold">Entry Mode</legend>
+                  {(["chat", "members", "verified"] as const).map((mode) => (
+                    <label key={mode} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm">
+                      <input
+                        type="radio"
+                        name="gw-entry-mode"
+                        value={mode}
+                        checked={(rules.entryMode || "chat") === mode}
+                        disabled={settingsLocked}
+                        onChange={(event) => setRule("entryMode", event.target.value)}
+                      />
+                      <span>
+                        <strong>{mode === "chat" ? "Anyone in chat" : mode === "members" ? "Members only" : "Verified Entry"}</strong>
+                        <small className="mt-1 block text-muted-foreground">
+                          {mode === "chat"
+                            ? "Anyone who types the keyword can participate."
+                            : mode === "members"
+                              ? "Requires a YourRank account linked to the Kick account used in chat."
+                              : "Viewers type the keyword, then verify through YourRank before entering the draw."}
+                        </small>
+                      </span>
+                    </label>
+                  ))}
+                  <p id="gw-entry-mode-desc" hidden={manualUi} className="text-xs text-muted-foreground" aria-live="polite">
+                    {rules.entryMode === "members"
+                      ? "Requires a YourRank account linked to the Kick account used in chat."
+                      : rules.entryMode === "verified"
+                        ? "Viewers type the keyword, then verify through YourRank before entering the draw."
+                        : "Anyone who types the keyword can participate."}
+                  </p>
+                </fieldset>
+                <fieldset id="gw-kick-eligibility-section" hidden={manualUi} className="space-y-2">
+                  <legend id="gw-eligibility-title" className="text-sm font-semibold">Eligibility</legend>
+                  <label id="gw-kick-identity-rule" className="flex items-center gap-2 text-sm">
+                    <Checkbox checked disabled aria-label="One entry per Kick account" />
+                    <span>
+                      <strong>One entry per Kick account</strong>
+                      <small className="mt-1 block text-muted-foreground">Always enforced by Kick account ID.</small>
+                    </span>
+                  </label>
+                </fieldset>
+                <fieldset id="gw-winner-repeat-modes" disabled={settingsLocked} className="space-y-2">
+                  <legend id="gw-winner-repeat-title" className="text-sm font-medium">Winner repeat</legend>
+                  {(["once", "again"] as const).map((value) => (
+                    <label key={value} className="flex items-center gap-2 text-sm">
+                      <input id={`gw-winner-repeat-${value}`} type="radio" name="gw-winner-repeat" value={value} checked={(rules.winnerRepeat || "once") === value} disabled={settingsLocked} onChange={() => setRule("winnerRepeat", value)} />
+                      <span>
+                        <strong>{value === "once" ? "Win once" : "Can win again"}</strong>
+                        <small className="mt-1 block text-muted-foreground">
+                          {value === "once"
+                            ? "Winners are excluded from later draws and re-rolls in this giveaway."
+                            : "A re-roll may pick the same participant again."}
+                        </small>
+                      </span>
+                    </label>
+                  ))}
+                  <p id="gw-winner-repeat-desc" className="text-xs text-muted-foreground" aria-live="polite">
+                    {rules.winnerRepeat === "again"
+                      ? "A re-roll may pick the same participant again."
+                      : "Winners are excluded from later draws and re-rolls in this giveaway."}
+                  </p>
+                </fieldset>
+              </fieldset>
+              <fieldset id="gw-response-settings" className="space-y-4">
+                <div id="gw-winner-verification-section" hidden={manualUi} className="space-y-3">
+                  <h3 id="gw-winner-verification-title" className="text-sm font-medium">Winner verification</h3>
+                  <RuleCheckbox id="gw-opt-claim-req" label="Winner must respond in chat" checked={Boolean(rules.winnerMustRespond)} disabled={savingResponseRules} onChange={(value) => setRule("winnerMustRespond", value)} />
+                  <div id="gw-claim-duration-wrap" className="space-y-2" hidden={!rules.winnerMustRespond}>
+                    <Label htmlFor="gw-opt-claim-duration">Response timeout</Label>
+                    <Select value={String(rules.responseTimeout || 60)} onValueChange={(value) => setRule("responseTimeout", Number(value))}>
+                      <SelectTrigger id="gw-opt-claim-duration" disabled={savingResponseRules || !rules.winnerMustRespond}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[30, 60, 90, 120].map((seconds) => <SelectItem key={seconds} value={String(seconds)}>{seconds} seconds</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div id="gw-auto-reroll-wrap" hidden={!rules.winnerMustRespond}>
+                    <RuleCheckbox id="gw-opt-auto-reroll" label="Auto re-roll on timeout" checked={Boolean(rules.autoReroll)} disabled={savingResponseRules || !rules.winnerMustRespond} onChange={(value) => setRule("autoReroll", value)} />
+                    <p className="ml-6 text-xs text-muted-foreground">Runs at expiry, or within 5 minutes if this page is closed.</p>
+                  </div>
+                </div>
+              </fieldset>
+              {responseRulesEditable && <p id="gw-response-live-note" className="text-xs text-muted-foreground">Changes apply to the next draw or re-roll.</p>}
+              <fieldset id="gw-advanced-settings" disabled={settingsLocked} className="space-y-4">
+                <details id="gw-advanced-options" open={advancedOpen} onToggle={(event) => updateAdvancedOpen(event.currentTarget.open)} className="rounded-lg border p-3">
+                  <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
+                    <span>Advanced options</span>
+                    <span id="gw-advanced-summary" className="text-xs font-normal text-muted-foreground">{formatAdvancedSummary(rules)}</span>
+                  </summary>
+                  <div className="mt-4 space-y-5">
+                    <fieldset id="gw-advanced-eligibility-section" disabled={settingsLocked} hidden={manualUi} className="space-y-3">
+                      <h3 id="gw-advanced-eligibility-title" className="text-sm font-semibold">Eligibility</h3>
+                      <div id="gw-subscriber-rule" hidden={manualUi}>
+                        <RuleCheckbox id="gw-opt-subscriber" label="Subscriber only" checked={Boolean(rules.subscriberOnly)} onChange={(value) => setRule("subscriberOnly", value)} />
+                      </div>
+                      <div id="gw-vip-rule" hidden={manualUi}>
+                        <RuleCheckbox id="gw-opt-vip" label="VIP only" checked={Boolean(rules.vipOnly)} onChange={(value) => setRule("vipOnly", value)} />
+                      </div>
+                      <RuleCheckbox id="gw-opt-skip-past" label="Exclude past giveaway winners" checked={Boolean(rules.excludePreviousWinners)} onChange={(value) => setRule("excludePreviousWinners", value)} />
+                      <p className="text-xs text-muted-foreground">Skips winners from this community’s earlier giveaways.</p>
+                      <p id="gw-subscriber-hint" hidden={manualUi} className="text-xs text-muted-foreground">Checked against chat badges. Both on requires both badges.</p>
+                      <p id="gw-kick-history-hint" hidden={manualUi} className="text-xs text-muted-foreground">Account age and follow duration need Kick data that isn’t connected.</p>
+                    </fieldset>
+                    <fieldset id="gw-anti-abuse-section" disabled={settingsLocked} hidden={manualUi} className="space-y-3">
+                      <h3 id="gw-abuse-title" className="text-sm font-semibold">Anti-abuse</h3>
+                      <RuleCheckbox id="gw-opt-ip" label="One account per IP" checked={Boolean(rules.onePerIp)} disabled={rules.entryMode !== "verified"} onChange={(value) => setRule("onePerIp", value)} />
+                      <RuleCheckbox id="gw-opt-vpn" label="VPN / Proxy detection" checked={Boolean(rules.vpnDetection)} disabled={rules.entryMode !== "verified" || capabilities.vpnDetection !== true} onChange={(value) => setRule("vpnDetection", value)} />
+                      <label className="flex cursor-not-allowed items-center gap-2 text-sm opacity-50">
+                        <Checkbox checked={false} disabled aria-label="Duplicate device detection" aria-describedby="gw-device-requirement" />
+                        <span>Duplicate device detection</span>
+                      </label>
+                      <p id="gw-ip-requirement" className="text-xs text-muted-foreground">{rules.entryMode === "verified" ? "Shared connections may exclude people living together." : "Locked — Requires Verified Entry"}</p>
+                      <p id="gw-vpn-requirement" className="text-xs text-muted-foreground">
+                        {rules.entryMode !== "verified"
+                          ? "Locked — Requires Verified Entry"
+                          : capabilities.vpnDetection === true
+                            ? "Blocks VPN, proxy, Tor and hosting networks (proxycheck.io)."
+                            : "Unavailable — PROXYCHECK_API_KEY not configured"}
+                      </p>
+                      <p id="gw-device-requirement" className="text-xs text-muted-foreground">
+                        {rules.entryMode === "verified" ? "Unavailable — No supported device check" : "Locked — Requires Verified Entry and a supported device check"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Needs Verified Entry — Kick chat doesn’t expose IP or device.</p>
+                      <Button
+                        id="gw-enable-verified"
+                        type="button"
+                        variant="link"
+                        hidden={rules.entryMode === "verified" || settingsLocked}
+                        onClick={() => setRule("entryMode", "verified")}
+                      >
+                        Enable Verified Entry
+                      </Button>
+                    </fieldset>
+                    <div id="gw-winner-instruction-section" hidden={manualUi} className="space-y-2">
+                      <h3 id="gw-winner-instruction-title" className="text-sm font-semibold">Winner instruction</h3>
+                      <Label htmlFor="gw-custom-rule-text">Winner instruction (optional)</Label>
+                      <Input id="gw-custom-rule-text" maxLength={160} placeholder="e.g. Say your in-game name in chat" value={customRule} onChange={(event) => setCustomRule(event.target.value)} />
+                      <p className="text-xs text-muted-foreground">A display instruction on this page; not an eligibility check.</p>
+                    </div>
+                  </div>
+                </details>
+              </fieldset>
+              <p id="gw-settings-note" className="text-xs text-muted-foreground">
+                {settingsLocked ? "Entry rules are locked for the current giveaway. Winner verification can still change until you confirm a winner." : "Settings are saved when you start a giveaway. Changes apply to the next giveaway."}
+              </p>
+              {manualUi && <p id="gw-manual-rules-note" className="text-xs text-muted-foreground">Other rules need a connected Kick channel.</p>}
+              {session?.rules?.entryMode === "verified" && (
+                <div id="gw-verification-link-wrap">
+                  <a id="gw-verification-link" className="text-sm text-primary underline-offset-4 hover:underline" href={`/giveaways/verify?sessionId=${encodeURIComponent(session.id)}`}>
+                    Open verification link
+                  </a>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div
+          className={cn(
+            "space-y-6 min-w-0",
+            active && "is-live max-[960px]:order-1",
+            "min-[961px]:sticky min-[961px]:top-[var(--gw-pinned-top,calc(var(--ws-topbar-h,64px)_+_112px))]",
+            "min-[961px]:max-h-[calc(100vh_-_var(--gw-pinned-top,calc(var(--ws-topbar-h,64px)_+_112px))_-_80px)]",
+            "min-[961px]:overflow-y-auto min-[961px]:[scrollbar-width:thin]",
+          )}
+          id="gw-layout"
+        >
+          <Card id="gw-stage-card">
+            <CardHeader className="gap-4 border-b md:flex-row md:items-center md:justify-between">
+              <div>
+                <CardTitle className="text-lg">Giveaway draw</CardTitle>
+                <CardDescription className="mt-2">See who is eligible, then draw when you are ready.</CardDescription>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <Stat id="gw-stat-entrants" label="Entrants" value={entries.length.toLocaleString()} />
+                <Stat id="gw-stat-keyword" label="Keyword" value={session ? session.provider === "manual" ? "Manual" : session.keyword : "—"} />
+                <Stat id="gw-stat-time" label="Time" value={elapsed} />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5 p-5 md:p-6">
+              {winner && !isRolling && (
+                <div id="gw-winner-stage" role="status" aria-live="polite" className={cn("gw-winner-stage relative overflow-hidden rounded-xl border bg-gradient-to-br from-primary/5 to-transparent p-5", finalized && "gw-winner-stage--confirmed")}>
+                  {winnerJustDrawn && <WinnerConfetti key={session?.drawn_at || winner.id} />}
+                  <div className="flex flex-col items-center gap-3 text-center">
+                    <Crown className="size-7 text-amber-500" aria-hidden="true" />
+                    <img className="size-16 rounded-full border object-cover" src={safeAvatarUrl(winner.avatar_url)} alt="Winner avatar" />
+                    <div>
+                      <Badge className="mb-2 rounded-full">Winner drawn</Badge>
+                      <h3 id="gw-winner-name" className="text-xl font-bold">{winner.username}</h3>
+                      <p id="gw-winner-trust" className="text-sm text-muted-foreground">{winner.provider === "manual" ? "Added manually" : "Viewer"}</p>
+                    </div>
+                  </div>
+                  {winner.message && <p id="gw-winner-message" className="mt-4 text-center text-sm">{winner.message}</p>}
+                  {customRule.trim() && <p id="gw-winner-instruction" className="mt-2 text-center text-sm text-muted-foreground">{customRule.trim()}</p>}
+                  {winner.provider === "manual" && session?.rules?.winnerMustRespond && (
+                    <p id="gw-winner-manual-hint" className="mt-3 text-center text-sm text-muted-foreground">This entrant was added manually; no chat response needed.</p>
+                  )}
+                  {responseRequired && (
+                    <ClaimStatus
+                      remaining={responseRemaining}
+                      claimed={winnerClaimed}
+                      message={session?.winner_confirmation_message}
+                      timeout={responseTimeout}
+                      exhausted={autoRerollExhausted}
+                      winnerName={winner.username}
+                    />
+                  )}
+                  <div className="mt-5 flex flex-wrap justify-center gap-2">
+                    <Button id="gw-btn-copy-winner" type="button" variant="outline" size="sm" onClick={() => void copyWinner()}>Copy Info</Button>
+                    <Button id="gw-btn-reroll" type="button" variant={claimExpired ? "default" : "outline"} size="sm" disabled={Boolean(winnerAction) || finalized} onClick={() => void rerollWinner()}>
+                      <RefreshCw /> Re-roll Winner
+                    </Button>
+                    <Button id="gw-btn-confirm" type="button" size="sm" disabled={!canConfirm || winnerAction === "confirming"} title={responseRequired && !winnerClaimed ? claimExpired ? "The winner did not respond — re-roll to pick another winner" : "Waiting for the winner to respond in chat" : undefined} onClick={() => void confirmWinner()}>
+                      <Check /> {finalized ? "Winner confirmed" : "Confirm Winner"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {isRolling && (
+                <div id="gw-roulette" className="space-y-3 rounded-xl border bg-muted/30 p-5 text-center" role="status" aria-live="polite">
+                  {rouletteNames.length ? (
+                    <div className="relative mx-auto h-[92px] max-w-md overflow-hidden rounded-lg border bg-card">
+                      <div
+                        id="gw-roller-track"
+                        aria-hidden="true"
+                        className={cn("will-change-transform", rouletteBlur && "blur-[1px]")}
+                        style={{ transform: `translateY(${(1 - roulettePosition) * 46}px)` }}
+                      >
+                        {rouletteNames.map((name, index) => (
+                          <div key={`${index}-${name}`} className="gw-roulette-item flex h-[46px] items-center justify-center font-semibold">
+                            @{name}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t-2 border-primary/60" aria-hidden="true" />
+                    </div>
+                  ) : <Loader2 className="mx-auto size-7 animate-spin text-primary" aria-hidden="true" />}
+                  <p className="font-semibold">Drawing winner…</p>
+                </div>
+              )}
+              {!winner && !isRolling && (
+                <div id="gw-stage-idle" className="flex flex-col items-center rounded-xl border border-dashed bg-muted/20 px-5 py-10 text-center">
+                  <span className="mb-4 flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary"><Gift className="size-7" /></span>
+                  <h3 className="font-semibold">Ready to draw</h3>
+                  <p className="mt-1 text-sm text-muted-foreground"><span id="gw-idle-entrant-count">{entries.length.toLocaleString()}</span> entrants waiting. Everyone who types your keyword lands here.</p>
+                  <Button id="gw-btn-roll" size="lg" className="mt-5" disabled={!entries.length || !session || isRolling} onClick={() => void drawWinner()}>
+                    Draw Random Winner
+                  </Button>
+                </div>
+              )}
+              {data.draws?.length || autoRerollExhausted ? (
+                <DrawHistory
+                  draws={data.draws || []}
+                  autoRerollExhausted={autoRerollExhausted}
+                  winnerName={winner?.username || "the winner"}
+                  exhaustedAt={session?.auto_reroll_exhausted_at}
+                />
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card id="gw-entrants-card">
+            <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <CardTitle className="text-lg">Entrants (<span id="gw-count-header">{entries.length.toLocaleString()}</span>)</CardTitle>
+                <CardDescription className="mt-2">Collect entries from chat or add viewer names here.</CardDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input aria-label="Search entrants" id="gw-search-entrants" className="w-52 pl-9" placeholder="Search entrant…" value={search} onChange={(event) => setSearch(event.target.value)} />
+                </div>
+                <Button id="gw-btn-export" type="button" variant="outline" size="sm" disabled={!entries.length} onClick={exportCsv}>Export CSV</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {linkedCount > 0 && (
+                <div id="gw-linked-banner" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-700/20 bg-amber-500/5 px-4 py-3 text-sm" role="status">
+                  <span id="gw-linked-banner-text">{linkedCount} entrant{linkedCount === 1 ? " is" : "s are"} linked to another entrant.</span>
+                  {excludePlan.length > 0 && <Button id="gw-linked-exclude-all" size="sm" variant="outline" onClick={() => void mutateEntry("/entries/exclude", { entryIds: excludePlan.map((entry) => entry.id) }, "Could not exclude linked entrants.")}>Exclude linked duplicates ({excludePlan.length})</Button>}
+                </div>
+              )}
+              {active && (
+                <form id="gw-add-entrant-form" className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto]" onSubmit={(event) => void addEntrant(event)}>
+                  <div className="space-y-2">
+                    <Label htmlFor="gw-add-entrant-name">Add entrant</Label>
+                    <Input ref={manualInputRef} id="gw-add-entrant-name" name="username" type="text" maxLength={40} autoComplete="off" required value={manualName} onChange={(event) => setManualName(event.target.value)} />
+                    {manualError && <p id="gw-add-entrant-error" className="text-sm text-destructive" role="alert" aria-live="assertive">{manualError}</p>}
+                  </div>
+                  <Button className="self-end" type="submit" disabled={adding}>{adding ? <Loader2 className="animate-spin" /> : null}Add</Button>
+                </form>
+              )}
+              {entries.length === 0 ? (
+                <EmptyState id="gw-entrants-empty" title="No entrants yet" description="Start a giveaway, then add viewer names or collect entries from Kick chat." />
+              ) : filteredEntries.length === 0 ? (
+                <div id="gw-entrants-no-match" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-5" role="status">
+                  <div><strong id="gw-entrants-no-match-text">No entrants match "{search.trim()}"</strong><p className="mt-1 text-sm text-muted-foreground">Clear the search to see all entrants.</p></div>
+                  <Button id="gw-btn-clear-search" variant="outline" size="sm" onClick={() => setSearch("")}>Clear search</Button>
+                </div>
+              ) : (
+                <div className="max-h-[min(60vh,520px)] overflow-auto rounded-lg border">
+                  <table className="w-full min-w-[680px] text-left text-sm">
+                    <thead className="sticky top-0 z-10 bg-muted/50 text-xs uppercase text-muted-foreground">
+                      <tr><th className="px-3 py-3">#</th><th className="px-3 py-3">Viewer</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Chat Message</th><th className="px-3 py-3">Entered At</th><th className="px-3 py-3 text-right">Action</th></tr>
+                    </thead>
+                    <tbody id="gw-entrants-list" className="divide-y">
+                      {filteredEntries.map((entrant) => (
+                        <EntrantRow
+                          key={entrant.id}
+                          entrant={entrant}
+                          index={entries.indexOf(entrant) + 1}
+                          onInclude={() => void mutateEntry("/entries/include", { entryId: entrant.id }, "Could not include the entrant again.")}
+                          onExclude={() => void mutateEntry("/entries/exclude", { entryIds: [entrant.id] }, "Could not exclude linked entrants.")}
+                          onRemove={() => void mutateEntry("/entries/remove", { entryId: entrant.id }, "Could not remove entrant.")}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <Dialog open={winnerOpen && Boolean(winner)} onOpenChange={(open) => { if (!open) setWinnerOpen(false); }}>
+        <DialogContent id="gw-winner-modal" className="max-h-[90dvh] max-w-2xl overflow-y-auto">
+          <DialogHeader className="text-center">
+            <Crown className="mx-auto size-8 text-amber-500" aria-hidden="true" />
+            <DialogTitle id="gw-modal-title">Winner Drawn</DialogTitle>
+            <DialogDescription>The giveaway has finished. Verify the winner below.</DialogDescription>
+          </DialogHeader>
+          {winner && (
+            <div className="space-y-5 text-center">
+              <img id="gw-modal-avatar" className="mx-auto size-16 rounded-full border object-cover" src={safeAvatarUrl(winner.avatar_url)} alt="Winner avatar" />
+              <h3 id="gw-modal-name" className="text-xl font-bold">{winner.username}</h3>
+              <p id="gw-modal-msg" className="text-sm text-muted-foreground">{winner.message || ""}</p>
+              {customRule && <p className="text-sm text-muted-foreground">Requirement: {customRule}</p>}
+              <div className="flex justify-center gap-2">
+                <Badge id="gw-modal-trust-badge">{winner.provider === "manual" ? "Added manually" : "Viewer"}</Badge>
+                {winnerClaimed && <Badge id="gw-modal-verify-chip">Confirmed active</Badge>}
+              </div>
+              {responseRequired && (
+                <ClaimStatus
+                  remaining={responseRemaining}
+                  claimed={winnerClaimed}
+                  message={session?.winner_confirmation_message}
+                  timeout={responseTimeout}
+                  exhausted={autoRerollExhausted}
+                  winnerName={winner.username}
+                  modal
+                />
+              )}
+              <WinnerChatLog
+                winner={winner}
+                confirmationMessage={winnerClaimed ? session?.winner_confirmation_message : null}
+                confirmedAt={session?.winner_confirmed_at}
+              />
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button id="gw-modal-reroll" variant={claimExpired ? "default" : "outline"} disabled={Boolean(winnerAction) || finalized} onClick={() => void rerollWinner()}><RefreshCw /> Re-roll Winner</Button>
+                <Button id="gw-modal-copy" variant="outline" onClick={() => void copyWinner()}>Copy Winner Info</Button>
+                <Button id="gw-modal-confirm" disabled={!canConfirm || winnerAction === "confirming"} title={responseRequired && !winnerClaimed ? claimExpired ? "The winner did not respond — re-roll to pick another winner" : "Waiting for the winner to respond in chat" : undefined} onClick={() => void confirmWinner()}>
+                  {winnerAction === "confirming" ? <Loader2 className="animate-spin" /> : <Check />}
+                  Confirm Winner
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function RuleCheckbox({
+  id,
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className={cn("flex cursor-pointer items-center gap-2 text-sm", disabled && "cursor-not-allowed opacity-50")}>
+      <Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={(value) => onChange(value === true)} />
+      {label}
+    </label>
+  );
+}
+
+function Stat({ id, label, value }: { id: string; label: string; value: string }) {
+  return (
+    <div className="min-w-16 rounded-lg border bg-muted/30 px-3 py-2">
+      <strong id={id} className="block text-sm tabular-nums">{value}</strong>
+      <span className="block text-[10px] text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
+function ClaimStatus({
+  remaining,
+  claimed,
+  message,
+  timeout,
+  exhausted = false,
+  winnerName,
+  modal = false,
+}: {
+  remaining: number;
+  claimed: boolean;
+  message?: string | null;
+  timeout: number;
+  exhausted?: boolean;
+  winnerName?: string;
+  modal?: boolean;
+}) {
+  const [box, status, countdown] = modal
+    ? ["gw-modal-claim-box", "gw-modal-claim-status", "gw-modal-claim-countdown"]
+    : ["gw-claim-box", "gw-claim-status", "gw-claim-countdown"];
+  const text = claimed ? (message || "Responded in chat") : remaining > 0 ? "Waiting for winner response…" : "Winner did not respond";
+  return (
+    <div id={box} className="mt-5 rounded-lg border bg-muted/30 p-4 text-left" role="status" aria-live="polite">
+      <div className="flex items-center justify-between gap-3">
+        <strong id={status} className={cn("text-sm", claimed ? "text-emerald-700" : remaining <= 0 ? "text-destructive" : "text-foreground")}>{text}</strong>
+        <span id={countdown} className="shrink-0 text-sm font-semibold tabular-nums">{claimed ? "Verified" : `${remaining}s`}</span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+        <div className={cn("h-full rounded-full transition-all", claimed ? "bg-emerald-600" : remaining <= 0 ? "bg-destructive" : "bg-primary")} style={{ width: `${claimed ? 100 : Math.max(0, Math.min(100, (remaining / timeout) * 100))}%` }} />
+      </div>
+      {modal && <p id="gw-modal-claim-hint" className="mt-2 text-xs text-muted-foreground">Ask the winner to send a message in chat. Their live responses appear in the log below.</p>}
+      <p
+        id={modal ? "gw-modal-auto-reroll-stopped" : "gw-auto-reroll-stopped"}
+        className="gw-auto-reroll-stopped mt-2 text-xs text-muted-foreground"
+        role="status"
+        hidden={!exhausted}
+      >
+        {exhausted ? `Auto re-roll stopped — ${winnerName || "the winner"} didn't respond and no other eligible entrants remain, so re-roll isn't possible. Start a new giveaway when you're ready.` : ""}
+      </p>
+    </div>
+  );
+}
+
+function WinnerConfetti() {
+  const [visible, setVisible] = useState(true);
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  const particles = useMemo(() => {
+    const colors = ["var(--ws-accent)", "#8b5cf6", "#c4b5fd", "#e2e8f0"];
+    return Array.from({ length: 24 }, (_, index) => ({
+      color: colors[index % colors.length],
+      x: (Math.random() * 2 - 1) * 150,
+      y: -(50 + Math.random() * 150),
+      rotation: Math.random() * 420 - 210,
+      duration: 900 + Math.random() * 700,
+    }));
+  }, []);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const animations: Animation[] = [];
+    particles.forEach((particle, index) => {
+      const piece = container.children.item(index);
+      if (!piece || typeof piece.animate !== "function") return;
+      const animation = piece.animate([
+        { opacity: 0, transform: "translate(0, 0) rotate(0deg)" },
+        { opacity: 1, offset: 0.12 },
+        { opacity: 0, transform: `translate(${particle.x}px, ${particle.y}px) rotate(${particle.rotation}deg)` },
+      ], {
+        duration: particle.duration,
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+        fill: "forwards",
+      });
+      void animation.finished.catch(() => undefined);
+      animations.push(animation);
+    });
+    const timer = window.setTimeout(() => setVisible(false), 2400);
+    return () => {
+      window.clearTimeout(timer);
+      animations.forEach((animation) => animation.cancel());
+    };
+  }, [particles, reducedMotion]);
+
+  if (!visible || reducedMotion) return null;
+  return (
+    <div ref={containerRef} id="gw-confetti" className="gw-confetti pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+      {particles.map((particle, index) => (
+        <span
+          key={index}
+          className="gw-confetti-piece absolute left-1/2 top-[34%] h-3 w-[7px] rounded-sm opacity-0"
+          style={{ backgroundColor: particle.color }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function WinnerChatLog({
+  winner,
+  confirmationMessage,
+  confirmedAt,
+}: {
+  winner: GiveawayWinner;
+  confirmationMessage?: string | null;
+  confirmedAt?: string | null;
+}) {
+  const feedRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const feed = feedRef.current;
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }, [winner.id, winner.message, winner.entered_at, confirmationMessage, confirmedAt]);
+
+  return (
+    <div className="gw-winner-chat-card overflow-hidden rounded-lg border text-left">
+      <div className="gw-winner-chat-head flex items-center justify-between gap-3 border-b px-4 py-3 text-sm font-semibold">
+        <span>Winner&apos;s Live Chat Log</span>
+        <span className="gw-winner-chat-tag inline-flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-medium">
+          <span className="gw-live-dot size-2 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" aria-hidden="true" />
+          Live
+        </span>
+      </div>
+      <div ref={feedRef} id="gw-winner-chat-feed" className="gw-winner-chat-feed max-h-36 space-y-2 overflow-y-auto px-4 py-3 text-sm" aria-live="polite">
+        <div className="gw-winner-chat-item">
+          <span className="gw-winner-chat-time text-muted-foreground">[{formatEnteredAt(winner.entered_at)}]</span>{" "}
+          <span className="gw-winner-chat-user font-semibold">@{winner.username}:</span>
+          <span className="gw-winner-chat-text"> {winner.message || ""}</span>
+        </div>
+        {confirmationMessage && (
+          <div className="gw-winner-chat-item">
+            <span className="gw-winner-chat-time text-muted-foreground">[{formatEnteredAt(confirmedAt)}]</span>{" "}
+            <span className="gw-winner-chat-user font-semibold">@{winner.username}:</span>
+            <span className="gw-winner-chat-text"> {confirmationMessage}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EntrantRow({
+  entrant,
+  index,
+  onInclude,
+  onExclude,
+  onRemove,
+}: {
+  entrant: GiveawayEntrant;
+  index: number;
+  onInclude: () => void;
+  onExclude: () => void;
+  onRemove: () => void;
+}) {
+  const manual = entrant.provider === "manual";
+  const linked = entrant.linked || [];
+  const status = entrant.eligibility_reason === "excluded_linked_account"
+    ? "Excluded: linked account"
+    : entrant.eligibility_status === "pending_verification"
+      ? "Pending verification"
+      : entrant.eligibility_status === "rejected"
+        ? entrant.eligibility_reason_label || `Rejected: ${String(entrant.eligibility_reason || "ineligible").replaceAll("_", " ")}`
+        : manual
+          ? "Added manually"
+          : entrant.badges?.some((badge) => badge.type === "subscriber")
+            ? "Subscriber"
+            : entrant.badges?.some((badge) => badge.type === "vip")
+              ? "VIP"
+              : "Entered";
+  return (
+    <tr id={`entrant-${entrant.id}`} data-username={entrant.username.toLowerCase()} className="align-middle">
+      <td className="px-3 py-3 text-muted-foreground" data-label="#">{index}</td>
+      <td className="px-3 py-3" data-label="Viewer">
+        <div className="flex items-center gap-2">
+          <img className="size-8 rounded-full bg-muted object-cover" src={manual ? DEFAULT_AVATAR : safeAvatarUrl(entrant.avatar_url)} alt="" />
+          {manual ? <span className="gw-entrant-name font-medium">{entrant.username}</span> : <a className="gw-entrant-name font-medium underline-offset-4 hover:underline" href={safeKickProfileUrl(entrant.username)} target="_blank" rel="noopener">{entrant.username}</a>}
+        </div>
+      </td>
+      <td className="px-3 py-3" data-label="Status">
+        <Badge className={cn("rounded-full", entrant.eligibility_status === "rejected" && "border-destructive/30 bg-destructive/5 text-destructive")}>{status}</Badge>
+        {linked.length > 0 && entrant.eligibility_reason !== "excluded_linked_account" && (
+          <Badge className="gw-linked-badge ml-1 mt-1 rounded-full border-amber-700/20 bg-amber-500/5 text-amber-900" title={linked.map((link) => `${link.username}: ${(link.reasons || []).map(linkedReasonLabel).join(", ")}`).join(" · ")}>
+            Linked · {linked[0].username}{linked.length > 1 ? ` (+${linked.length - 1})` : ""}
+          </Badge>
+        )}
+      </td>
+      <td className="gw-entrant-msg max-w-48 truncate px-3 py-3 text-muted-foreground" data-label="Chat message">{manual ? "—" : entrant.message || ""}</td>
+      <td className="px-3 py-3 text-muted-foreground" data-label="Entered">{formatEnteredAt(entrant.entered_at)}</td>
+      <td className="px-3 py-3 text-right" data-label="Action">
+        {entrant.eligibility_reason === "excluded_linked_account" && <Button type="button" size="sm" variant="outline" onClick={onInclude}>Include again</Button>}
+        {linked.length > 0 && entrant.eligibility_reason !== "excluded_linked_account" && <Button type="button" size="sm" variant="outline" onClick={onExclude}>Exclude</Button>}
+        <Button className="ml-1" type="button" size="icon" variant="ghost" title="Remove entrant" aria-label={`Remove ${entrant.username}`} onClick={onRemove}><X /></Button>
+      </td>
+    </tr>
+  );
+}
+
+function DrawHistory({
+  draws,
+  autoRerollExhausted,
+  winnerName,
+  exhaustedAt,
+}: {
+  draws: GiveawayDraw[];
+  autoRerollExhausted: boolean;
+  winnerName: string;
+  exhaustedAt?: string | null;
+}) {
+  const newestFirst = [...draws].reverse();
+  return (
+    <details id="gw-draw-history" className="rounded-lg border p-3">
+      <summary className="cursor-pointer text-sm font-semibold">Draw history</summary>
+      <ul id="gw-draw-history-list" className="mt-3 space-y-2 text-sm text-muted-foreground">
+        {autoRerollExhausted && (
+          <li className="gw-draw-history-row">
+            Auto re-roll stopped — no other eligible entrants left ({winnerName} didn't respond) · {formatEnteredAt(exhaustedAt)}
+          </li>
+        )}
+        {newestFirst.map((draw, index) => {
+          const name = draw.username || "a previous entrant";
+          const replaced = draw.replaced_username || "the previous winner";
+          const label = draw.reason === "auto_reroll"
+            ? `Auto re-roll to ${name} — ${replaced} didn't respond in time`
+            : draw.reason === "reroll"
+              ? `Re-rolled to ${name} (replaced ${replaced})`
+              : `Drew ${name}`;
+          return <li key={draw.id || `${draw.drawn_at}-${index}`}>{label} · {formatEnteredAt(draw.drawn_at)}</li>;
+        })}
+      </ul>
+    </details>
+  );
+}
+
+function EmptyState({ id, title, description }: { id: string; title: string; description: string }) {
+  return (
+    <div id={id} className="rounded-xl border border-dashed px-5 py-8 text-center" role="status">
+      <p className="font-semibold">{title}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function Raffles({
+  apiClient,
+  siteId,
+  onAlert,
+  onClearAlert,
+}: {
+  apiClient: PageDependencies["api"];
+  siteId: string;
+  onAlert: (message: string) => void;
+  onClearAlert: () => void;
+}) {
+  const [raffles, setRaffles] = useState<Raffle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { draft, setDraft, discardDraft, clearDraftAfterSubmit } = useDrawerDraft("rf-drawer", RAFFLE_DRAFT_DEFAULTS);
+  const title = draft["rf-title"];
+  const description = draft["rf-desc"];
+  const ticketCost = draft["rf-cost"];
+  const maxTickets = draft["rf-max"];
+  const [drawId, setDrawId] = useState("");
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [drawResult, setDrawResult] = useState<RafflesPayload | null>(null);
+
+  const loadRaffles = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await apiClient<RafflesPayload>("/api/events/raffles", {}, siteId);
+      setRaffles(result.raffles || []);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(errorMessage(error, "Network error. Check your connection and try again."));
+    } finally {
+      setLoading(false);
+    }
+  }, [apiClient, siteId]);
+
+  useEffect(() => { void loadRaffles(); }, [loadRaffles]);
+
+  const activeRaffles = raffles.filter((raffle) => raffle.status === "active");
+  const pastRaffles = raffles.filter((raffle) => raffle.status !== "active");
+
+  const createRaffle = async (event: FormEvent) => {
+    event.preventDefault();
+    onClearAlert();
+    setFormError("");
+    const errors: Record<string, string> = {};
+    if (!title.trim()) errors["rf-title"] = "Enter a prize title.";
+    if (!/^\d+$/.test(ticketCost) || Number(ticketCost) < 0) errors["rf-cost"] = "Enter a ticket cost of 0 or more.";
+    if (!/^\d+$/.test(maxTickets) || Number(maxTickets) < 1) errors["rf-max"] = "Enter at least 1 ticket.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      document.getElementById(Object.keys(errors)[0])?.focus();
+      return;
+    }
+    setCreating(true);
+    try {
+      await apiClient("/api/events/raffles", post({
+        title: title.trim(),
+        description: description.trim(),
+        ticketCost: Number.parseInt(ticketCost, 10) || 0,
+        maxTickets: Number.parseInt(maxTickets, 10) || 10,
+      }), siteId);
+      setDrawerOpen(false);
+      clearDraftAfterSubmit();
+      setDraft({ ...RAFFLE_DRAFT_DEFAULTS });
+      await loadRaffles();
+    } catch (error) {
+      setFormError(errorMessage(error, "Network error creating raffle."));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const drawRaffle = async () => {
+    if (!drawId) return;
+    setConfirmation(null);
+    onClearAlert();
+    try {
+      const result = await apiClient<RafflesPayload>("/api/events/raffles/draw", post({ raffleId: drawId }), siteId);
+      if (!result.winnerName) {
+        onAlert("No winner was drawn — no tickets were sold.");
+      } else {
+        setDrawResult(result);
+        playWinnerSound();
+      }
+      setDrawId("");
+      await loadRaffles();
+    } catch (error) {
+      onAlert(errorMessage(error, "Network error drawing raffle."));
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-lg font-semibold">Raffles</h2><p className="mt-1 text-sm text-muted-foreground">Create a prize raffle and draw from sold tickets.</p></div>
+        <Button id="btn-create-raffle" onClick={() => { setFormError(""); setFieldErrors({}); setDrawerOpen(true); }}><Ticket /> Create Raffle</Button>
+      </div>
+      {loadError ? (
+        <StatusMessage tone="error" role="alert" className="flex flex-wrap items-center justify-between gap-3">
+          <span><strong>Couldn't load raffles.</strong> {loadError}</span>
+          <Button type="button" variant="outline" size="sm" onClick={() => void loadRaffles()}>Retry</Button>
+        </StatusMessage>
+      ) : loading ? (
+        <StatusMessage>Loading raffles…</StatusMessage>
+      ) : (
+        <>
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Active raffles</CardTitle><CardDescription>View tickets sold and draw a winner when you are ready.</CardDescription></CardHeader>
+            <CardContent id="rf-active-list" className="space-y-3">
+              {!activeRaffles.length ? <EmptyState id="rf-empty-active" title="No active raffles" description="Create a raffle so viewers can buy tickets with Credits." /> : activeRaffles.map((raffle) => (
+                <article key={raffle.id} data-raffle-id={raffle.id} className="grid gap-4 rounded-lg border p-4 lg:grid-cols-[1fr_auto]">
+                  <div>
+                    <Badge className="mb-2 rounded-full border-emerald-700/25 bg-emerald-600/5 text-emerald-800">Selling tickets</Badge>
+                    <h3 className="font-semibold">{raffle.title}</h3>
+                    {raffle.description && <p className="mt-1 text-sm text-muted-foreground">{raffle.description}</p>}
+                    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                      <Metric label="Ticket" value={raffle.ticket_cost === 0 ? "Free" : `${raffle.ticket_cost} Credits`} />
+                      <Metric label="Sold" value={String(raffle.total_tickets || 0)} />
+                      <Metric label="Viewers" value={String(raffle.participant_count || 0)} />
+                      <Metric label="Limit" value={`${raffle.max_tickets_per_viewer || 10} each`} />
+                    </dl>
+                  </div>
+                  <div className="flex flex-col items-start justify-between gap-3 lg:items-end">
+                    <span className="text-xs text-muted-foreground">{(raffle.total_tickets || 0) > 0 ? "Ready to draw" : "Waiting for tickets"}</span>
+                    <Button
+                      className="btn--draw-raffle"
+                      type="button"
+                      size="sm"
+                      disabled={!raffle.total_tickets}
+                      onClick={() => {
+                        setDrawId(raffle.id);
+                        setConfirmation({ title: "Draw raffle winner", description: "Are you ready to draw the random winning ticket on stream?", action: "Draw winner" });
+                      }}
+                    >
+                      Draw winner
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Past raffles</CardTitle><CardDescription>Completed raffles stay together here.</CardDescription></CardHeader>
+            <CardContent id="rf-past-list">
+              {!pastRaffles.length ? <EmptyState id="rf-empty-past" title="No past raffles yet" description="Completed raffles will appear here." /> : (
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full min-w-[620px] text-left text-sm">
+                    <thead className="bg-muted/50 text-xs uppercase text-muted-foreground"><tr><th className="px-3 py-3">Prize</th><th className="px-3 py-3">Ticket cost</th><th className="px-3 py-3">Tickets</th><th className="px-3 py-3">Winner</th><th className="px-3 py-3">Drawn</th></tr></thead>
+                    <tbody className="divide-y">{pastRaffles.map((raffle) => (
+                      <tr key={raffle.id}>
+                        <td className="px-3 py-3 font-semibold" data-label="Prize">{raffle.title}</td>
+                        <td className="px-3 py-3" data-label="Ticket cost">{raffle.ticket_cost === 0 ? "Free" : `${raffle.ticket_cost} Credits`}</td>
+                        <td className="px-3 py-3" data-label="Tickets">{raffle.total_tickets || 0} tickets</td>
+                        <td className="px-3 py-3" data-label="Winner">{raffle.winner_name ? <><strong>{raffle.winner_name}</strong><span className="block text-xs text-muted-foreground">Ticket #{raffle.winner_ticket_number}</span></> : "No winner drawn"}</td>
+                        <td className="px-3 py-3" data-label="Drawn">{raffle.drawn_at ? new Date(raffle.drawn_at).toLocaleString() : "—"}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent id="rf-drawer" className="max-h-dvh overflow-hidden">
+          <SheetHeader>
+            <SheetTitle id="rf-drawer-title" className="flex items-center gap-2">
+              <Ticket className="h-4 w-4" aria-hidden="true" />
+              Create Ticket Raffle
+            </SheetTitle>
+          </SheetHeader>
+          <form id="rf-form" className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => void createRaffle(event)}>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+              <Field label="Prize Title *" id="rf-title" error={fieldErrors["rf-title"]}>
+                <Input id="rf-title" placeholder="e.g. $100 Amazon Gift Card or VIP Role" value={title} onChange={(event) => setDraft((current) => ({ ...current, "rf-title": event.target.value }))} maxLength={120} required />
+                <p className="text-xs text-muted-foreground">What will the winner receive?</p>
+              </Field>
+              <Field label="Description (Optional)" id="rf-desc">
+                <Textarea id="rf-desc" placeholder="Rules or details for claiming this prize…" value={description} onChange={(event) => setDraft((current) => ({ ...current, "rf-desc": event.target.value }))} maxLength={500} rows={2} />
+              </Field>
+              <Field label="Ticket Cost (in Credits)" id="rf-cost" error={fieldErrors["rf-cost"]}>
+                <Input id="rf-cost" type="number" min="0" placeholder="e.g. 30" value={ticketCost} onChange={(event) => setDraft((current) => ({ ...current, "rf-cost": event.target.value }))} required />
+                <PresetButtons values={[["Free (0 Credits)", "0"], ["25 Credits", "25"], ["50 Credits", "50"], ["100 Credits", "100"]]} onSelect={(value) => setDraft((current) => ({ ...current, "rf-cost": value }))} />
+                <p className="text-xs text-muted-foreground">How many Credits a viewer pays per ticket. Set 0 for free community entries.</p>
+              </Field>
+              <Field label="Max Tickets per Viewer" id="rf-max" error={fieldErrors["rf-max"]}>
+                <Input id="rf-max" type="number" min="1" placeholder="e.g. 5" value={maxTickets} onChange={(event) => setDraft((current) => ({ ...current, "rf-max": event.target.value }))} required />
+                <PresetButtons values={[["1 ticket", "1"], ["5 tickets", "5"], ["10 tickets", "10"], ["25 tickets", "25"]]} onSelect={(value) => setDraft((current) => ({ ...current, "rf-max": value }))} />
+                <p className="text-xs text-muted-foreground">Prevents one viewer from buying all tickets.</p>
+              </Field>
+              {formError && <StatusMessage tone="error" role="alert">{formError}</StatusMessage>}
+            </div>
+            <SheetFooter className="shrink-0">
+              <Button type="button" variant="outline" id="rf-cancel" onClick={() => { discardDraft(); setDrawerOpen(false); }}>Cancel</Button>
+              <Button id="rf-submit" type="submit" disabled={creating}>{creating && <Loader2 className="animate-spin" />}Create Raffle</Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+      <ConfirmAction confirmation={confirmation} onCancel={() => { setConfirmation(null); setDrawId(""); }} onConfirm={() => void drawRaffle()} />
+      <Dialog open={Boolean(drawResult)} onOpenChange={(open) => { if (!open) setDrawResult(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Raffle winner</DialogTitle><DialogDescription>{drawResult?.message || "Winner drawn"}</DialogDescription></DialogHeader>
+          <div className="space-y-2 text-center">
+            <Trophy className="mx-auto size-8 text-amber-500" aria-hidden="true" />
+            <p className="text-xl font-bold">{drawResult?.winnerName}</p>
+            <p className="text-sm text-muted-foreground">Winning ticket <strong>#{drawResult?.winnerTicketNumber}</strong> · {drawResult?.totalTickets} tickets</p>
+          </div>
+          <Button type="button" onClick={() => setDrawResult(null)}>Close</Button>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-semibold">{value}</dd></div>;
+}
+
+function Field({ label, id, error, children }: { label: string; id: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      {children}
+      {error && <p className="text-sm text-destructive" role="alert" aria-live="polite">{error}</p>}
+    </div>
+  );
+}
+
+function PresetButtons({ values, onSelect }: { values: Array<[string, string]>; onSelect: (value: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {values.map(([label, value]) => <Button key={value} type="button" size="sm" variant="outline" className="gw-chip" data-val={value} onClick={() => onSelect(value)}>{label}</Button>)}
+    </div>
+  );
+}
+
+function Predictions({
+  apiClient,
+  siteId,
+  onAlert,
+  onClearAlert,
+}: {
+  apiClient: PageDependencies["api"];
+  siteId: string;
+  onAlert: (message: string) => void;
+  onClearAlert: () => void;
+}) {
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [settleOpen, setSettleOpen] = useState(false);
+  const [settlingPrediction, setSettlingPrediction] = useState<Prediction | null>(null);
+  const [selectedOption, setSelectedOption] = useState("");
+  const { draft, setDraft, discardDraft, clearDraftAfterSubmit } = useDrawerDraft("pred-drawer", PREDICTION_DRAFT_DEFAULTS);
+  const title = draft["pred-title"];
+  const optionOne = draft["pred-opt-1"];
+  const optionTwo = draft["pred-opt-2"];
+  const minBet = draft["pred-min-bet"];
+  const maxBet = draft["pred-max-bet"];
+  const lockMinutes = draft["pred-lock-min"];
+  const [creating, setCreating] = useState(false);
+  const [settling, setSettling] = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [pendingAction, setPendingAction] = useState<"cancel" | "settle" | null>(null);
+  const [pendingPrediction, setPendingPrediction] = useState<Prediction | null>(null);
+
+  const loadPredictions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await apiClient<PredictionsPayload>("/api/predictions", {}, siteId);
+      setPredictions(result.predictions || []);
+      setEnabled(result.entitlement?.enabled !== false);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(errorMessage(error, "Network error. Check your connection and try again."));
+    } finally {
+      setLoading(false);
+    }
+  }, [apiClient, siteId]);
+
+  useEffect(() => { void loadPredictions(); }, [loadPredictions]);
+
+  const activePredictions = predictions.filter((prediction) => prediction.status === "open" || prediction.status === "locked");
+  const pastPredictions = predictions.filter((prediction) => prediction.status === "settled" || prediction.status === "cancelled");
+
+  const submitPrediction = async (event: FormEvent) => {
+    event.preventDefault();
+    setStatusError("");
+    onClearAlert();
+    const errors: Record<string, string> = {};
+    if (!title.trim()) errors["pred-title"] = "Enter a prediction question.";
+    if (!optionOne.trim()) errors["pred-opt-1"] = "Enter option A.";
+    if (!optionTwo.trim()) errors["pred-opt-2"] = "Enter option B.";
+    if (optionOne.trim().toLowerCase() === optionTwo.trim().toLowerCase()) errors["pred-opt-2"] = "Options must be different from each other.";
+    if (!/^\d+$/.test(minBet) || Number(minBet) < 1) errors["pred-min-bet"] = "Enter a minimum bet of at least 1 Credit.";
+    if (!/^\d+$/.test(maxBet) || Number(maxBet) < 1) errors["pred-max-bet"] = "Enter a maximum bet of at least 1 Credit.";
+    if (/^\d+$/.test(maxBet) && /^\d+$/.test(minBet) && Number(maxBet) < Number(minBet)) errors["pred-max-bet"] = "Max bet must be at least the minimum bet.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      document.getElementById(Object.keys(errors)[0])?.focus();
+      return;
+    }
+    const parsedLock = Number.parseInt(lockMinutes, 10);
+    const boundedLock = Number.isNaN(parsedLock) || parsedLock < 0 ? 5 : Math.min(parsedLock, 1_440);
+    setCreating(true);
+    try {
+      await apiClient<PredictionsPayload>("/api/predictions", post({
+        title: title.trim(),
+        options: [{ id: "yes", label: optionOne.trim() || "Yes" }, { id: "no", label: optionTwo.trim() || "No" }],
+        minBet: Number.parseInt(minBet, 10) || 10,
+        maxBet: Number.parseInt(maxBet, 10) || 500,
+        lockMinutes: boundedLock,
+      }), siteId);
+      setCreateOpen(false);
+      clearDraftAfterSubmit();
+      setDraft((current) => ({ ...current, "pred-title": "" }));
+      await loadPredictions();
+    } catch (error) {
+      const data = errorData(error);
+      if (errorStatus(error) === 403 && data.code === "entitlement_required") {
+        setStatusError(data.error || "Predictions are unavailable on your current plan.");
+        setEnabled(false);
+      } else {
+        setStatusError(errorMessage(error, "Network error creating prediction."));
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const lockPrediction = async (prediction: Prediction) => {
+    onClearAlert();
+    try {
+      await apiClient(`/api/predictions/${encodeURIComponent(prediction.id)}/lock`, post({ predictionId: prediction.id }), siteId);
+      await loadPredictions();
+    } catch (error) {
+      onAlert(errorMessage(error, "Network error locking prediction."));
+    }
+  };
+
+  const openSettlement = (prediction: Prediction) => {
+    setSettlingPrediction(prediction);
+    setSelectedOption(prediction.options[0]?.id || "");
+    setStatusError("");
+    setSettleOpen(true);
+  };
+
+  const confirmSettling = async () => {
+    if (!settlingPrediction || !selectedOption) return;
+    setConfirmation(null);
+    setSettling(true);
+    setStatusError("");
+    try {
+      await apiClient(`/api/predictions/${encodeURIComponent(settlingPrediction.id)}/settle`, post({
+        predictionId: settlingPrediction.id,
+        winningOptionId: selectedOption,
+      }), siteId);
+      setSettleOpen(false);
+      await loadPredictions();
+    } catch (error) {
+      setStatusError(errorMessage(error, "Network error settling prediction."));
+    } finally {
+      setSettling(false);
+    }
+  };
+
+  const confirmCancel = async () => {
+    if (!pendingPrediction || pendingAction !== "cancel") return;
+    setConfirmation(null);
+    onClearAlert();
+    try {
+      await apiClient(`/api/predictions/${encodeURIComponent(pendingPrediction.id)}/cancel`, post({ predictionId: pendingPrediction.id }), siteId);
+      setSettleOpen(false);
+      await loadPredictions();
+    } catch (error) {
+      onAlert(errorMessage(error, "Network error cancelling prediction."));
+    } finally {
+      setPendingAction(null);
+      setPendingPrediction(null);
+    }
+  };
+
+  const handleConfirm = () => {
+    if (pendingAction === "cancel") void confirmCancel();
+    else if (pendingAction === "settle") void confirmSettling();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-lg font-semibold">Predictions</h2><p className="mt-1 text-sm text-muted-foreground">Run a live pool and settle it when the outcome is known.</p></div>
+        <Button id="btn-open-event-drawer" disabled={!enabled} aria-describedby={!enabled ? "pred-plan-lock" : undefined} onClick={() => { if (!enabled) return; setStatusError(""); setFieldErrors({}); setCreateOpen(true); }}><Users /> Create Event</Button>
+      </div>
+      {!enabled && (
+        <StatusMessage id="pred-plan-lock" className="flex flex-wrap items-center justify-between gap-3">
+          <span data-plan-lock="predictions">Predictions are available on Starter and higher plans.</span>
+          <a className="font-semibold underline underline-offset-4" href="/dashboard/settings/billing?from=predictions">Upgrade your plan</a>
+        </StatusMessage>
+      )}
+      {loadError ? (
+        <StatusMessage tone="error" role="alert" className="flex flex-wrap items-center justify-between gap-3"><span><strong>Couldn't load predictions.</strong> {loadError}</span><Button variant="outline" size="sm" onClick={() => void loadPredictions()}>Retry</Button></StatusMessage>
+      ) : loading ? <StatusMessage>Loading predictions…</StatusMessage> : (
+        <>
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Active predictions</CardTitle><CardDescription>Open or locked pools currently available to viewers.</CardDescription></CardHeader>
+            <CardContent id="pred-active-list" className="space-y-4">
+              {!activePredictions.length ? <EmptyState id="pred-empty-active" title="No active predictions" description="Launch a live prediction to let viewers wager their Credits on your stream match outcomes." /> : activePredictions.map((prediction) => (
+                <article key={prediction.id} data-pred-id={prediction.id} className="rounded-xl border p-4 md:p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><Badge className={cn("mb-2 rounded-full", prediction.status === "open" ? "border-emerald-700/25 bg-emerald-600/5 text-emerald-800" : "border-amber-700/25 bg-amber-500/10 text-amber-900")}>{prediction.status === "open" ? "Betting open" : "Betting locked"}</Badge><h3 className="text-lg font-semibold">{prediction.title}</h3></div>
+                    <div className="text-right"><strong className="text-lg">{prediction.total_pool || 0} Credits</strong><span className="block text-xs text-muted-foreground">in the pool</span></div>
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    {prediction.options.map((option) => {
+                      const pool = prediction.total_pool || 0;
+                      const points = option.total_points || 0;
+                      const percent = pool > 0 ? Math.round(points / pool * 100) : 0;
+                      const leading = pool > 0 && points === Math.max(...prediction.options.map((item) => item.total_points || 0));
+                      return (
+                        <div key={option.id} className={cn("rounded-lg border p-3", leading && "border-primary/40 bg-primary/5")}>
+                          <div className="flex justify-between gap-3 text-sm"><span className="font-medium">{option.label}</span><span className="text-muted-foreground"><strong>{percent}%</strong> · {points} Credits</span></div>
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} /></div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
+                    <Metric label="Bettors" value={String(prediction.participant_count || 0)} />
+                    <Metric label="Bet limits" value={`${prediction.min_bet}–${prediction.max_bet}`} />
+                    <Metric label="Locks at" value={prediction.lock_at ? new Date(prediction.lock_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Manual"} />
+                  </div>
+                  <div className="mt-4 flex flex-wrap justify-between gap-2">
+                    <Button className="btn--cancel-pred" size="sm" variant="ghost" onClick={() => {
+                      setPendingAction("cancel");
+                      setPendingPrediction(prediction);
+                      setConfirmation({ title: "Cancel prediction", description: "Cancel this prediction? All bets will be fully refunded to viewers.", action: "Cancel prediction", destructive: true });
+                    }}>Cancel &amp; refund</Button>
+                    <div className="flex flex-wrap gap-2">
+                      {prediction.status === "open" && <Button className="btn--lock-pred" size="sm" variant="outline" onClick={() => void lockPrediction(prediction)}>Lock betting</Button>}
+                      <Button className="btn--open-settle" size="sm" onClick={() => openSettlement(prediction)}>Settle &amp; pay out</Button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Past predictions</CardTitle><CardDescription>Settled and cancelled pools.</CardDescription></CardHeader>
+            <CardContent id="pred-past-list">
+              {!pastPredictions.length ? <EmptyState id="pred-empty-past" title="No predictions created yet" description="Completed predictions will appear here." /> : (
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full min-w-[620px] text-left text-sm">
+                    <thead className="bg-muted/50 text-xs uppercase text-muted-foreground"><tr><th className="px-3 py-3">Prediction</th><th className="px-3 py-3">Total Pool</th><th className="px-3 py-3">Participants</th><th className="px-3 py-3">Outcome</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Created</th></tr></thead>
+                    <tbody className="divide-y">{pastPredictions.map((prediction) => (
+                      <tr key={prediction.id}>
+                        <td className="px-3 py-3 font-semibold">{prediction.title}</td>
+                        <td className="px-3 py-3">{prediction.total_pool || 0} Credits</td>
+                        <td className="px-3 py-3">{prediction.participant_count || 0} bettors</td>
+                        <td className="px-3 py-3">{prediction.winning_option_id || "—"}</td>
+                        <td className="px-3 py-3"><Badge>{prediction.status}</Badge></td>
+                        <td className="px-3 py-3">{new Date(prediction.created_at).toLocaleString()}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+      {statusError && <StatusMessage id="pred-status" tone="error" role="alert">{statusError}{!enabled && <a className="ml-2 font-semibold underline underline-offset-4" href="/dashboard/settings/billing?from=predictions">Upgrade your plan</a>}</StatusMessage>}
+
+      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
+        <SheetContent id="pred-drawer" className="max-h-dvh overflow-hidden">
+          <SheetHeader><SheetTitle id="pred-drawer-title">Create Live Prediction</SheetTitle><SheetDescription>Ask a question with outcomes your viewers can choose.</SheetDescription></SheetHeader>
+          <form id="pred-form" className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => void submitPrediction(event)}>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+              <Field label="Prediction Question *" id="pred-title" error={fieldErrors["pred-title"]}><Input id="pred-title" value={title} onChange={(event) => setDraft((current) => ({ ...current, "pred-title": event.target.value }))} required placeholder="e.g. Will I clutch this 1v3 round?" /></Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Option A (Yes)" id="pred-opt-1" error={fieldErrors["pred-opt-1"]}><Input id="pred-opt-1" value={optionOne} onChange={(event) => setDraft((current) => ({ ...current, "pred-opt-1": event.target.value }))} required /></Field>
+                <Field label="Option B (No)" id="pred-opt-2" error={fieldErrors["pred-opt-2"]}><Input id="pred-opt-2" value={optionTwo} onChange={(event) => setDraft((current) => ({ ...current, "pred-opt-2": event.target.value }))} required /></Field>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Minimum bet (Credits)" id="pred-min-bet" error={fieldErrors["pred-min-bet"]}><Input id="pred-min-bet" type="number" min="1" value={minBet} onChange={(event) => setDraft((current) => ({ ...current, "pred-min-bet": event.target.value }))} required /></Field>
+                <Field label="Maximum bet (Credits)" id="pred-max-bet" error={fieldErrors["pred-max-bet"]}><Input id="pred-max-bet" type="number" min="1" value={maxBet} onChange={(event) => setDraft((current) => ({ ...current, "pred-max-bet": event.target.value }))} required /></Field>
+              </div>
+              <Field label="Lock betting after (minutes)" id="pred-lock-min"><Input id="pred-lock-min" type="number" min="0" max="1440" value={lockMinutes} onChange={(event) => setDraft((current) => ({ ...current, "pred-lock-min": event.target.value }))} /></Field>
+              {statusError && <StatusMessage tone="error" role="alert">{statusError}{!enabled && <a className="ml-2 font-semibold underline underline-offset-4" href="/dashboard/settings/billing?from=predictions">Upgrade your plan</a>}</StatusMessage>}
+            </div>
+            <SheetFooter className="shrink-0">
+              <Button type="button" id="pred-cancel" variant="outline" onClick={() => { discardDraft(); setCreateOpen(false); }}>Cancel</Button>
+              <Button id="pred-submit" type="submit" disabled={creating || !enabled}>{creating && <Loader2 className="animate-spin" />}Launch Prediction</Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={settleOpen} onOpenChange={(open) => { setSettleOpen(open); if (!open) setSettlingPrediction(null); }}>
+        <SheetContent id="settle-drawer" className="max-h-dvh overflow-hidden">
+          <SheetHeader><SheetTitle>Settle prediction</SheetTitle><SheetDescription id="settle-pred-title">Question: “{settlingPrediction?.title}” — Total Pool: {settlingPrediction?.total_pool || 0} Credits</SheetDescription></SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5" id="settle-options-container">
+            {settlingPrediction?.options.map((option) => (
+              <label key={option.id} className="flex cursor-pointer items-center gap-3 rounded-lg border p-3">
+                <input type="radio" name="settle_opt" value={option.id} checked={selectedOption === option.id} onChange={() => setSelectedOption(option.id)} />
+                <span><strong>{option.label}</strong><span className="block text-xs text-muted-foreground">({option.total_points || 0} Credits wagered)</span></span>
+              </label>
+            ))}
+          </div>
+          {statusError && <p id="settle-status" className="px-6 text-sm text-destructive" role="alert">{statusError}</p>}
+          <SheetFooter className="shrink-0">
+            <Button id="settle-btn-cancel-pred" type="button" variant="ghost" onClick={() => {
+              setPendingAction("cancel");
+              setPendingPrediction(settlingPrediction);
+              setConfirmation({ title: "Cancel prediction", description: "Cancel this prediction? All bets will be fully refunded to viewers.", action: "Cancel prediction", destructive: true });
+            }}>Cancel &amp; refund</Button>
+            <Button id="settle-btn-confirm" type="button" disabled={!selectedOption || settling} onClick={() => {
+              setPendingAction("settle");
+              setConfirmation({ title: "Settle prediction", description: `Declare "${selectedOption.toUpperCase()}" as the winning outcome? Points will be distributed immediately.`, action: "Settle and pay" });
+            }}>{settling && <Loader2 className="animate-spin" />}Settle and pay</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      <ConfirmAction
+        confirmation={confirmation}
+        onCancel={() => { setConfirmation(null); setPendingAction(null); setPendingPrediction(null); }}
+        onConfirm={handleConfirm}
+      />
+    </div>
+  );
+}

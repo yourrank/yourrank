@@ -2,6 +2,15 @@
 
 Maintained to prevent architecture drift.
 
+## Rewards and Audience implementation ownership
+
+The Audience dynamic section remains booted by `people.js` and mounts one React
+island for Members, Activity, Reviews, and Linked accounts. `credits.js` owns
+the Rewards React island and the existing `siteConnections` OAuth behavior.
+Audience retains its API contracts, member actions and drawers, bulk
+award/export, operation retry identity, site-change guards, query handling,
+review decisions, linked-account actions, and leave teardown. No backend
+handler, route, or response shape changes.
 ## Creator login and registration — 2026-09-28
 
 Owner clarified the initial Home redesign request to mean login and registration
@@ -468,6 +477,10 @@ Community, People, and Insights are current navigation presentation labels only;
 Home now has one setup action with a collapsed checklist; People empty-state nesting and Rewards setup hierarchy were simplified. The shared workspace uses the canonical mineral/slate/indigo tokens in `dashboard-v4.css`, with a compact mobile topbar, context-eligible command search, and keyboard-contained drawers. Route/account/site identity contracts are unchanged. The demo player-profile route now renders the canonical profile instead of returning 404.
 
 Live-browser evidence covers Home, empty People, Rewards setup, and the demo profile. The configured root regression run passed; credential-dependent integration skips remain skips. This is not a full-site or production verification. See `docs/design/yourrank-dashboard-redesign-verification.md` for evidence and remaining limits.
+
+## Creator dashboard Home React island — 2026-09-30
+
+Home remains a core vanilla SPA section: `overview.js` owns dashboard state, requests, site/token guards, and a serializable presentation model; `react/pages/overview` owns Home markup and dialog presentation. Existing callers, request contracts, and `overview-state.js` projections are unchanged. The island is pushed-props and lazy-loaded only when the Home root exists.
 
 ## Viewer structural replacement — 2026-09-06
 

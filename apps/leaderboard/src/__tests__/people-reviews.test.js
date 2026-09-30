@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
+import { AudienceReviewsPage } from "../pages/audience.jsx";
 import {
   handlePeopleReviewDecision,
   handlePeopleReviewDetail,
@@ -435,25 +436,28 @@ describe("People Reviews route and UI ownership", () => {
     const index = readFileSync(new URL("../index.js", import.meta.url), "utf8");
     const page = readFileSync(new URL("../pages/audience.jsx", import.meta.url), "utf8");
     const client = readFileSync(new URL("../assets/people.js", import.meta.url), "utf8");
-    const css = readFileSync(new URL("../assets/people.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const reactPage = readFileSync(new URL("../react/pages/audience/page.tsx", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../react/pages/audience/styles.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
     expect(routes).toContain('path: "/api/people/reviews"');
     expect(routes).toContain('path: "/api/people/reviews/:id"');
     expect(routes).toContain('path: "/api/people/reviews/:id/decision"');
     expect(index).toContain('clean === "/dashboard/audience/reviews"');
-    expect(page).toContain("Human decisions needed for your community.");
-    expect(page).toContain("No reviews need your attention.");
+    expect(AudienceReviewsPage({ fragment: true }).toString()).toContain('<div id="audience-app" data-audience-tab="reviews"></div>');
+    expect(reactPage).toContain("Human decisions needed for your community.");
+    expect(reactPage).toContain("No reviews need your attention.");
     expect(page).toContain('href: "/dashboard/audience/members"');
     expect(page).toContain('href: "/dashboard/audience/reviews"');
-    expect(client).toContain('decision: "allow"');
-    expect(client).toContain('decision: "exclude"');
-    expect(client).toContain('allowButton.disabled = true');
-    expect(client).toContain('excludeButton.disabled = true');
-    expect(client).toContain('setAttribute("aria-busy", "true")');
-    expect(client).not.toMatch(/trustScore|fraudScore|riskScore|altReason|ipAddress|deviceFingerprint/i);
-    expect(css).toContain("@media (max-width: 24rem)");
+    expect(client).toContain('import("./react/audience.js")');
+    expect(reactPage).toContain('decideReview("allow")');
+    expect(reactPage).toContain('decideReview("exclude")');
+    expect(reactPage).toContain('disabled={decisionPending}');
+    expect(reactPage).toContain('aria-busy={decisionPending}');
+    expect(reactPage).not.toMatch(/trustScore|fraudScore|riskScore|altReason|ipAddress|deviceFingerprint/i);
+    expect(css).toContain("@media (max-width: 760px)");
     expect(css).toMatch(/\.people-review-table td \{\r?\n\s+display: flex;/);
-    expect(css).toContain("height: auto;");
+    expect(css).toContain("justify-content: space-between;");
+    expect(css).toContain("content: attr(data-label);");
     expect(css).not.toContain("column-reverse");
   });
 });

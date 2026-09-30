@@ -1,18 +1,16 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource hono/jsx */
 
-import { raw } from "hono/html";
 import { DashboardShell } from "./dashboard-shell.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
-import { renderGiveawayDrawersHtml, renderGiveawaysContentHtml } from "./giveaway-pages.js";
+import { renderGiveawaysContentHtml } from "./giveaway-pages.js";
 
 export function GiveawaysPage({ activePath, user, tab = "chat", fragment } = {}) {
   const chrome = chromeStateFor("giveaways", tab, { exact: true }) || chromeStateFor("giveaways", "chat");
-  const drawers = tab === "hub" ? "" : renderGiveawayDrawersHtml();
   const content = <div class="gw-workspace-content">
     <div id="gw-app" dangerouslySetInnerHTML={{ __html: renderGiveawaysContentHtml(tab) }}></div>
   </div>;
-  if (fragment) return <>{content}{raw(drawers)}</>;
+  if (fragment) return content;
   return (
     <DashboardShell
       activeNav={chrome.navKey}
@@ -22,7 +20,6 @@ export function GiveawaysPage({ activePath, user, tab = "chat", fragment } = {})
       footer="rewards"
       rootId="gw-dash"
       user={user}
-      overlays={drawers}
     >
       {content}
     </DashboardShell>
@@ -37,11 +34,10 @@ export const giveawaysConfig = {
     "/assets/shell-nav.css",
     "/assets/ui.css",
     "/assets/dashboard-v4.css",
-    "/assets/giveaways.css",
     "/assets/react/react.css",
   ],
   scripts: [
-    '<script src="/assets/giveaways.js?v=2" type="module"></script>',
+    '<script src="/assets/giveaways.js?v=3" type="module"></script>',
     '<script src="/assets/tournaments.js?v=1" type="module"></script>',
     '<script src="/assets/shell-nav.js?v=4" defer></script>',
   ],
