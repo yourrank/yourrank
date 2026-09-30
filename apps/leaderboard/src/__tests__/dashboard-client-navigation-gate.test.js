@@ -56,9 +56,6 @@ const EXCEPTIONS = {
     { match: "history.replaceState({}, \"\", `${clean.pathname}${clean.search}${clean.hash}`);", reason: "one-shot OAuth feedback param scrub: same document, no navigation" },
     { match: "history.replaceState({}, \"\", `${location.pathname}${params.size ? `?${params}` : \"\"}${location.hash}`);", reason: "one-shot ?new=1 param scrub after opening the shop drawer: same document, no navigation" },
   ],
-  "giveaways.js": [
-    { match: "location.href = loginRedirectPath(location);", reason: "cross-tab logout on a standalone document: session gone" },
-  ],
   "react/pages/tournaments/page.tsx": [
     { match: 'window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);', reason: "one-shot ?new=1 query scrub after opening the create modal: same document, no navigation" },
   ],

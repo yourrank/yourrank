@@ -14,9 +14,9 @@ const assetsDir = path.resolve(import.meta.dir, "../assets");
 const readAsset = (name) => fs.readFileSync(path.join(assetsDir, name), "utf8").replace(/\r\n/g, "\n");
 const sheets = fs.readdirSync(assetsDir).filter((file) => file.endsWith(".css"));
 const dashboardV4Css = readAsset("dashboard-v4.css");
-const giveawaysCss = readAsset("giveaways.css");
 const shellNavJs = readAsset("shell-nav.js");
 const accountSource = fs.readFileSync(path.resolve(import.meta.dir, "../pages/account.jsx"), "utf8");
+const giveawaysPageSource = fs.readFileSync(path.resolve(import.meta.dir, "../react/pages/giveaways/page.tsx"), "utf8");
 const user = { display_name: "Test operator", plan: "pro" };
 
 const withoutComments = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -63,7 +63,8 @@ describe("authenticated page chrome", () => {
     // The strip is a horizontal scroll box, so an outset ring would be clipped.
     expect(dashboardV4Css).toMatch(/\.v3-tab:focus-visible,\n\.v3-dash\[data-auth-workspace\] \.editor-step:focus-visible \{\n {2}outline-offset: -2px;/);
     // Feature areas keep their behaviour hooks but not their own tab paint.
-    expect(withoutComments(giveawaysCss)).not.toMatch(/\.gw-tab-btn\.is-active/);
+    expect(giveawaysPageSource).not.toContain("gw-tab-btn is-active");
+    expect(giveawaysPageSource).toContain('<nav className="v3-tabs gw-subnav"');
     expect(dashboardV4Css).not.toContain(".account-settings-tabs");
     expect(dashboardV4Css).not.toContain(".account-settings-head");
     expect(accountSource).not.toContain("tab-icon");
@@ -114,15 +115,11 @@ describe("authenticated page chrome", () => {
       }
     }
     const engage = renderGiveawaysContentHtml("raffles");
-    expect((engage.match(/<h1\b/g) || []).length).toBe(1);
-    expect(engage).toContain('class="v3-head v3-head--row"');
-    // The Engage workspace strip marks exactly one current destination; the
-    // feature pages carry no second tab row — the hub cards own that choice.
-    const engageStrips = [...engage.matchAll(/<(nav|div)\b[^>]*v3-tabs[^"]*"[^>]*>[\s\S]*?<\/\1>/g)];
-    expect(engageStrips.length).toBe(1);
-    for (const strip of engageStrips) {
-      expect((strip[0].match(/aria-current="page"/g) || []).length).toBe(1);
-    }
+    expect(engage).toContain('data-tab="raffles"');
+    expect(engage).not.toMatch(/<h1\b/);
+    expect((giveawaysPageSource.match(/<h1\b/g) || []).length).toBe(1);
+    expect(giveawaysPageSource).toContain('<header className="v3-head v3-head--row">');
+    expect(giveawaysPageSource).toContain('aria-current={active === key ? "page" : undefined}');
   });
 
   it("keeps breadcrumbs quiet and truncatable rather than a second navigation", () => {
