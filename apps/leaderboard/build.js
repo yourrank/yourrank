@@ -22,5 +22,14 @@ try {
   process.exit(1);
 }
 
-// Step 3: Bundle assets
+// Step 3: Build the dashboard React islands and their scoped Tailwind sheet.
+console.log("Bundling dashboard React islands...");
+try {
+  execSync("bun build-react.mjs", { stdio: "inherit" });
+} catch (error) {
+  console.error("React island build failed:", error);
+  process.exit(1);
+}
+
+// Step 4: Bundle assets
 await writeAssetBundle();
