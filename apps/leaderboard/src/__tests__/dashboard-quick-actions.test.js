@@ -2,12 +2,14 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { PAGES } from "../pages.jsx";
 import { effectivePlan } from "@yourrank/shared/plans";
+import { buildHomeViewModel } from "../assets/dashboard/overview.js";
 import { SETUP_STEPS, setupStepHref } from "../assets/dashboard/overview-state.js";
 import { SECTIONS } from "../assets/dashboard/routes.js";
 
 const siteJs = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
 const utilsJs = readFileSync(new URL("../assets/dashboard/utils.js", import.meta.url), "utf8");
 const overviewJs = readFileSync(new URL("../assets/dashboard/overview.js", import.meta.url), "utf8");
+const overviewPage = readFileSync(new URL("../react/pages/overview/page.tsx", import.meta.url), "utf8");
 const gamesJs = readFileSync(new URL("../assets/dashboard/games.js", import.meta.url), "utf8");
 const dashboardJs = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", import.meta.url), "utf8");
@@ -33,14 +35,15 @@ describe("dashboard overview quick actions", () => {
 
   it("puts the main tasks one click from the Overview", () => {
     const html = dashboardHtml();
-    expect(html).toContain('ov-setup');
+    expect(html).toContain('<div id="ov-app" class="yr-react">');
+    expect(html).toContain("Checking…");
+    expect(html).toContain("Your community at a glance.");
     expect(html).toContain('id="ovSetupMessage"');
-    expect(html).toContain('id="ovSetupAction"');
-    expect(html).toContain('<ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul>');
     expect(html).not.toContain('id="ovActiveGiveaway"');
     expect(html).not.toContain("Times shared");
     for (const id of ["ovAttention", "ovLiveNow", "ovComingNext", "ovPulse", "ovRecent", "ovQuickActions", "ovSetup"]) {
       expect(html).toContain(`id="${id}"`);
+      expect(overviewPage).toContain(`id="${id}"`);
     }
     expect(html).not.toContain('id="ovTopPlayers"');
     expect(html).not.toContain('id="ovNextStep"');
@@ -55,8 +58,7 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('class="ov-scope"><strong id="ovSiteName"');
     expect(html).toContain('id="ovOperatorContext" hidden');
     expect(html).toContain('class="ov-status" id="ovStatus"');
-    expect(html).toContain('class="ov-figures" id="ovFigures" aria-label="Community pulse"');
-    expect(html).toContain('id="ovPulseRange">Last 30 days<');
+    expect(overviewPage).toContain('className="ov-figures" id="ovFigures" aria-label="Community pulse"');
     expect(html).not.toContain("Visits this week");
     expect(html).not.toContain('id="ovKpiRow"');
     expect(html).not.toContain('id="ovCommandGrid"');
@@ -71,38 +73,43 @@ describe("dashboard overview quick actions", () => {
     expect(setupStepHref(SETUP_STEPS[1], { siteId: "s1" })).toBe("/dashboard/leaderboard/players?board=s1");
     expect(setupStepHref(SETUP_STEPS[2], { emailVerified: true })).toBe("#publish");
     expect(setupStepHref(SETUP_STEPS[2], { emailVerified: false })).toBe("/verify-email");
-    // Setup progress must be the last Home section and start hidden.
-    expect(html.lastIndexOf('id="ovSetup"')).toBeGreaterThan(html.indexOf('id="ovQuickActions"'));
-    expect(html).toMatch(/id="ovSetup"[^>]*hidden/);
+    const sectionOrder = ["ovAttention", "ovLiveNow", "ovComingNext", "ovPulse", "ovRecent", "ovQuickActions", "ovSetup"]
+      .map((id) => html.indexOf(`id="${id}"`));
+    expect(sectionOrder.every((position) => position >= 0)).toBe(true);
+    expect(sectionOrder).toEqual([...sectionOrder].sort((left, right) => left - right));
+    expect(html).toMatch(/id="ovSetup"[^>]*\shidden(?:="[^"]*")?(?:\s|>)/);
     expect(html).not.toContain("Active giveaways");
-    expect(overviewJs).toContain("state.CREDITS?.usage?.pendingRedemptions");
-    expect(overviewJs).toContain("state.CREDITS?.channel || null");
-    expect(dashboardHtml()).toContain('id="ovAttentionList"');
-    expect(dashboardHtml()).toContain('id="ovAttentionCount"');
-    expect(dashboardHtml()).toContain('role="region" aria-live="polite" aria-atomic="false" hidden');
-    expect(overviewJs).toContain('Moderator for ${ownerName}');
-    expect(overviewJs).toContain('data-setup-state="${stateKey}"');
+    expect(overviewJs).toContain("sourceState.CREDITS?.usage?.pendingRedemptions");
+    expect(overviewJs).toContain("sourceState.CREDITS?.channel || null");
+    expect(overviewPage).toContain('id="ovAttentionList"');
+    expect(overviewPage).toContain('id="ovAttentionCount"');
+    expect(overviewPage).toContain('role="region" aria-live="polite" aria-atomic="false" hidden={vm.attention.hidden}');
+    expect(overviewPage).toContain('data-setup-state={step.stateKey}');
     expect(overviewJs).toContain('"owner-action"');
-    expect(overviewJs).toContain("setMetricLoading(");
     expect(overviewJs).not.toContain("/api/events/raffles");
     expect(overviewJs).not.toContain("/api/predictions");
     expect(overviewJs).not.toContain("GIVEAWAYS_STATUS");
-    expect(overviewJs).toContain('renderEmpty(activityEmpty');
+    expect(overviewPage).toContain('className="v3-empty v3-empty--compact-heading"');
     expect(overviewJs).not.toContain("ov_topEmpty");
   });
 
   it("keeps one owner for the Home body and its data", () => {
     const html = dashboardHtml();
-    for (const marker of [/data-page="home"/g, /id="ovFigures"/g, /id="ovActivityList"/g, /id="ovQuickActionsList"/g]) {
+    for (const marker of [/data-page="home"/g, /id="ov-app"/g]) {
       expect(html.match(marker)).toHaveLength(1);
     }
-    // Every Home section is derived in overview-state.js and painted by
-    // overview.js; nothing else may render Home.
+    for (const id of ["ovFigures", "ovActivityList", "ovQuickActionsList"]) {
+      expect(html.match(new RegExp(`id="${id}"`, "g"))).toHaveLength(1);
+      expect(overviewPage).toContain(`id="${id}"`);
+    }
+    // overview-state.js owns projections, overview.js publishes the serializable
+    // view model, and the React island owns Home markup.
     expect(overviewJs).toContain("renderOverviewSummary");
     for (const projection of ["attentionItems(", "liveNowItems(", "comingNextItems(", "pulseMetrics(", "recentActivityItems(", "quickActions(", "setupProgress("]) {
       expect(overviewJs).toContain(projection);
     }
-    expect(overviewJs).toContain("setMetricLoading(");
+    expect(overviewPage).toContain("v3-skel-kpi");
+    expect(overviewPage).toContain("ov-live-row--skeleton");
     expect(overviewJs).not.toContain("nextStepAction(");
     expect(overviewJs).not.toContain("visitsMetricState(");
     expect(dashboardCss).not.toContain(".ov-next-step");
@@ -120,12 +127,24 @@ describe("dashboard overview quick actions", () => {
   });
 
   it("routes unverified users to email confirmation without a duplicate Overview banner", () => {
-    expect(overviewJs).toContain("status.published && !status.emailVerified");
-    expect(overviewJs).toContain("const needsVerification = !status.emailVerified");
-    expect(overviewJs).toContain("const readyToPublish = steps.brand && steps.players");
-    expect(overviewJs).toContain("const verificationIsNext = pendingVerification || (readyToPublish && needsVerification)");
-    expect(overviewJs).toContain('verificationIsNext ? "/verify-email"');
-    expect(overviewJs).toContain('verificationIsNext ? "Confirm email"');
+    const vm = buildHomeViewModel({
+      state: {
+        ACTIVE_SITE_ID: "site-1",
+        SLUG: "night-owls",
+        BOARDS: [{ id: "site-1", name: "Night Owls", userRole: "owner" }],
+        ME: { emailVerified: false },
+        CREDITS: { usage: { pendingRedemptions: 0 }, channel: null },
+      },
+      status: { live: false, published: true, emailVerified: false },
+      steps: { brand: true, players: true, publish: true },
+    });
+    expect(vm.setup).toMatchObject({
+      hidden: false,
+      attention: true,
+      title: "Confirm your email to go live",
+      action: { href: "/verify-email", label: "Confirm email", publicationAction: false },
+    });
+    expect(vm.attention.items.filter((item) => item.key === "verifyEmail")).toHaveLength(1);
     expect(siteJs).toContain("banner.hidden = s.emailVerified || dismissed");
     expect(siteJs).toContain("export function wirePublishAction");
     expect(siteJs).toContain("requestPublicationChange");
