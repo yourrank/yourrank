@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { MemberSelection, exportRows } from "../assets/member-selection.js";
+const audiencePage = readFileSync(new URL("../react/pages/audience/page.tsx", import.meta.url), "utf8");
 
 const alice = { id: "m-alice", balance: 10, identities: [{ provider: "kick", username: "alice" }] };
 const bob = { id: "m-bob", balance: 20, identities: [{ provider: "discord", username: "bob" }] };
@@ -65,23 +66,21 @@ describe("MemberSelection across pages and searches", () => {
   });
 });
 
-describe("credits.js wiring", () => {
-  const src = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
-
+describe("Audience React member-selection wiring", () => {
   it("exports from the selection model, not from the loaded page", () => {
-    expect(src).toContain("const rows = exportRows(memberSelection, state.members);");
-    expect(src).not.toMatch(/\(state\.members \|\| \[\]\)\.filter\(\(v\) => memberSelection\.has\(v\.id\)\)/);
+    expect(audiencePage).toContain("const rows = exportRows(memberSelectionRef.current, members);");
+    expect(audiencePage).not.toMatch(/\(members \|\| \[\]\)\.filter\(\(member\) => memberSelectionRef\.current\.has\(member\.id\)\)/);
   });
 
   it("never iterates MemberSelection directly; bulk award reads ids() from the model", () => {
     expect(new MemberSelection()[Symbol.iterator]).toBeUndefined();
     expect(() => [...new MemberSelection()]).toThrow(TypeError);
-    expect(src).toContain("const ids = memberSelection.ids();");
-    expect(src).not.toMatch(/\[\.\.\.memberSelection\]|for \(const \w+ of memberSelection\)|Array\.from\(memberSelection\)/);
+    expect(audiencePage).toContain("const ids = selection.ids();");
+    expect(audiencePage).not.toMatch(/\[\.\.\.memberSelectionRef\.current\]|for \(const \w+ of memberSelectionRef\.current\)|Array\.from\(memberSelectionRef\.current\)/);
   });
 
   it("captures the row snapshot at selection time and refreshes it on every members fetch", () => {
-    expect(src).toContain("if (box.checked && row) memberSelection.add(row);");
-    expect(src).toContain("memberSelection.refresh(data.members || []);");
+    expect(audiencePage).toContain("if (checked && row) selection.add(row);");
+    expect(audiencePage).toContain("memberSelectionRef.current.refresh(nextMembers);");
   });
 });

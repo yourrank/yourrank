@@ -1,9 +1,6 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource hono/jsx */
 
-import { raw } from "hono/html";
-import { subnavHtml } from "@yourrank/shared/dashboard-ui";
-import { settingsWidgets } from "./account-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
 
@@ -15,54 +12,15 @@ export const SETTINGS_TABS = [
   ["data", "Data"],
 ];
 
-const SETTINGS_DESCRIPTIONS = {
-  account: "Your profile, password, and signed-in devices.",
-  team: "People who can help manage the selected site.",
-  plan: "Your current plan, usage, and payment history.",
-  connections: "Manage your account and selected site's connections.",
-  data: "Export your account data or permanently close your account.",
-};
-
-function settingsPanel(key, html, active) {
-  return <section class="account-settings-panel" data-settings-panel={key} hidden={key !== active} dangerouslySetInnerHTML={{ __html: html }} />;
-}
-
 export function UnifiedSettingsPage({ activePath, user, tab = "account", fragment } = {}) {
   const active = SETTINGS_TABS.some(([key]) => key === tab) ? tab : "account";
-  const activeLabel = SETTINGS_TABS.find(([key]) => key === active)?.[1] || "Account";
-  const activeDescription = SETTINGS_DESCRIPTIONS[active];
   const content = <div class="account-body account-settings" id="acc-app" data-acc-tab="settings" data-settings-active={active}>
-      <div class="v3-head">
-        <h1 data-chrome-h1>{activeLabel}</h1>
-        <p class="v3-head-sub" data-settings-page-description>{activeDescription}</p>
-      </div>
-      {raw(subnavHtml({
-        items: SETTINGS_TABS.map(([key, label]) => ({
-          key,
-          label,
-          href: `/dashboard/settings/${key === "plan" ? "billing" : key}`,
-          attrs: { "data-settings-tab": key, "data-settings-description": SETTINGS_DESCRIPTIONS[key] },
-        })),
-        active,
-        label: "Settings sections",
-        tablist: true,
-      }))}
-      <div class="account-settings-layout">
-        <div class="account-settings-main">
-          {settingsPanel("account", settingsWidgets.account, active)}
-          {settingsPanel("team", settingsWidgets.team, active)}
-          {settingsPanel("plan", settingsWidgets.plan, active)}
-          {settingsPanel("connections", `${settingsWidgets.connected}${settingsWidgets.integrationHealth}${settingsWidgets.postbacks}`, active)}
-          {settingsPanel("data", `${settingsWidgets.data}<div class="account-related-setting"><div><strong>Looking for one site's data?</strong><p>Resetting, archiving, or deleting a site affects only the selected site.</p></div><a class="btn btn--ghost" href="/dashboard/site?tab=danger">Manage site data</a></div>`, active)}
-        </div>
-        <div class="account-settings-help">
-          <span>Account settings apply to you. To change your website, use Site settings.</span>
-          <a href="/dashboard/site">Open Site settings</a>
-          <span aria-hidden="true">·</span>
-          <a href="/help/support?area=account">Open Help &amp; feedback</a>
-        </div>
-      </div>
-    </div>;
+    <div class="v3-head"><h1 data-chrome-h1="true">{SETTINGS_TABS.find(([key]) => key === active)?.[1]}</h1></div>
+    <nav class="v3-tabs" aria-label="Settings sections" role="tablist">{SETTINGS_TABS.map(([key, label]) => <a class={`v3-tab${active === key ? " is-on" : ""}`} href={`/dashboard/settings/${key === "plan" ? "billing" : key}`} id={`settings-tab-${key}`} role="tab" aria-controls={`settings-panel-${key}`} aria-selected={active === key} aria-current={active === key ? "page" : undefined} data-settings-tab={key}>{label}</a>)}</nav>
+    <section id={`settings-panel-${active}`} role="tabpanel" aria-labelledby={`settings-tab-${active}`} data-settings-panel={active}>
+      <div class="yr-react-settings-loading" aria-live="polite">Loading settings…</div>
+    </section>
+  </div>;
   const chrome = chromeStateFor("settings", active);
   if (fragment) return content;
   return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="none" crumbs={chrome.crumbs} footer="account" topbarContext="Settings" user={user}>
@@ -71,8 +29,8 @@ export function UnifiedSettingsPage({ activePath, user, tab = "account", fragmen
 }
 
 const settingsConfigBase = {
-  styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"],
-  scripts: ['<script src="/assets/account.js?v=3" type="module"></script>', '<script src="/assets/shell-nav.js?v=4" defer></script>'],
+  styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css", "/assets/react/react.css"],
+  scripts: ['<script src="/assets/account.js?v=4" type="module"></script>', '<script src="/assets/shell-nav.js?v=4" defer></script>'],
   nav: false,
   footer: false,
   wide: true,

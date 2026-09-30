@@ -1,33 +1,22 @@
-// Activities workspace behaviour: the real activities.js client runs against the
-// real rendered fragment in a DOM with an in-memory API, so live/history
-// separation, the create-drop drawer, plan-locked automation, template and
-// schedule actions, and SPA leave/re-enter are exercised the way a browser
-// drives them rather than by string-matching the source.
+// Activities workspace behavior is exercised through the React island with an
+// in-memory API and portal-aware DOM helpers.
 //
 // Run: bun test src/__tests__/activities-workspace.test.js
 
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
-import { Window } from "happy-dom";
-import { ActivitiesPage } from "../pages/activities.jsx";
-import { clearSession } from "../assets/dashboard/session.js";
-
-const window = new Window({ url: "http://localhost/dashboard/activities?siteId=site-1" });
-const { document } = window;
-const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle", "matchMedia", "localStorage", "fetch"];
-const originalGlobals = Object.fromEntries(INSTALLED_GLOBALS.map((k) => [k, globalThis[k]]));
-for (const key of INSTALLED_GLOBALS.slice(0, 15)) {
-  globalThis[key] = key === "getComputedStyle" ? window.getComputedStyle.bind(window) : window[key];
-}
-window.Element.prototype.scrollIntoView = function () {};
-window.Element.prototype.getClientRects = function () { return [{}]; };
-globalThis.localStorage = window.localStorage;
-window.matchMedia = (query) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
-globalThis.matchMedia = window.matchMedia;
-window.scrollTo = () => {};
-let confirmAnswer = true;
-const trapped = [];
-window.__yrSpaShell = true;
-window.__yrBoot = { signal() {}, fail() {} };
+import {
+  activitiesAct,
+  clickActivity,
+  document,
+  flushActivitiesUpdates,
+  mountActivitiesPage,
+  restoreActivitiesDomGlobals,
+  setActivityInput,
+  setActivitySelect,
+  submitActivityForm,
+  unmountActivitiesPage,
+  window,
+} from "./activities-react-utils.js";
 
 // ---- Fixture data -----------------------------------------------------------
 let user = { id: "user-1", email: "creator@example.com", plan: "pro", emailVerified: true };
@@ -70,6 +59,8 @@ function resetData() {
 
 const requests = [];
 let failNext = null; // { path, status, error }
+let holdFailure = null;
+let holdApiResponse = null;
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 globalThis.fetch = async (input, init = {}) => {
@@ -77,11 +68,22 @@ globalThis.fetch = async (input, init = {}) => {
   const url = new URL(raw, "http://localhost");
   const path = url.pathname;
   const body = init.body ? JSON.parse(init.body) : null;
-  requests.push({ path, query: Object.fromEntries(url.searchParams), method: init.method || "GET", body });
+  requests.push({ path, url: `${url.pathname}${url.search}`, query: Object.fromEntries(url.searchParams), method: init.method || "GET", body });
   if (failNext && failNext.path === path) {
     const { status, error } = failNext;
     failNext = null;
-    return json({ error }, status);
+    const response = json({ error }, status);
+    if (holdFailure?.path === path) {
+      return new Promise((resolve) => { holdFailure.release = () => resolve(response); });
+    }
+    return response;
+  }
+  if (holdApiResponse?.path === path
+    && (!holdApiResponse.state || url.searchParams.get("state") === holdApiResponse.state)
+    && (!holdApiResponse.siteId || url.searchParams.get("siteId") === holdApiResponse.siteId)) {
+    return new Promise((resolve) => {
+      holdApiResponse.release = () => resolve(json(holdApiResponse.body));
+    });
   }
   const siteId = url.searchParams.get("siteId") || body?.siteId || "site-1";
   const site = data[siteId];
@@ -139,53 +141,59 @@ globalThis.fetch = async (input, init = {}) => {
 const requestsTo = (path) => requests.filter((r) => r.path === path);
 
 const $id = (id) => document.getElementById(id);
-const settle = async () => { for (let i = 0; i < 12; i++) await new Promise((r) => setTimeout(r, 0)); };
-const click = (el) => el.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-const submit = (form) => form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+const settle = flushActivitiesUpdates;
+const click = clickActivity;
+const submit = submitActivityForm;
+const setInput = (id, value) => setActivityInput($id(id), value);
+const setSelect = (id, value) => setActivitySelect($id(id), value);
+const dialogButton = (label) => Array.from(document.querySelector('[role="alertdialog"]')?.querySelectorAll("button") || [])
+  .find((button) => button.textContent.trim() === label);
+const clickDialogButton = (label) => click(dialogButton(label));
 const rowsOf = (id) => Array.from($id(id).querySelectorAll("li.act-drop"));
 const codesOf = (id) => rowsOf(id).map((li) => li.querySelector("code").textContent);
 
-document.body.innerHTML = `<div id="lbDynamic"></div>`;
-const activities = await import("../assets/activities.js");
-// The client imports the real dialog.js transitively; stub the dialog after
-// that so confirmations resolve without a modal and focus traps are recorded.
-window.YRDialog = {
-  trap: (el) => { trapped.push(el); return () => {}; },
-  confirm: async () => confirmAnswer,
-};
-
 /** Mount a fresh fragment (as the SPA loader does) and run enter(). */
-async function mount(siteId = "site-1", hash = "") {
-  window.history.replaceState(null, "", `/dashboard/activities?siteId=${siteId}${hash}`);
-  $id("lbDynamic").innerHTML = ActivitiesPage({ fragment: true }).toString();
-  await activities.enter();
+async function mount(siteId = "site-1", hash = "", deps = {}) {
+  const site = sites.find((item) => item.id === siteId);
+  await mountActivitiesPage({ site, hash, deps });
   await settle();
 }
 
-afterAll(() => {
-  for (const key of INSTALLED_GLOBALS) globalThis[key] = originalGlobals[key];
-});
+afterAll(restoreActivitiesDomGlobals);
 
-beforeEach(() => {
+beforeEach(async () => {
+  await unmountActivitiesPage();
   resetData();
   requests.length = 0;
-  trapped.length = 0;
-  confirmAnswer = true;
   failNext = null;
+  holdFailure = null;
+  holdApiResponse = null;
   user = { id: "user-1", email: "creator@example.com", plan: "pro", emailVerified: true };
-  clearSession();
-  activities.leave();
 });
 
 describe("Activities workspace", () => {
   it("keeps live drops and history as separate server datasets, newest first, with the pager hidden for one page", async () => {
     await mount();
+    const activityRequests = requestsTo("/api/activities");
     const states = requestsTo("/api/activities").map((r) => r.query.state);
     expect(states).toContain("open");
     expect(states).toContain("completed");
     expect(states).not.toContain("all");
+    expect(activityRequests.find((r) => r.query.state === "open").url).toBe("/api/activities?siteId=site-1&state=open&limit=100");
+    expect(activityRequests.find((r) => r.query.state === "completed").url).toBe("/api/activities?siteId=site-1&state=completed&limit=5");
 
     expect($id("act-live-loading").hidden).toBe(true);
+    expect($id("act-live-loading").getAttribute("role")).toBe("status");
+    expect($id("act-live-loading").getAttribute("aria-busy")).toBe("true");
+    expect($id("act-live-error").getAttribute("data-state")).toBe("error");
+    expect($id("act-live-empty").getAttribute("data-state")).toBe("empty");
+    expect($id("act-live").dataset.dropList).toBe("live");
+    expect($id("act-live").getAttribute("aria-label")).toBe("Live now");
+    expect($id("act-history").dataset.dropList).toBe("history");
+    expect($id("act-history").getAttribute("aria-label")).toBe("History");
+    expect($id("act-pager").parentElement.classList.contains("v3-list-shell-foot")).toBe(true);
+    expect($id("act-scope").dataset.scope).toBe("site");
+    expect($id("act-scope").querySelector(".v3-scope-label").textContent).toBe("Current site");
     expect(codesOf("act-live-list")).toEqual(["ALPHA", "BETA"]);
     expect($id("act-live").querySelector("h2").textContent).toBe("Live now · 2");
     expect(rowsOf("act-live-list").every((li) => li.querySelector("[data-activity-end]"))).toBe(true);
@@ -194,16 +202,38 @@ describe("Activities workspace", () => {
     expect(rowsOf("act-history-list").some((li) => li.querySelector("[data-activity-end]"))).toBe(false);
     const labels = rowsOf("act-history-list").map((li) => li.querySelector(".v3-badge").textContent.trim());
     expect(labels).toEqual(["Claimed out", "Expired", "Ended by creator"]);
+    expect(rowsOf("act-live-list")[0].querySelector(".v3-badge").dataset.tone).toBe("success");
+    expect(rowsOf("act-history-list").map((li) => li.querySelector(".v3-badge").dataset.tone)).toEqual(["accent", "warning", "neutral"]);
+    const liveBadge = rowsOf("act-live-list")[0].querySelector(".v3-badge");
+    expect(liveBadge.classList.contains("uppercase")).toBe(false);
+    expect(liveBadge.classList.contains("tracking-wide")).toBe(false);
+    expect(rowsOf("act-live-list")[0].querySelector(".act-meter > span").style.width).toBe("6%");
+    expect($id("act-create-toggle")).toBeTruthy();
+    expect($id("act-create-toggle").classList.contains("bg-primary")).toBe(true);
+    expect($id("act-create-toggle").classList.contains("v3-btn--primary")).toBe(false);
+    expect($id("act-app").querySelector(".v3-head").classList.contains("!mb-0")).toBe(true);
+    const mobileAreas = Array.from(rowsOf("act-live-list")[0].querySelectorAll(".act-drop__fact"))
+      .map((item) => item.className.match(/\[grid-area:([^\]]+)\]/)?.[1]);
+    expect(mobileAreas).toEqual(["credits", "expiry", "claims"]);
     expect($id("act-pager").hidden).toBe(true);
   });
 
   it("shows empty states with zero drops and no pager", async () => {
     await mount("site-2");
     expect($id("act-live-empty").hidden).toBe(false);
+    expect($id("act-live-empty").getAttribute("data-state")).toBe("empty");
+    expect($id("act-live-empty").querySelector(".v3-empty-actions").classList.contains("justify-center")).toBe(true);
     expect($id("act-live-list").hidden).toBe(true);
     expect($id("act-history-empty").hidden).toBe(false);
     expect($id("act-pager").hidden).toBe(true);
     expect($id("act-live").querySelector("h2").textContent).toBe("Live now");
+    const emptyCreate = $id("act-live-empty").querySelector('[data-drawer-open="act-create-drawer"]');
+    expect(emptyCreate.textContent).toBe("Create drop");
+    await click(emptyCreate);
+    expect($id("act-create-drawer").hidden).toBe(false);
+    await click($id("act-drop-cancel"));
+    expect($id("act-create-drawer")).toBeNull();
+    expect(document.activeElement).toBe(emptyCreate);
   });
 
   it("pages history through the server only when more than one page exists", async () => {
@@ -216,52 +246,63 @@ describe("Activities workspace", () => {
     expect($id("act-pager-next").disabled).toBe(false);
     expect(requestsTo("/api/activities").filter((r) => r.query.state === "completed")).toHaveLength(1);
 
-    click($id("act-pager-next"));
+    await click($id("act-pager-next"));
     await settle();
     const historyRequests = requestsTo("/api/activities").filter((r) => r.query.state === "completed");
     expect(historyRequests).toHaveLength(2);
     expect(historyRequests[1].query.cursor).toBe("5");
+    expect(historyRequests[1].url).toBe("/api/activities?siteId=site-1&state=completed&limit=5&cursor=5");
     expect(codesOf("act-history-list")[0]).toBe("OLD6");
     expect($id("act-pager-prev").disabled).toBe(false);
 
     // Going back reuses the cached page instead of re-fetching it.
-    click($id("act-pager-prev"));
+    await click($id("act-pager-prev"));
     await settle();
     expect(requestsTo("/api/activities").filter((r) => r.query.state === "completed")).toHaveLength(2);
     expect(codesOf("act-history-list")[0]).toBe("OLD1");
   });
 
   it("opens the create drawer, posts the unchanged payload, then closes, refreshes, and reports", async () => {
-    await mount();
-    expect($id("act-create-drawer").hidden).toBe(true);
-    click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
+    data["site-1"].open = [];
+    const toasts = [];
+    await mount("site-1", "", { showToast: (message, type) => toasts.push({ message, type }) });
+    expect($id("act-create-toggle")).toBeTruthy();
+    expect($id("act-create-drawer")).toBeNull();
+    const opener = document.querySelector('[data-drawer-open="act-create-drawer"]');
+    await click(opener);
     expect($id("act-create-drawer").hidden).toBe(false);
-    expect(trapped.at(-1)).toBeTruthy();
-    expect(trapped.at(-1).contains($id("act-drop-code"))).toBe(true);
+    expect(document.activeElement?.id).toBe("act-drop-code");
+    expect(Array.from($id("act-drop-expire").options).map((option) => option.value)).toEqual(["0", "15", "30", "60", "1440"]);
+    expect($id("act-drop-expire").value).toBe("0");
 
-    $id("act-drop-code").value = "party100";
-    $id("act-drop-points").value = "250";
-    $id("act-drop-max").value = "20";
-    $id("act-drop-expire").value = "30";
-    submit($id("act-drop-form"));
+    await setInput("act-drop-code", "party100");
+    await setInput("act-drop-points", "250");
+    await setInput("act-drop-max", "20");
+    await setSelect("act-drop-expire", "30");
+    await submit($id("act-drop-form"));
     await settle();
 
     const post = requestsTo("/api/events/drops")[0];
     expect(post.method).toBe("POST");
+    expect(post.url).toBe("/api/events/drops?siteId=site-1");
     expect(post.body).toEqual({ siteId: "site-1", code: "party100", pointsReward: 250, maxClaims: 20, expireMinutes: 30 });
-    expect($id("act-create-drawer").hidden).toBe(true);
+    expect($id("act-create-drawer")).toBeNull();
     expect(codesOf("act-live-list")[0]).toBe("PARTY100");
-    expect($id("act-live").querySelector("h2").textContent).toBe("Live now · 3");
+    expect($id("act-live").querySelector("h2").textContent).toBe("Live now · 1");
     expect($id("act-feedback").textContent).toBe("Drop PARTY100 is live.");
+    expect(toasts).toContainEqual({ message: "Drop PARTY100 is live.", type: "success" });
+    await click(opener);
     expect($id("act-drop-code").value).toBe("");
+    await click($id("act-drop-cancel"));
   });
 
   it("keeps the drawer open and shows the server's message when creation fails", async () => {
+    data["site-1"].open = [];
     await mount();
-    click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
+    await click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
     failNext = { path: "/api/events/drops", status: 409, error: "That code is already live." };
-    $id("act-drop-code").value = "ALPHA";
-    submit($id("act-drop-form"));
+    await setInput("act-drop-code", "ALPHA");
+    await submit($id("act-drop-form"));
     await settle();
     expect($id("act-create-drawer").hidden).toBe(false);
     expect($id("act-form-status").textContent).toBe("That code is already live.");
@@ -269,26 +310,50 @@ describe("Activities workspace", () => {
   });
 
   it("closes the drawer on Cancel without posting", async () => {
+    data["site-1"].open = [];
     await mount();
-    click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
-    click($id("act-create-drawer").querySelector("[data-drawer-close]"));
-    expect($id("act-create-drawer").hidden).toBe(true);
+    const opener = document.querySelector('[data-drawer-open="act-create-drawer"]');
+    await click(opener);
+    await click($id("act-drop-cancel"));
+    expect($id("act-create-drawer")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    expect(requestsTo("/api/events/drops")).toHaveLength(0);
+  });
+
+  it("keeps Escape and the close button as no-request drawer dismissal paths", async () => {
+    data["site-1"].open = [];
+    await mount();
+    await click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
+    await activitiesAct(() => document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect($id("act-create-drawer")).toBeNull();
+    expect(requestsTo("/api/events/drops")).toHaveLength(0);
+
+    await click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
+    await click($id("act-create-drawer").querySelector("[data-drawer-close]"));
+    expect($id("act-create-drawer")).toBeNull();
     expect(requestsTo("/api/events/drops")).toHaveLength(0);
   });
 
   it("ends a live drop only after confirmation and moves it to history", async () => {
     await mount();
-    confirmAnswer = false;
-    click(document.querySelector('[data-activity-end="drop:alpha"]'));
+    await click(document.querySelector('[data-activity-end="drop:alpha"]'));
     await settle();
     expect(requestsTo("/api/activities/close")).toHaveLength(0);
     expect(codesOf("act-live-list")).toEqual(["ALPHA", "BETA"]);
+    expect(document.querySelector('[role="alertdialog"]').textContent).toContain('End "ALPHA" now?');
+    const confirmEnd = dialogButton("End now");
+    expect(confirmEnd.classList.contains("bg-background")).toBe(true);
+    expect(confirmEnd.classList.contains("text-destructive")).toBe(true);
+    expect(confirmEnd.classList.contains("border-destructive/30")).toBe(true);
+    expect(confirmEnd.classList.contains("bg-destructive")).toBe(false);
+    await clickDialogButton("Cancel");
 
-    confirmAnswer = true;
     const button = document.querySelector('[data-activity-end="drop:alpha"]');
     expect(button.classList.contains("v3-btn--danger")).toBe(false);
     expect(button.classList.contains("v3-btn--accent")).toBe(false);
-    click(button);
+    await click(button);
+    expect(button.classList.contains("opacity-55")).toBe(true);
+    await clickDialogButton("End now");
     await settle();
     expect(requestsTo("/api/activities/close")[0].body).toEqual({ siteId: "site-1", activityId: "drop:alpha" });
     expect(codesOf("act-live-list")).toEqual(["BETA"]);
@@ -298,18 +363,36 @@ describe("Activities workspace", () => {
 
   it("switches tabs via the in-page subnav and the URL hash", async () => {
     await mount();
+    expect(document.querySelector(".act-tabs").getAttribute("aria-label")).toBe("Activities");
+    expect(document.querySelector(".act-tabs").hasAttribute("data-subnav-strip")).toBe(true);
+    expect($id("act-tab-drops").classList.contains("is-on")).toBe(true);
     expect($id("act-panel-drops").hidden).toBe(false);
     expect($id("act-panel-automation").hidden).toBe(true);
-    click(document.querySelector('.act-tabs [data-subnav="automation"]'));
+    await click(document.querySelector('.act-tabs [data-subnav="automation"]'));
     expect($id("act-panel-drops").hidden).toBe(true);
     expect($id("act-panel-automation").hidden).toBe(false);
     expect(document.querySelector('.act-tabs [data-subnav="automation"]').getAttribute("aria-selected")).toBe("true");
     expect(document.querySelector('.act-tabs [data-subnav="drops"]').getAttribute("aria-selected")).toBe("false");
     expect(window.location.hash).toBe("#automation");
 
-    activities.leave();
+    await unmountActivitiesPage();
     await mount("site-1", "#automation");
     expect($id("act-panel-automation").hidden).toBe(false);
+  });
+
+  it("supports roving tabs with arrow, Home, and End keys without rewriting the initial hash", async () => {
+    await mount("site-1", "#automation");
+    expect(window.location.hash).toBe("#automation");
+    const automationTab = document.querySelector('[role="tab"][data-subnav="automation"]');
+    expect(automationTab.getAttribute("tabindex")).toBe("0");
+    await activitiesAct(() => automationTab.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true })));
+    expect(document.activeElement.id).toBe("act-tab-drops");
+    expect(window.location.hash).toBe("#drops");
+    await activitiesAct(() => document.activeElement.dispatchEvent(new window.KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true })));
+    expect(document.activeElement.id).toBe("act-tab-automation");
+    expect(document.querySelector('[role="tab"][data-subnav="drops"]').getAttribute("tabindex")).toBe("-1");
+    await activitiesAct(() => document.activeElement.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })));
+    expect(document.activeElement.id).toBe("act-tab-drops");
   });
 
   it("renders Pro/Team automation with templates and prioritised schedules", async () => {
@@ -320,52 +403,119 @@ describe("Activities workspace", () => {
     const groups = Array.from($id("act-schedule-list").querySelectorAll(".act-schedule-group")).map((g) => g.dataset.group);
     expect(groups).toEqual(["attention", "upcoming", "past"]);
     const failed = $id("act-schedule-list").querySelector('[data-schedule-id="sch-2"]');
+    const scheduled = $id("act-schedule-list").querySelector('[data-schedule-id="sch-1"]');
+    const cancelled = $id("act-schedule-list").querySelector('[data-schedule-id="sch-3"]');
+    const templateRow = $id("act-template-list").querySelector('[data-template-id="tpl-1"]');
     expect(failed.classList.contains("is-attention")).toBe(true);
     expect(failed.querySelector("[data-schedule-resume]")).toBeTruthy();
     expect(failed.querySelector("[data-schedule-resume]").classList.contains("v3-btn--accent")).toBe(true);
     expect(failed.textContent).toContain("The last run failed.");
     expect($id("act-schedule-list").querySelector('[data-schedule-id="sch-3"] [data-schedule-cancel]')).toBeNull();
     expect($id("act-schedule-list").querySelector('[data-schedule-id="sch-3"] [data-schedule-resume]')).toBeNull();
+    expect(failed.closest(".act-schedule-group").dataset.group).toBe("attention");
+    expect(failed.closest(".act-schedule-group").querySelector("h3").classList.contains("text-[15px]")).toBe(true);
+    expect(failed.closest(".act-schedule-group").querySelector("h3").classList.contains("text-amber-800")).toBe(true);
+    expect(failed.querySelector(".v3-badge").textContent.trim()).toBe("failed");
+    expect(scheduled.querySelector(".v3-badge").textContent.trim()).toBe("scheduled");
+    expect(cancelled.querySelector(".v3-badge").textContent.trim()).toBe("cancelled");
+    expect($id("act-schedule-list").querySelector('[data-schedule-id="sch-1"]').closest(".act-schedule-group").dataset.group).toBe("upcoming");
+    expect($id("act-schedule-list").querySelector('[data-schedule-id="sch-3"]').closest(".act-schedule-group").dataset.group).toBe("past");
+    expect($id("act-schedule-list").querySelector('[data-schedule-id="sch-3"]').textContent).toContain("No time limit");
+    const metricAreas = Array.from(rowsOf("act-live-list")[0].querySelectorAll(".act-drop__fact"))
+      .map((item) => item.className.match(/\[grid-area:([^\]]+)\]/)?.[1]);
+    expect(metricAreas).toEqual(["credits", "expiry", "claims"]);
+    expect($id("act-templates").classList.contains("rounded-xl")).toBe(false);
+    expect($id("act-templates").classList.contains("border")).toBe(false);
+    expect($id("act-schedules").classList.contains("rounded-xl")).toBe(false);
+    expect($id("act-schedules").classList.contains("border")).toBe(false);
+    expect($id("act-schedule-new").classList.contains("bg-background")).toBe(true);
+    expect($id("act-schedule-new").classList.contains("bg-primary")).toBe(false);
+    expect(failed.querySelector(".act-item__actions").classList.contains("opacity-70")).toBe(false);
+    expect(failed.querySelector("[data-schedule-resume]").classList.contains("opacity-70")).toBe(false);
+    expect(scheduled.querySelector("[data-schedule-cancel]").classList.contains("opacity-70")).toBe(true);
+    expect(templateRow.querySelector(".act-item__actions").classList.contains("opacity-70")).toBe(false);
+    expect(templateRow.querySelector("[data-template-edit]").classList.contains("opacity-70")).toBe(true);
+    expect(templateRow.querySelector("[data-template-delete]").classList.contains("opacity-70")).toBe(true);
   });
 
-  it("shows one compact locked state on Free with no automation controls underneath", async () => {
-    await mount("site-2");
+  it("uses centered automation empty states and an outlined disabled Schedule button", async () => {
+    data["site-1"].automation.templates = [];
+    data["site-1"].automation.schedules = [];
+    await mount("site-1", "#automation");
+    expect($id("act-template-empty").hidden).toBe(false);
+    expect($id("act-template-empty").classList.contains("v3-empty")).toBe(true);
+    expect($id("act-template-empty").getAttribute("data-state")).toBe("empty");
+    expect($id("act-schedule-empty").hidden).toBe(false);
+    expect($id("act-schedule-empty").classList.contains("v3-empty")).toBe(true);
+    expect($id("act-schedule-empty").getAttribute("data-state")).toBe("empty");
+    expect($id("act-schedule-new").disabled).toBe(true);
+    expect($id("act-schedule-new").classList.contains("bg-background")).toBe(true);
+    expect($id("act-schedule-new").classList.contains("border-input")).toBe(true);
+  });
+
+  it("shows one compact locked state on Free and wires the plan lock", async () => {
+    const wired = [];
+    await mount("site-2", "", { wirePlanLock: (element, feature) => wired.push({ element, feature }) });
+    await settle();
     expect($id("act-automation-gate").hidden).toBe(false);
     expect($id("act-automation-gate-copy").textContent).toContain("Templates and scheduling require Pro or Team.");
     expect($id("act-automation").hidden).toBe(true);
+    const upgrade = $id("act-automation-gate").querySelector("[data-plan-lock-upgrade]");
+    expect(upgrade.getAttribute("href")).toBe("/dashboard/settings/billing?from=activities");
+    expect(upgrade.classList.contains("bg-background")).toBe(true);
+    expect(upgrade.classList.contains("underline")).toBe(false);
+    expect($id("act-automation-gate").classList.contains("border-dashed")).toBe(true);
+    expect($id("act-automation-gate").classList.contains("bg-transparent")).toBe(true);
     const visibleControls = Array.from($id("act-panel-automation").querySelectorAll("button, select, input"))
       .filter((el) => !el.closest("[hidden]"));
     expect(visibleControls.filter((el) => el.closest("#act-automation"))).toHaveLength(0);
     expect(visibleControls.some((el) => el.disabled)).toBe(false);
+    expect(wired).toEqual([{ element: $id("act-automation-gate"), feature: "activity_automation" }]);
     // Manual drops stay available.
     expect(document.querySelector('[data-drawer-open="act-create-drawer"]').disabled).toBe(false);
   });
 
+  it("keeps the live error message verbatim and retries that dataset", async () => {
+    failNext = { path: "/api/activities", status: 500, error: "The board is temporarily offline." };
+    await mount();
+    expect($id("act-live-error").hidden).toBe(false);
+    expect($id("act-live-error").getAttribute("role")).toBe("alert");
+    expect($id("act-live-error").getAttribute("data-state")).toBe("error");
+    expect($id("act-live-error").textContent).toContain("The board is temporarily offline.");
+    await click($id("act-live-error").querySelector("[data-retry]"));
+    await settle();
+    expect($id("act-live-error").hidden).toBe(true);
+    expect(codesOf("act-live-list")).toEqual(["ALPHA", "BETA"]);
+  });
+
   it("creates and edits templates through the drawer with the existing API contract", async () => {
     await mount();
-    click(document.querySelector('[data-drawer-open="act-template-drawer"]'));
+    await click(document.querySelector('[data-drawer-open="act-template-drawer"]'));
     expect($id("act-template-drawer").hidden).toBe(false);
     expect($id("act-template-drawer-title").textContent).toBe("New template");
-    $id("act-template-name").value = "Weekend";
-    $id("act-template-points").value = "500";
-    $id("act-template-max").value = "10";
-    $id("act-template-expire").value = "60";
-    submit($id("act-template-form"));
+    expect(document.activeElement).toBe($id("act-template-name"));
+    await setInput("act-template-name", "Weekend");
+    await setInput("act-template-points", "500");
+    await setInput("act-template-max", "10");
+    await setSelect("act-template-expire", "60");
+    await submit($id("act-template-form"));
     await settle();
     const create = requestsTo("/api/activities/templates")[0];
     expect(create.method).toBe("POST");
+    expect(create.url).toBe("/api/activities/templates?siteId=site-1");
     expect(create.body).toEqual({ siteId: "site-1", kind: "safe_code_drop", name: "Weekend", config: { pointsReward: 500, maxClaims: 10, expireMinutes: 60 } });
-    expect($id("act-template-drawer").hidden).toBe(true);
+    expect($id("act-template-drawer")).toBeNull();
     expect($id("act-template-list").querySelectorAll("[data-template-id]")).toHaveLength(2);
 
-    click($id("act-template-list").querySelector('[data-template-edit="tpl-1"]'));
+    await click($id("act-template-list").querySelector('[data-template-edit="tpl-1"]'));
     expect($id("act-template-drawer-title").textContent).toBe("Edit template");
     expect($id("act-template-name").value).toBe("Friday drop");
-    $id("act-template-name").value = "Friday drop v2";
-    submit($id("act-template-form"));
+    await setInput("act-template-name", "Friday drop v2");
+    await submit($id("act-template-form"));
     await settle();
     const update = requestsTo("/api/activities/templates")[1];
     expect(update.method).toBe("PUT");
+    expect(update.url).toBe("/api/activities/templates?siteId=site-1");
     expect(update.body.templateId).toBe("tpl-1");
     expect($id("act-template-list").textContent).toContain("Friday drop v2");
   });
@@ -373,13 +523,22 @@ describe("Activities workspace", () => {
   it("deletes a template optimistically and restores it when the server rejects", async () => {
     await mount();
     failNext = { path: "/api/activities/templates/delete", status: 500, error: "Nope." };
-    click($id("act-template-list").querySelector('[data-template-delete="tpl-1"]'));
+    holdFailure = { path: "/api/activities/templates/delete", release: null };
+    await click($id("act-template-list").querySelector('[data-template-delete="tpl-1"]'));
+    expect(document.querySelector('[role="alertdialog"]').textContent).toContain('Delete "Friday drop"?');
+    expect(document.querySelector('[role="alertdialog"]').textContent).toContain("Existing schedules keep their saved snapshot.");
+    await clickDialogButton("Delete");
+    await settle();
+    expect($id("act-template-list").querySelectorAll("[data-template-id]")).toHaveLength(0);
+    await activitiesAct(() => holdFailure.release());
     await settle();
     expect(requestsTo("/api/activities/templates/delete")[0].body).toEqual({ siteId: "site-1", templateId: "tpl-1" });
+    expect(requestsTo("/api/activities/templates/delete")[0].url).toBe("/api/activities/templates/delete?siteId=site-1");
     expect($id("act-template-list").querySelectorAll("[data-template-id]")).toHaveLength(1);
     expect($id("act-feedback").textContent).toBe("Nope.");
 
-    click($id("act-template-list").querySelector('[data-template-delete="tpl-1"]'));
+    await click($id("act-template-list").querySelector('[data-template-delete="tpl-1"]'));
+    await clickDialogButton("Delete");
     await settle();
     expect($id("act-template-list").hidden).toBe(true);
     expect($id("act-template-empty").hidden).toBe(false);
@@ -387,42 +546,57 @@ describe("Activities workspace", () => {
 
   it("reschedules a failed schedule and cancels schedules through the existing endpoints", async () => {
     await mount();
-    click($id("act-schedule-list").querySelector('[data-schedule-resume="sch-2"]'));
+    await click($id("act-schedule-list").querySelector('[data-schedule-resume="sch-2"]'));
     expect($id("act-schedule-drawer").hidden).toBe(false);
     expect($id("act-schedule-drawer-title").textContent).toBe("Reschedule");
     expect($id("act-schedule-template-field").hidden).toBe(true);
-    submit($id("act-schedule-form"));
+    expect($id("act-schedule-recurrence-field").hidden).toBe(true);
+    expect(document.activeElement).toBe($id("act-schedule-at"));
+    await submit($id("act-schedule-form"));
     await settle();
     const resume = requestsTo("/api/activities/schedules/resume")[0];
+    expect(resume.url).toBe("/api/activities/schedules/resume?siteId=site-1");
     expect(resume.body.scheduleId).toBe("sch-2");
     expect(typeof resume.body.runAt).toBe("string");
     expect(resume.body.templateId).toBeUndefined();
     expect($id("act-schedule-list").querySelector(".act-schedule-group[data-group=attention]")).toBeNull();
 
-    click($id("act-schedule-list").querySelector('[data-schedule-cancel="sch-1"]'));
+    await click($id("act-schedule-list").querySelector('[data-schedule-cancel="sch-1"]'));
+    expect(document.querySelector('[role="alertdialog"]').textContent).toContain('Cancel "Friday drop"?');
+    expect(document.querySelector('[role="alertdialog"]').textContent).toContain("No future Activity will be created from this schedule.");
+    await clickDialogButton("Cancel");
+    expect(requestsTo("/api/activities/schedules/cancel")).toHaveLength(0);
+    await click($id("act-schedule-list").querySelector('[data-schedule-cancel="sch-1"]'));
+    await clickDialogButton("Cancel Schedule");
     await settle();
     expect(requestsTo("/api/activities/schedules/cancel")[0].body).toEqual({ siteId: "site-1", scheduleId: "sch-1" });
     expect($id("act-schedule-list").querySelector('[data-schedule-id="sch-1"]').closest(".act-schedule-group").dataset.group).toBe("past");
 
-    click($id("act-schedule-new"));
+    await click($id("act-schedule-new"));
     expect($id("act-schedule-drawer-title").textContent).toBe("Schedule an Activity");
-    $id("act-schedule-recurrence").value = "daily";
-    submit($id("act-schedule-form"));
+    await setSelect("act-schedule-recurrence", "daily");
+    await submit($id("act-schedule-form"));
     await settle();
     const created = requestsTo("/api/activities/schedules")[0];
+    expect(created.url).toBe("/api/activities/schedules?siteId=site-1");
     expect(created.body).toMatchObject({ siteId: "site-1", templateId: "tpl-1", recurrence: "daily" });
     expect(created.body.scheduleId).toBeUndefined();
+    await click($id("act-schedule-new"));
+    expect($id("act-schedule-recurrence").value).toBe("daily");
+    expect($id("act-schedule-template").value).toBe("tpl-1");
+    await click($id("act-schedule-form-cancel"));
   });
 
   it("re-enters after leave without duplicate listeners or stale site data", async () => {
     await mount("site-1");
     expect(codesOf("act-live-list")).toEqual(["ALPHA", "BETA"]);
     expect($id("act-scope").textContent).toContain("Kick Cup");
-    click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
-    expect($id("act-create-drawer").hidden).toBe(false);
+    await click(document.querySelector('[data-subnav="automation"]'));
+    await click($id("act-template-new"));
+    expect($id("act-template-drawer").hidden).toBe(false);
 
-    activities.leave();
-    expect($id("act-create-drawer").hidden).toBe(true);
+    await unmountActivitiesPage();
+    expect($id("act-template-drawer")).toBeNull();
     await mount("site-2");
     expect($id("act-live-empty").hidden).toBe(false);
     expect($id("act-live-list").hidden).toBe(true);
@@ -431,30 +605,91 @@ describe("Activities workspace", () => {
     expect($id("act-automation-gate").hidden).toBe(false);
     expect(requestsTo("/api/activities").at(-1).query.siteId).toBe("site-2");
 
-    // Wiring is per-fragment: a second enter() on the same fragment must not add listeners.
+    // Re-rendering the same island does not accumulate event handlers.
     requests.length = 0;
-    await activities.enter();
-    await settle();
-    click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
-    $id("act-drop-code").value = "ONCE";
-    submit($id("act-drop-form"));
+    await mount("site-2");
+    await click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
+    await setInput("act-drop-code", "ONCE");
+    await submit($id("act-drop-form"));
     await settle();
     expect(requestsTo("/api/events/drops")).toHaveLength(1);
     expect(requestsTo("/api/events/drops")[0].body.siteId).toBe("site-2");
   });
 
-  it("discards responses that arrive after leaving", async () => {
-    // Start entering site-1, then leave and mount site-2 before that entry's
-    // responses land: the stale site-1 payload must not paint into site-2.
-    window.history.replaceState(null, "", "/dashboard/activities?siteId=site-1");
-    $id("lbDynamic").innerHTML = ActivitiesPage({ fragment: true }).toString();
-    const pending = activities.enter();
-    activities.leave();
+  it("keeps the selected history page size after leaving and re-entering", async () => {
+    data["site-1"].completed = Array.from({ length: 12 }, (_, i) => ended(`page${i + 1}`, "Expired"));
+    await mount();
+    await setSelect("act-pager-size", "8");
+    await settle();
+    expect($id("act-pager-size").value).toBe("8");
+    expect(requestsTo("/api/activities").filter((r) => r.query.state === "completed").at(-1).url)
+      .toBe("/api/activities?siteId=site-1&state=completed&limit=8");
+
+    await unmountActivitiesPage();
     await mount("site-2");
+    expect($id("act-pager-size").value).toBe("8");
+
+    await unmountActivitiesPage();
+    await mount();
+    await setSelect("act-pager-size", "5");
+    await settle();
+  });
+
+  it("uses the HTTP fallback copy when an error response has no message", async () => {
+    data["site-1"].open = [];
+    await mount();
+    failNext = { path: "/api/events/drops", status: 503 };
+    await click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
+    await setInput("act-drop-code", "TEMPORARY");
+    await submit($id("act-drop-form"));
+    await settle();
+    expect($id("act-form-status").textContent).toBe("The server returned HTTP 503.");
+  });
+
+  it("uses the access-denied fallback for a 403 response without an error field", async () => {
+    data["site-1"].open = [];
+    await mount();
+    failNext = { path: "/api/events/drops", status: 403 };
+    await click(document.querySelector('[data-drawer-open="act-create-drawer"]'));
+    await setInput("act-drop-code", "DENIED");
+    await submit($id("act-drop-form"));
+    await settle();
+    expect($id("act-form-status").textContent).toBe("You don't have access to do that.");
+  });
+
+  it("discards responses that arrive after leaving", async () => {
+    let resolveOldShell;
+    const pending = mountActivitiesPage({
+      site: sites[0],
+      deps: { loadBoardShell: () => new Promise((resolve) => { resolveOldShell = resolve; }) },
+    });
+    await pending;
+    await unmountActivitiesPage();
+    await mount("site-2");
+    resolveOldShell({ activeSiteId: "site-1", board: sites[0] });
     await pending;
     await settle();
     expect(codesOf("act-live-list")).toEqual([]);
     expect($id("act-live-empty").hidden).toBe(false);
+    expect($id("act-scope").textContent).toContain("Second Board");
+  });
+
+  it("discards a stale Activities response after switching boards", async () => {
+    holdApiResponse = {
+      path: "/api/activities",
+      state: "open",
+      siteId: "site-1",
+      body: { activities: [drop("stale")], total: 1, page: { hasMore: false, nextCursor: null } },
+      release: null,
+    };
+    await mount("site-1");
+    expect(holdApiResponse.release).toBeTruthy();
+    await unmountActivitiesPage();
+    await mount("site-2");
+    await activitiesAct(() => holdApiResponse.release());
+    holdApiResponse = null;
+    await settle();
+    expect(codesOf("act-live-list")).toEqual([]);
     expect($id("act-scope").textContent).toContain("Second Board");
   });
 });

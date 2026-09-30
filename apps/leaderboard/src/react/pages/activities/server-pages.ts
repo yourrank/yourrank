@@ -1,13 +1,23 @@
-// DOM-free page cache for a server-paginated list that exposes a numbered
-// pager. /api/activities serves keyset pages (`page.nextCursor`), so pages can
-// only be reached in order; this cache keeps every page fetched so far, knows
-// which cursor fetches the next one, and reports how many pages are currently
-// reachable (loaded pages plus one more while the server says `hasMore`).
+import { DEFAULT_PAGE_SIZE, normalizePageSize } from "../../../assets/pagination.js";
 
-import { DEFAULT_PAGE_SIZE, normalizePageSize } from "./pagination.js";
+export type ServerPageInfo = {
+  nextCursor?: string | null;
+  hasMore?: boolean;
+};
 
-export class ServerPages {
+export class ServerPages<T extends { id?: string | number | null }> {
+  pageSize: number;
+  pages: T[][];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
+
   constructor(pageSize = DEFAULT_PAGE_SIZE) {
+    this.pageSize = DEFAULT_PAGE_SIZE;
+    this.pages = [];
+    this.nextCursor = null;
+    this.hasMore = false;
+    this.total = 0;
     this.reset(pageSize);
   }
 
@@ -19,28 +29,33 @@ export class ServerPages {
     this.total = 0;
   }
 
-  get loadedCount() { return this.pages.length; }
-  get loadedRows() { return this.pages.reduce((sum, rows) => sum + rows.length, 0); }
-  get isEmpty() { return this.loadedCount > 0 && this.loadedRows === 0; }
+  get loadedCount() {
+    return this.pages.length;
+  }
 
-  /** Pages a viewer can currently navigate to. */
+  get loadedRows() {
+    return this.pages.reduce((sum, rows) => sum + rows.length, 0);
+  }
+
+  get isEmpty() {
+    return this.loadedCount > 0 && this.loadedRows === 0;
+  }
+
   reachableCount() {
     return Math.max(1, this.loadedCount + (this.hasMore ? 1 : 0));
   }
 
-  isLoaded(pageNumber) {
+  isLoaded(pageNumber: number) {
     return Number.isInteger(pageNumber) && pageNumber >= 1 && pageNumber <= this.loadedCount;
   }
 
-  /** The cursor that fetches `pageNumber`, or `undefined` when it is not the next page. */
-  cursorFor(pageNumber) {
+  cursorFor(pageNumber: number) {
     if (pageNumber === 1 && this.loadedCount === 0) return null;
     if (pageNumber === this.loadedCount + 1 && this.hasMore) return this.nextCursor;
     return undefined;
   }
 
-  /** Record a fetched page. Only the next sequential page is accepted. */
-  store(pageNumber, items, page, total) {
+  store(pageNumber: number, items: T[], page: ServerPageInfo | undefined, total: number) {
     if (pageNumber !== this.loadedCount + 1) return false;
     this.pages.push(Array.isArray(items) ? items : []);
     this.nextCursor = page?.nextCursor || null;
@@ -49,11 +64,11 @@ export class ServerPages {
     return true;
   }
 
-  rows(pageNumber) {
+  rows(pageNumber: number) {
     return this.pages[pageNumber - 1] || [];
   }
 
-  replace(item) {
+  replace(item: T) {
     if (!item || item.id == null) return false;
     for (const rows of this.pages) {
       const index = rows.findIndex((row) => row.id === item.id);
@@ -65,8 +80,7 @@ export class ServerPages {
     return false;
   }
 
-  /** Clamp a requested page into the reachable range. */
-  clamp(pageNumber) {
+  clamp(pageNumber: number) {
     const requested = Number(pageNumber);
     if (!Number.isFinite(requested)) return 1;
     return Math.min(Math.max(Math.floor(requested), 1), this.reachableCount());

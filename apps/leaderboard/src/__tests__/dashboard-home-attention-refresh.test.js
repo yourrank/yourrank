@@ -6,18 +6,10 @@
 //
 // Run: bun test src/__tests__/dashboard-home-attention-refresh.test.js
 
-import { beforeEach, describe, expect, it } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { Window } from "happy-dom";
 import { DashboardContent } from "../pages/dashboard.jsx";
-
-const window = new Window({ url: "http://localhost/dashboard" });
-const { document } = window;
-for (const key of ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle"]) {
-  globalThis[key] = key === "getComputedStyle" ? window.getComputedStyle.bind(window) : window[key];
-}
-globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 0);
-window.Element.prototype.getClientRects = function () { return [{}]; };
+import { actAndFlush, document, restoreOverviewDomGlobals, unmountHomePage } from "./overview-react-utils.js";
 
 // The server the Home loaders talk to. Only credits/status carries state the
 // tests mutate; every other dashboard endpoint answers with an empty payload.
@@ -45,15 +37,15 @@ Object.assign(state, {
   ME: { plan: "pro", emailVerified: true },
 });
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+const settle = () => actAndFlush(() => new Promise((resolve) => setTimeout(resolve, 30)));
 const creditsRequests = () => server.requests.filter((path) => path.startsWith("/api/credits/status"));
 const claimRow = () => document.querySelector('#ovAttentionList [data-attention="pendingClaims"]');
 const kickRow = () => document.querySelector('#ovAttentionList [data-attention="kickDelivery"]');
 
 async function completeClaimOnRewardsThenReturnHome(remaining) {
-  navTo("boards");
+  await actAndFlush(() => navTo("boards"));
   server.pendingRedemptions = remaining;
-  navTo("home");
+  await actAndFlush(() => navTo("home"));
   await settle();
 }
 
@@ -65,7 +57,7 @@ describe("Home → Needs attention refreshes credits/status on every SPA entry",
   });
 
   it("entering Home in-app requests the selected site's credits/status exactly once and renders the pending claim", async () => {
-    navTo("home");
+    await actAndFlush(() => navTo("home"));
     await settle();
     expect(creditsRequests()).toEqual(["/api/credits/status?siteId=site-1"]);
     expect(claimRow()?.textContent).toContain("1 claim is waiting for you");
@@ -74,7 +66,7 @@ describe("Home → Needs attention refreshes credits/status on every SPA entry",
   });
 
   it("re-entering Home after the last claim was completed drops the claim item without a reload", async () => {
-    navTo("home");
+    await actAndFlush(() => navTo("home"));
     await settle();
     expect(claimRow()).not.toBeNull();
 
@@ -86,7 +78,7 @@ describe("Home → Needs attention refreshes credits/status on every SPA entry",
   });
 
   it("re-entering Home with claims still pending shows the fresh count, not the count from the last visit", async () => {
-    navTo("home");
+    await actAndFlush(() => navTo("home"));
     await settle();
     expect(claimRow()?.textContent).toContain("1 claim is waiting for you");
 
@@ -96,13 +88,13 @@ describe("Home → Needs attention refreshes credits/status on every SPA entry",
   });
 
   it("re-entering Home also picks up fresh Kick channel health for the selected site", async () => {
-    navTo("home");
+    await actAndFlush(() => navTo("home"));
     await settle();
     expect(kickRow()).toBeNull();
 
-    navTo("boards");
+    await actAndFlush(() => navTo("boards"));
     server.channel = { externalId: "kick-1", name: "creator", homeAttention: true, connected: true };
-    navTo("home");
+    await actAndFlush(() => navTo("home"));
     await settle();
     expect(kickRow()).not.toBeNull();
     expect(kickRow()?.querySelector("a")?.getAttribute("href")).toContain("site-1");
@@ -112,13 +104,19 @@ describe("Home → Needs attention refreshes credits/status on every SPA entry",
     state.ACTIVE_SITE_ID = "site-2";
     state.BOARDS.push({ id: "site-2", name: "Other", published: true, userRole: "owner" });
     try {
-      await enterHome();
+      await actAndFlush(() => enterHome());
+      await settle();
       expect(creditsRequests()).toEqual(["/api/credits/status?siteId=site-2"]);
     } finally {
       state.ACTIVE_SITE_ID = "site-1";
       state.BOARDS.pop();
     }
   });
+});
+
+afterAll(async () => {
+  await unmountHomePage();
+  restoreOverviewDomGlobals();
 });
 
 describe("Home boot owns credits/status through the shell entry, never twice", () => {

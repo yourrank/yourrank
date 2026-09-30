@@ -9,7 +9,7 @@ const assets = path.resolve(import.meta.dir, "../assets");
 const read = (file) => fs.readFileSync(path.join(assets, file), "utf8");
 const states = read("dashboard/states.js");
 const performance = read("dashboard/performance.js");
-const credits = read("credits.js");
+const rewardsPage = fs.readFileSync(path.resolve(import.meta.dir, "../react/pages/rewards/page.tsx"), "utf8");
 const account = read("dashboard/account.js");
 const shellNavAsset = read("shell-nav.js");
 const appCss = read("app.css");
@@ -41,8 +41,8 @@ describe("metric state vocabulary", () => {
   });
 
   it("renders zeros for a credits economy with no activity yet", () => {
-    expect(credits).toContain("setMetricEmpty");
-    expect(credits).not.toContain("setMetricUnknown");
+    expect(rewardsPage).toContain('value={loading ? "—" : String(summary.periodEarned ?? 0)}');
+    expect(rewardsPage).toContain('value={loading ? "—" : String(summary.redemptionsPending ?? 0)}');
   });
 });
 

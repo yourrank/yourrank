@@ -15,7 +15,7 @@ import { routeById } from "@yourrank/shared/dashboard-routes";
 export const dashboardConfig = {
   title: DEFAULT_DASHBOARD_TITLE,
   canonical: "https://yourrank.site/dashboard",
-  styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"],
+  styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css", "/assets/react/react.css"],
   scripts: ['<script src="/assets/dashboard.js?v=18" type="module"></script>', '<script src="/assets/dashboard/preview-tabs.js?v=2" type="module"></script>', '<script src="/assets/shell-nav.js?v=4" defer></script>'],
   nav: false,
   footer: false,
@@ -76,6 +76,7 @@ const ROUTE_SECTIONS = Object.fromEntries(
 function OverviewSection({ active } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="home">
+<div id="ov-app" class="yr-react">
 <header class="v3-head ov-head v3-head--row"><div class="ov-identity"><span class="ov-avatar" aria-hidden="true"><img id="ovSiteLogo" alt="" hidden /><span id="ovSiteInitial">Y</span></span><div><h1>Home</h1><p class="ov-scope"><strong id="ovSiteName">Checking…</strong><span id="ovOperatorContext" hidden></span></p><p class="v3-head-sub" id="ovHeadSub">Your community at a glance.</p></div></div><div class="ov-head-state"><span class="ov-status" id="ovStatus" data-state="checking"><i aria-hidden="true"></i><span id="ovPublishedStatus">Checking…</span></span><a class="ov-public-link" id="ovPublicLink" href="/" target="_blank" rel="noopener noreferrer" hidden>Open public page ↗</a></div></header>
 <section class="ov-operations ov-attention" id="ovAttention" aria-labelledby="ovAttentionTitle" role="region" aria-live="polite" aria-atomic="false" hidden>
   <header class="ov-operations-head"><div><h2 id="ovAttentionTitle">Needs attention</h2><p>Problems that block members or visitors, with the fix for each.</p></div><span class="ov-operation-count" id="ovAttentionCount">0 items</span></header>
@@ -104,6 +105,7 @@ function OverviewSection({ active } = {}) {
   <div class="ov-quick-grid" id="ovQuickActionsList"></div>
 </section>
 <section class="ov-setup" id="ovSetup" aria-labelledby="ovSetupTitle" hidden><div class="ov-setup-head"><div><h2 id="ovSetupTitle">Setup progress</h2><p id="ovSetupMessage">Add players and publish to open your community.</p></div><a class="btn btn--accent" id="ovSetupAction" href="/dashboard/site" hidden>Continue setup</a></div><details class="ov-setup-details"><summary>Core setup <span class="ov-setup-count" id="ovSetupCount">0 of 3 done</span></summary><ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul></details></section>
+</div>
 </section>
   );
 }

@@ -36,10 +36,15 @@ describe("Wave K Home operational ownership", () => {
 
   it("renders Home-owned Coming next and Needs attention surfaces for the selected site", () => {
     const page = readFileSync(new URL("../pages/dashboard.jsx", import.meta.url), "utf8");
-    expect(page).toContain('id="ovAttention"');
-    expect(page).toContain('id="ovLiveNow"');
-    expect(page).toContain('id="ovComingNext"');
-    expect(page).toContain('id="ovAttentionList"');
+    expect(page).toContain('<div id="ov-app" class="yr-react">');
+    expect(page).toContain('class="ov-operations ov-attention" id="ovAttention" aria-labelledby="ovAttentionTitle" role="region" aria-live="polite" aria-atomic="false" hidden>');
+    expect(page).toContain('class="ov-operations ov-live" id="ovLiveNow" aria-labelledby="ovLiveNowTitle" data-home-section="live" hidden>');
+    expect(page).toContain('class="ov-operations ov-coming-next" id="ovComingNext" aria-labelledby="ovComingNextTitle" data-home-section="upcoming" hidden>');
+    const reactPage = readFileSync(new URL("../react/pages/overview/page.tsx", import.meta.url), "utf8");
+    expect(reactPage).toContain('id="ovAttention"');
+    expect(reactPage).toContain('id="ovLiveNow"');
+    expect(reactPage).toContain('id="ovComingNext"');
+    expect(reactPage).toContain('id="ovAttentionList"');
     const source = readFileSync(new URL("../assets/dashboard/overview.js", import.meta.url), "utf8");
     expect(source).toContain("new URLSearchParams({ siteId })");
     expect(source).not.toMatch(/prediction|raffle|wager|payout|settlement/i);
@@ -48,8 +53,9 @@ describe("Wave K Home operational ownership", () => {
     expect(projections).not.toMatch(/prediction|raffle|wager|payout|settlement/i);
     const dashboardCss = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
     expect(dashboardCss).toContain(".ov-attention-row .btn,");
-    const activitiesCss = readFileSync(new URL("../assets/activities.css", import.meta.url), "utf8");
-    expect(activitiesCss).toContain(".act-item.is-attention { background: var(--ws-warning-soft); }");
-    expect(activitiesCss).toContain(".act-item__copy strong { overflow-wrap: anywhere;");
+    const activitiesClient = readFileSync(new URL("../react/pages/activities/page.tsx", import.meta.url), "utf8");
+    expect(activitiesClient).toContain('attention && "is-attention bg-amber-50/60 dark:bg-amber-950/20"');
+    expect(activitiesClient).toContain('<strong className="wrap-anywhere text-sm">{template.name}</strong>');
+    expect(activitiesClient).toContain('<strong className="wrap-anywhere text-sm">{schedule.templateName}</strong>');
   });
 });
