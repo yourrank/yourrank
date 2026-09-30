@@ -13,7 +13,7 @@ import { renderFragmentPayload, resolveFragment } from "../index.js";
 import { clearSession } from "../assets/dashboard/session.js";
 
 const user = { display_name: "Test operator", plan: "pro" };
-const ENGAGEMENT_CSS = "/assets/giveaways.css";
+const ENGAGEMENT_CSS = "/assets/react/react.css";
 const ACTIVITIES_CSS = "/assets/activities.css";
 
 // This file can share a process with other test files, so every replaced
@@ -231,12 +231,12 @@ describe("Engagement style requirements are declared by one owner", () => {
     expect(payload.html).toContain("No purchase or stake is required.");
   });
 
-  it("declares giveaways.css on the full document", () => {
+  it("declares the React stylesheet on the full Giveaways document", () => {
     expect(giveawaysConfig.styles).toContain(ENGAGEMENT_CSS);
     expect(PAGES.giveaways.config.styles).toContain(ENGAGEMENT_CSS);
   });
 
-  it("reports the same stylesheets on the SPA fragment as the document renders", async () => {
+  it("reports the React stylesheet on the SPA fragment as the document renders", async () => {
     const fragment = resolveFragment("/dashboard/giveaways/chat");
     const payload = await renderFragmentPayload(PAGES[fragment.pageKey], { user, tab: fragment.tab });
     expect(payload.styles).toEqual(giveawaysConfig.styles);

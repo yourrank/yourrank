@@ -33,6 +33,70 @@ const competitions = new Map([[site.id, [
   { id: '22222222-2222-4222-8222-222222222222', name: 'September Challenge', published: false, players: [{ name: 'Draft player', score: 18 }], updated_at: now },
 ]], [secondarySite.id, []]]);
 let mode = 'populated';
+const giveawayChat = {
+  connection: { connected: false, chatReady: false, channelName: null },
+  capabilities: { vpnDetection: false },
+  session: {
+    id: 'fixture-giveaway-session',
+    provider: 'manual',
+    keyword: '',
+    status: 'active',
+    started_at: now,
+    rules: {
+      entryMode: 'chat',
+      subscriberOnly: false,
+      vipOnly: false,
+      excludePreviousWinners: false,
+      winnerRepeat: 'once',
+      onePerIp: false,
+      vpnDetection: false,
+      winnerMustRespond: false,
+      responseTimeout: 60,
+      autoReroll: false,
+    },
+  },
+  entries: ['Mira', 'Jordan'].map((username, i) => ({
+    id: `fixture-entrant-${i + 1}`,
+    provider: 'manual',
+    provider_user_id: `manual:${username.toLowerCase()}`,
+    username,
+    avatar_url: null,
+    message: '',
+    badges: [],
+    entered_at: now,
+    eligibility_status: 'eligible',
+    eligibility_reason: null,
+    linked: [],
+  })),
+  winner: null,
+  draws: [],
+};
+const giveawayRaffles = [
+  {
+    id: 'fixture-active-raffle',
+    title: 'Community headset bundle',
+    description: 'A thank-you prize for the community.',
+    ticket_cost: 30,
+    max_tickets_per_viewer: 10,
+    status: 'active',
+    total_tickets: 24,
+    participant_count: 8,
+    created_at: now,
+  },
+  {
+    id: 'fixture-completed-raffle',
+    title: 'Stream avatar commission',
+    ticket_cost: 25,
+    max_tickets_per_viewer: 10,
+    status: 'completed',
+    winner_name: 'Jordan',
+    winner_ticket_number: 4,
+    total_tickets: 32,
+    participant_count: 12,
+    drawn_at: now,
+    created_at: now,
+  },
+];
 
 // Tournament fixture variants: real buildBracket() output, no hand-written
 // rows. FIXTURE_TOURNAMENT selects the shape; `empty` mode still wins.
@@ -237,7 +301,10 @@ const server = createServer(async (req, res) => {
     if (path === '/bot/dash/api/offers' || path === '/bot/dash/api/stats/daily') return json(res, []);
     if (path === '/bot/dash/api/bots') return json(res, empty ? [] : [{ id: 'fixture-bot', username: 'community_bot', status: 'active', subscriber_count: 128 }]);
     if (path === '/bot/dash/api/stats/subscribers') return json(res, { total: 128, sources: [] });
-    if (path === '/api/giveaways/chat') return json(res, { ok: true, state: null, entries: [] });
+    if (path === '/api/giveaways/chat') return json(res, empty
+      ? { ...giveawayChat, session: null, entries: [] }
+      : giveawayChat);
+    if (path === '/api/events/raffles') return json(res, { raffles: empty ? [] : giveawayRaffles });
     if (path === '/dashboard/preview') return html(res, '<!doctype html><p>Isolated audit preview</p>');
     if (path.startsWith('/api/') || path.startsWith('/bot/')) return json(res, { ok: true, items: [], events: [], sessions: [], bots: [], broadcasts: [], commands: [], accounts: [], stats: {}, usage: {}, billing: {}, data: {}, connected: false });
     res.writeHead(404).end('Not found');

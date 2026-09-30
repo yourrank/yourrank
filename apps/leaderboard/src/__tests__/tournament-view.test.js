@@ -407,8 +407,7 @@ describe("React tournament workspace rendering", () => {
     await click("tc-more-trigger");
     expect($id("tc-chat-channel").value).toBe("board-channel");
     expect($id("tc-chat-channel").readOnly).toBe(false);
-    expect(document.body.textContent).toContain("Settings → Connections");
-    expect(document.querySelector('a[href="/dashboard/settings/connections"]')).toBeTruthy();
+    expect(document.body.textContent).toContain("Connect Kick in Settings → Connections before opening signups.");
   });
 
   it("opens the manual selection pane and selects the first bracket-sized eligible ranks", async () => {

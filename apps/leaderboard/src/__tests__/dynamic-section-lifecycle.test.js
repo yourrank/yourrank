@@ -1,21 +1,25 @@
-// Lifecycle coverage for the dynamic-section loader: SPA fragment navigation
-// must mount and unmount the Tournaments React island through its tab owner.
-// Page data and behavior are covered in tournament-lifecycle-ui.test.js.
+// Lifecycle coverage for dynamic-section React islands, including the
+// separate Tournaments tab owner. Page data and behavior are covered by the
+// page-specific suites.
 //
 // Run: bun test src/__tests__/dynamic-section-lifecycle.test.js
 
-import { afterAll, beforeEach, describe, expect, it } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import { Window } from "happy-dom";
+import { act } from "react";
 import { renderGiveawaysHtml } from "../pages/giveaway-pages.js";
 import { ActivitiesPage } from "../pages/activities.jsx";
 import { clearSession } from "../assets/dashboard/session.js";
 
 const window = new Window({ url: "http://localhost/dashboard/giveaways/tournaments" });
 const { document } = window;
-const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle", "matchMedia", "localStorage", "fetch"];
+const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "HTMLFormElement", "HTMLIFrameElement", "HTMLInputElement", "HTMLSelectElement", "DocumentFragment", "DOMParser", "IntersectionObserver", "MutationObserver", "ResizeObserver", "requestAnimationFrame", "cancelAnimationFrame", "getComputedStyle", "matchMedia", "localStorage", "fetch"];
 const originalGlobals = Object.fromEntries(INSTALLED_GLOBALS.map((k) => [k, globalThis[k]]));
-for (const key of INSTALLED_GLOBALS.slice(0, 15)) {
-  globalThis[key] = key === "getComputedStyle" ? window.getComputedStyle.bind(window) : window[key];
+const originalActEnvironment = globalThis.IS_REACT_ACT_ENVIRONMENT;
+for (const key of INSTALLED_GLOBALS.filter((key) => key !== "localStorage" && key !== "fetch")) {
+  globalThis[key] = ["getComputedStyle", "requestAnimationFrame", "cancelAnimationFrame"].includes(key)
+    ? window[key].bind(window)
+    : window[key];
 }
 window.Element.prototype.scrollIntoView = function () {};
 window.Element.prototype.getClientRects = function () { return [{}]; };
@@ -26,6 +30,7 @@ window.scrollTo = () => {};
 window.YRDialog = { trap: () => () => {}, confirm: async () => true };
 window.__yrSpaShell = true;
 window.__yrBoot = { signal() {}, fail() {} };
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const user = { id: "user-1", email: "creator@example.com", plan: "pro", emailVerified: true };
 const site = { id: "site-1", name: "Kick Cup", slug: "kick-cup", published: true, userRole: "owner", kickChannelName: "" };
@@ -39,6 +44,10 @@ const activity = {
   createdAt: new Date().toISOString(), endsAt: new Date(Date.now() + 86400000).toISOString(),
   reward: { creditsPerClaim: 250 }, progress: { claimed: 32, capacity: 100 }, actions: { canEnd: true },
 };
+
+mock.module("/assets/dashboard/board-shell.js", () => ({
+  loadBoardShell: async () => ({ activeSiteId: site.id, board: { kickChannelName: site.kickChannelName } }),
+}));
 
 const FRAGMENTS = {
   "/dashboard/giveaways/tournaments": () => renderGiveawaysHtml("tournaments"),
@@ -70,7 +79,12 @@ globalThis.fetch = async (input) => {
     const rows = state === "completed" ? [] : [activity];
     return json({ activities: rows, total: rows.length, page: { hasMore: false, nextCursor: null }, automation: { templates: [], schedules: [], entitlement: { canAutomate: true } } });
   }
-  if (path === "/api/giveaways/chat") return json({ ok: true, state: null, entries: [] });
+  if (path === "/api/giveaways/chat") return json({
+    connection: { connected: false, chatReady: false, channelName: null },
+    session: null,
+    entries: [],
+    winner: null,
+  });
   if (path === "/api/giveaways/chatroom") return json({ error: "offline" }, 404);
   return json({ ok: true });
 };
@@ -86,7 +100,21 @@ const ds = await import("../assets/dashboard/dynamic-section.js");
 
 afterAll(() => {
   for (const key of INSTALLED_GLOBALS) globalThis[key] = originalGlobals[key];
+  if (originalActEnvironment === undefined) delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  else globalThis.IS_REACT_ACT_ENVIRONMENT = originalActEnvironment;
 });
+
+async function actDynamic(callback) {
+  let result;
+  await act(async () => {
+    result = await callback();
+    await flushReactUpdates();
+  });
+  return result;
+}
+
+const loadDynamicSection = (section, tab) => actDynamic(() => ds.loadDynamicSection(section, tab));
+const leaveDynamicSection = () => actDynamic(() => ds.leaveDynamicSection());
 
 describe("bootOwners", () => {
   it("returns the base owner plus tab-specific owners", () => {
@@ -104,14 +132,13 @@ describe("dynamic-section lifecycle", () => {
   });
 
   it("boots the tab owner on the tournaments route, leaves it, and re-enters", async () => {
-    expect(await ds.loadDynamicSection("giveaways", "tournaments")).toBe(true);
-    await flushReactUpdates();
+    expect(await loadDynamicSection("giveaways", "tournaments")).toBe(true);
     expect(ds.isDynamicActive()).toBe(true);
     expect($id("tournament-app")).toBeTruthy();
     expect($id("tournament-root").querySelector("#tournament-empty, #tournament-workspace")).toBeTruthy();
 
     // Away to Activities: tournaments leave runs, activities enter succeeds.
-    expect(await ds.loadDynamicSection("activities", "overview")).toBe(true);
+    expect(await loadDynamicSection("activities", "overview")).toBe(true);
     expect($id("tournament-app")).toBeNull();
     expect($id("act-live-loading").hidden).toBe(true);
     expect($id("act-live-error").hidden).toBe(true);
@@ -121,17 +148,32 @@ describe("dynamic-section lifecycle", () => {
     expect(document.documentElement.classList.contains("yr-modal-open")).toBe(false);
 
     // Back to Tournaments: the tab owner mounts a fresh React island.
-    expect(await ds.loadDynamicSection("giveaways", "tournaments")).toBe(true);
-    await flushReactUpdates();
+    expect(await loadDynamicSection("giveaways", "tournaments")).toBe(true);
     expect($id("tournament-root").querySelector("#tournament-empty, #tournament-workspace")).toBeTruthy();
     expect(ds.isDynamicActive()).toBe(true);
 
     // Explicit leave detaches the section; a later load still initializes.
-    ds.leaveDynamicSection();
+    await leaveDynamicSection();
     expect(ds.isDynamicActive()).toBe(false);
-    expect(await ds.loadDynamicSection("giveaways", "tournaments")).toBe(true);
-    await flushReactUpdates();
+    expect(await loadDynamicSection("giveaways", "tournaments")).toBe(true);
     expect($id("tournament-root").querySelector("#tournament-empty, #tournament-workspace")).toBeTruthy();
+  });
+
+  it("mounts the Giveaways React island, unmounts on navigation, and mounts again", async () => {
+    expect(await loadDynamicSection("giveaways", "chat")).toBe(true);
+    expect($id("gw-layout")).toBeTruthy();
+    expect($id("giveaway-root")).toBeTruthy();
+
+    expect(await loadDynamicSection("activities", "overview")).toBe(true);
+    expect($id("gw-layout")).toBeNull();
+    expect($id("giveaway-root")).toBeNull();
+    expect($id("act-live-list").children.length).toBe(1);
+
+    expect(await loadDynamicSection("giveaways", "chat")).toBe(true);
+    expect($id("gw-layout")).toBeTruthy();
+    expect($id("giveaway-root")).toBeTruthy();
+    await leaveDynamicSection();
+    expect($id("giveaway-root")).toBeNull();
   });
 
   it("shows a generic error body with Retry for fragment failures", async () => {
@@ -143,8 +185,7 @@ describe("dynamic-section lifecycle", () => {
     const retry = container.querySelector("#stateRetry");
     expect(retry?.textContent).toBe("Retry");
     fragmentStatus = 200;
-    retry.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 0));
+    await actDynamic(() => retry.dispatchEvent(new window.MouseEvent("click", { bubbles: true })));
   });
 
   it("surfaces the permission message for a 403", async () => {
