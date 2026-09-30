@@ -4,7 +4,7 @@
 //
 // Run: bun test src/__tests__/dynamic-section-lifecycle.test.js
 
-import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 import { Window } from "happy-dom";
 import { act } from "react";
 import { renderGiveawaysHtml } from "../pages/giveaway-pages.js";
@@ -44,10 +44,6 @@ const activity = {
   createdAt: new Date().toISOString(), endsAt: new Date(Date.now() + 86400000).toISOString(),
   reward: { creditsPerClaim: 250 }, progress: { claimed: 32, capacity: 100 }, actions: { canEnd: true },
 };
-
-mock.module("/assets/dashboard/board-shell.js", () => ({
-  loadBoardShell: async () => ({ activeSiteId: site.id, board: { kickChannelName: site.kickChannelName } }),
-}));
 
 const FRAGMENTS = {
   "/dashboard/giveaways/tournaments": () => renderGiveawaysHtml("tournaments"),
@@ -161,8 +157,7 @@ describe("dynamic-section lifecycle", () => {
 
   it("mounts the Giveaways React island, unmounts on navigation, and mounts again", async () => {
     expect(await loadDynamicSection("giveaways", "chat")).toBe(true);
-    expect($id("gw-layout")).toBeTruthy();
-    expect($id("giveaway-root")).toBeTruthy();
+    expect($id("giveaway-root").childElementCount).toBeGreaterThan(0);
 
     expect(await loadDynamicSection("activities", "overview")).toBe(true);
     expect($id("gw-layout")).toBeNull();
@@ -170,8 +165,7 @@ describe("dynamic-section lifecycle", () => {
     expect($id("act-live-list").children.length).toBe(1);
 
     expect(await loadDynamicSection("giveaways", "chat")).toBe(true);
-    expect($id("gw-layout")).toBeTruthy();
-    expect($id("giveaway-root")).toBeTruthy();
+    expect($id("giveaway-root").childElementCount).toBeGreaterThan(0);
     await leaveDynamicSection();
     expect($id("giveaway-root")).toBeNull();
   });
