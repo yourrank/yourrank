@@ -2,6 +2,16 @@
 
 Maintained to prevent architecture drift.
 
+## Rewards and Audience implementation ownership
+
+The `credits.js` dispatcher selects `audience-credits.js` only for Members
+(`viewers`) and Activity (`history`); that module now contains only those
+behaviors and their dynamic lifecycle. Rewards routes use the React page as
+their sole client implementation. Members and Activity retain their existing
+API contracts, member actions and drawers, bulk award/export, operation retry
+identity, site-change guards, query handling, and controller/timer teardown.
+No backend handler, route, or response shape changes.
+
 ## Creator login and registration — 2026-09-28
 
 Owner clarified the initial Home redesign request to mean login and registration

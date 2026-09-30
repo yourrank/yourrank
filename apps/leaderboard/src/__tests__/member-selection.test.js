@@ -65,8 +65,8 @@ describe("MemberSelection across pages and searches", () => {
   });
 });
 
-describe("credits.js wiring", () => {
-  const src = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
+describe("Audience credits wiring", () => {
+  const src = readFileSync(new URL("../assets/audience-credits.js", import.meta.url), "utf8");
 
   it("exports from the selection model, not from the loaded page", () => {
     expect(src).toContain("const rows = exportRows(memberSelection, state.members);");

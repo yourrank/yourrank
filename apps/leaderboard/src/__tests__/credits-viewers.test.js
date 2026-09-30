@@ -4,15 +4,15 @@ import { readFileSync } from "node:fs";
 import { ServerListController } from "../assets/dashboard/server-list.js";
 import { kickDeliveryPresentation } from "../assets/kick-delivery-presentation.js";
 
-const creditsJs = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
-const creditsPagesJs = readFileSync(new URL("../pages/credits-pages.js", import.meta.url), "utf8");
+const audienceCreditsJs = readFileSync(new URL("../assets/audience-credits.js", import.meta.url), "utf8");
+const creditsPagesJs = readFileSync(new URL("../pages/audience-credits-pages.js", import.meta.url), "utf8");
 const creditsHandlerJs = readFileSync(new URL("../handlers/credits.js", import.meta.url), "utf8");
 const peopleHandlerJs = readFileSync(new URL("../handlers/people.js", import.meta.url), "utf8");
 const routesJs = readFileSync(new URL("../routes.js", import.meta.url), "utf8");
 
 describe("credit adjustment retry identity", () => {
   it("retains the same operation across a lost response and reload, then issues a fresh operation", async () => {
-    const source = creditsJs.slice(creditsJs.indexOf("async function adjustMemberCredits("), creditsJs.indexOf("let state = {};"));
+    const source = audienceCreditsJs.slice(audienceCreditsJs.indexOf("async function adjustMemberCredits("), audienceCreditsJs.indexOf("let state = {};"));
     const stored = new Map();
     const sessionStorage = { getItem: (key) => stored.get(key), setItem: (key, value) => stored.set(key, value), removeItem: (key) => stored.delete(key) };
     const calls = [];
@@ -34,15 +34,15 @@ describe("credit adjustment retry identity", () => {
 
 describe("viewer membership display", () => {
   it("shows site membership and authenticated connection state without raw IDs", () => {
-    expect(creditsJs).toContain("v.lastSeenAt || v.lastCreditAt");
-    expect(creditsJs).not.toContain("joinedAt");
-    expect(creditsJs).not.toContain("Member since");
-    expect(creditsJs).toContain("v.linkedIdentities");
-    expect(creditsJs).toContain("v.avatarUrl");
-    expect(creditsJs).toContain("function viewerIdentity(");
-    expect(creditsJs).toContain('v.displayName || "Unnamed member"');
-    expect(creditsJs).toContain("No signed-in account");
-    expect(creditsJs).toContain("No leaderboard player or subscriber record is assumed");
+    expect(audienceCreditsJs).toContain("v.lastSeenAt || v.lastCreditAt");
+    expect(audienceCreditsJs).not.toContain("joinedAt");
+    expect(audienceCreditsJs).not.toContain("Member since");
+    expect(audienceCreditsJs).toContain("v.linkedIdentities");
+    expect(audienceCreditsJs).toContain("v.avatarUrl");
+    expect(audienceCreditsJs).toContain("function memberIdentity(");
+    expect(audienceCreditsJs).toContain('v.displayName || "Unnamed member"');
+    expect(audienceCreditsJs).toContain("No signed-in account");
+    expect(audienceCreditsJs).toContain("No leaderboard player or subscriber record is assumed");
     expect(creditsPagesJs).toContain("Members in the selected site");
     expect(peopleHandlerJs).toContain('${viewerIdentitiesSql("v")} AS identities');
     expect(peopleHandlerJs).not.toMatch(/v\.kick_user_id|v\.discord_user_id|v\.kick_username|v\.discord_username|fraud_score/);
@@ -81,18 +81,18 @@ describe("viewer membership display", () => {
   });
 
   it("clears cached members on site changes and guards late fetches by site id", () => {
-    const fetchSource = creditsJs.slice(creditsJs.indexOf("function fetchMembersPage("), creditsJs.indexOf("function syncSelectAll("));
+    const fetchSource = audienceCreditsJs.slice(audienceCreditsJs.indexOf("function fetchMembersPage("), audienceCreditsJs.indexOf("function syncSelectAll("));
     expect(fetchSource).toContain("const requestSiteId = siteQuery() || dashboardState.ACTIVE_SITE_ID || activeSiteId;");
     expect(fetchSource).toContain("if (requestSiteId !== (siteQuery() || dashboardState.ACTIVE_SITE_ID || activeSiteId))");
     expect(fetchSource.indexOf("if (requestSiteId")).toBeLessThan(fetchSource.indexOf("state.members ="));
-    expect(creditsJs).toContain("state.members = [];");
-    expect(creditsJs).toContain("viewerCtrl?.clear();");
+    expect(audienceCreditsJs).toContain("state.members = [];");
+    expect(audienceCreditsJs).toContain("viewerCtrl?.clear();");
   });
 
   it("cannot manufacture a member by entering a matching username", () => {
     expect(creditsPagesJs).not.toContain('id="cr-tip-open-btn"');
     expect(creditsPagesJs).toContain('id="cr-tip-username" name="username" type="text" readonly');
-    expect(creditsJs).not.toContain('sitePath("/api/credits/tip")');
+    expect(audienceCreditsJs).not.toContain('sitePath("/api/credits/tip")');
     expect(routesJs).toContain('{ path: "/api/credits/tip"');
     expect(creditsHandlerJs).toContain("v.kick_linked_at IS NOT NULL");
     expect(creditsHandlerJs).toContain("JOIN viewers v ON v.id = sv.viewer_id");

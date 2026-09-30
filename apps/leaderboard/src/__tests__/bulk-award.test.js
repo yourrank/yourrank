@@ -76,8 +76,8 @@ describe("runBulkAward partial-failure contract", () => {
   });
 });
 
-describe("bulk award idempotency wiring in credits.js", () => {
-  const src = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
+describe("bulk award idempotency wiring in Audience credits", () => {
+  const src = readFileSync(new URL("../assets/audience-credits.js", import.meta.url), "utf8");
 
   it("reuses the persisted operation key per (site, member, delta, reason) and never mints one for a blind retry", () => {
     expect(src).toContain('"yr:credit-adjustment:" + JSON.stringify([activeSiteId, id, delta, reason])');

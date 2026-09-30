@@ -1,0 +1,312 @@
+.yr-react.cr-react-rewards {
+  display: grid;
+  gap: 1rem;
+  color: var(--ws-ink, #17211f);
+}
+
+.yr-react.cr-react-rewards [hidden] {
+  display: none !important;
+}
+
+.yr-react.cr-react-rewards .cr-react-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.yr-react.cr-react-rewards .cr-react-head h1 {
+  margin: 0;
+}
+
+.yr-react.cr-react-rewards .cr-react-head p {
+  margin: 0.35rem 0 0;
+}
+
+.yr-react.cr-react-rewards .cr-react-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.yr-react.cr-react-rewards .cr-react-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.yr-react.cr-react-rewards .cr-react-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.yr-react.cr-react-rewards .cr-react-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.yr-react.cr-react-rewards .cr-react-field {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.yr-react.cr-react-rewards .cr-react-field--full {
+  grid-column: 1 / -1;
+}
+
+.yr-react.cr-react-rewards .cr-react-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.yr-react.cr-react-rewards .cr-react-status {
+  min-height: 1.25rem;
+}
+
+.yr-react.cr-react-rewards .cr-react-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.yr-react.cr-react-rewards .cr-react-shop-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-areas: "main facts availability actions";
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--ws-line, #e5e7eb);
+  border-radius: var(--ws-radius, 0.75rem);
+  background: var(--ws-surface, white);
+}
+
+.yr-react.cr-react-rewards .cr-react-shop-row.is-inactive {
+  opacity: 0.72;
+}
+
+.yr-react.cr-react-rewards .cr-react-shop-image {
+  width: 3.75rem;
+  height: 2.5rem;
+  object-fit: cover;
+  border-radius: 0.375rem;
+}
+
+.yr-react.cr-react-claim-drawer {
+  position: fixed;
+  inset: 64px 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  width: min(38rem, 100vw);
+  max-width: 100vw;
+  height: calc(100dvh - 64px);
+  translate: none;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+  border-radius: 0;
+  padding: 1.5rem;
+}
+
+.yr-react.cr-react-shop-dialog {
+  position: fixed;
+  inset: 64px 0 0 auto;
+  display: flex;
+  width: min(42rem, 100vw);
+  max-width: 100vw;
+  height: calc(100dvh - 64px);
+  max-height: calc(100dvh - 64px);
+  translate: none;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 0;
+  padding: 1.5rem;
+}
+
+.yr-react.cr-react-claim-drawer .cr-react-dialog-body,
+.yr-react.cr-react-shop-dialog .cr-react-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.yr-react.cr-react-claim-drawer .cr-member-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.yr-react.cr-react-claim-drawer .cr-member-facts > div {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--ws-line, #e5e7eb);
+  border-radius: 0.5rem;
+  background: var(--ws-surface, white);
+}
+
+.yr-react.cr-react-claim-drawer .cr-member-facts dt {
+  color: var(--ws-text-soft, #64748b);
+  font-size: 0.75rem;
+}
+
+.yr-react.cr-react-claim-drawer .cr-member-facts dd {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.yr-react.cr-react-claim-drawer section {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.yr-react.cr-react-claim-drawer section h3 {
+  margin: 0;
+}
+
+.yr-react.cr-react-claim-drawer .cr-member-history-list,
+.yr-react.cr-react-claim-drawer .cr-claim-support-thread {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.yr-react.cr-react-claim-drawer .cr-member-history-list li,
+.yr-react.cr-react-claim-drawer .cr-claim-support-thread li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--ws-line, #e5e7eb);
+}
+
+.yr-react.cr-react-claim-drawer .cr-member-history-list li:first-child,
+.yr-react.cr-react-claim-drawer .cr-claim-support-thread li:first-child {
+  border-top: 1px solid var(--ws-line, #e5e7eb);
+}
+
+.yr-react.cr-react-claim-drawer .cr-member-history-list li > div,
+.yr-react.cr-react-claim-drawer .cr-claim-support-thread li > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.yr-react.cr-react-claim-drawer .cr-member-history-list span,
+.yr-react.cr-react-claim-drawer .cr-member-history-list time,
+.yr-react.cr-react-claim-drawer .cr-claim-support-thread time {
+  overflow-wrap: anywhere;
+  color: var(--ws-text-soft, #64748b);
+  font-size: 0.875rem;
+}
+
+.yr-react.cr-react-claim-drawer .cr-drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.yr-react.cr-react-shop-dialog .cr-react-field {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.yr-react.cr-react-shop-dialog .cr-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.yr-react.cr-react-shop-dialog .cr-toggle-row > span {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.yr-react.cr-react-shop-dialog .cr-shop-review {
+  margin: 0.875rem 0 0.25rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--ws-warning-line, #f4d28c);
+  border-radius: 0.5rem;
+  background: var(--ws-warning-soft, #fff8e8);
+}
+
+.yr-react.cr-react-shop-dialog .cr-shop-review h3 {
+  margin: 0 0 0.25rem;
+  color: var(--ws-warning-text, #854d0e);
+}
+
+.yr-react.cr-react-shop-dialog .cr-shop-review .hint {
+  display: block;
+  margin: 0 0 0.5rem;
+}
+
+.yr-react.cr-react-shop-dialog .cr-shop-review-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.yr-react.cr-react-rewards .cr-react-chart {
+  display: flex;
+  min-height: 10rem;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.yr-react.cr-react-rewards .cr-react-chart-column {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  border-radius: 0.25rem 0.25rem 0 0;
+  background: var(--ws-line, #e5e7eb);
+}
+
+.yr-react.cr-react-rewards .cr-react-chart-earn {
+  background: var(--ws-accent, #16a34a);
+}
+
+.yr-react.cr-react-rewards .cr-react-chart-spend {
+  background: #ef4444;
+}
+
+@media (max-width: 700px) {
+  .yr-react.cr-react-rewards .cr-react-grid--two,
+  .yr-react.cr-react-rewards .cr-react-grid--three,
+  .yr-react.cr-react-rewards .cr-react-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .yr-react.cr-react-rewards .cr-react-field--full {
+    grid-column: auto;
+  }
+
+  .yr-react.cr-react-rewards .cr-react-shop-row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "main"
+      "facts"
+      "availability"
+      "actions";
+  }
+
+  .yr-react.cr-react-claim-drawer .cr-member-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
