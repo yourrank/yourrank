@@ -56,6 +56,8 @@ describe("credit adjustment retry identity", () => {
 describe("viewer membership display", () => {
   it("shows site membership and authenticated connection state without raw IDs", () => {
     expect(audiencePageTsx).toContain("memberDetail.lastSeenAt || memberDetail.lastCreditAt");
+    expect(audiencePageTsx).not.toContain("joinedAt");
+    expect(audiencePageTsx).not.toContain("Member since");
     expect(audiencePageTsx).toContain("member.linkedIdentities");
     expect(audiencePageTsx).toContain("member.avatarUrl");
     expect(audiencePageTsx).toContain("function memberIdentity(member: Member)");

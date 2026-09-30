@@ -26,8 +26,9 @@ export async function api<T = unknown>(
     const message = typeof data === "object" && data !== null && "error" in data && typeof data.error === "string"
       ? data.error
       : "Something went wrong.";
-    const error = new Error(message) as Error & { data: unknown };
+    const error = new Error(message) as Error & { data: unknown; status: number };
     error.data = data;
+    error.status = response.status;
     throw error;
   }
   return data as T;

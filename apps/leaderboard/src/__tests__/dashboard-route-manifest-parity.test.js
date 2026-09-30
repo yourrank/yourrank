@@ -288,6 +288,7 @@ describe("manifest parity: navigation-state query parameters", () => {
     expect(rewardsPage).toContain('searchParams.delete("kick_connected")');
     expect(rewardsPage).toContain('searchParams.delete("error")');
     expect(rewardsPage).toContain('params.delete("new")');
+    expect(audiencePage).toContain('get("viewer")');
     for (const route of DASHBOARD_ROUTES) {
       for (const p of ["edit", "viewer", "kick_connected", "error", "nav", "tab", "plan"]) {
         expect(route.navParams.includes(p), `${route.id} must not declare ${p}`).toBe(false);

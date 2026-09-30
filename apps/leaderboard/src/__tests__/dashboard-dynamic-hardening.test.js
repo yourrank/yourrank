@@ -23,6 +23,7 @@ const rewardsEntryTsx = readFileSync(new URL("../react/pages/rewards/entry.tsx",
 const islandTsx = readFileSync(new URL("../react/lib/island.tsx", import.meta.url), "utf8");
 const accountJs = readFileSync(new URL("../assets/account.js", import.meta.url), "utf8");
 const giveawaysJs = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
+const giveawaysPage = readFileSync(new URL("../react/pages/giveaways/page.tsx", import.meta.url), "utf8");
 const dashboardJs = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 const shellNavJs = readFileSync(new URL("../assets/shell-nav.js", import.meta.url), "utf8");
 
@@ -89,18 +90,17 @@ describe("stale-navigation race protection", () => {
 });
 
 describe("lifecycle cleanup", () => {
-  it("giveaways leave() stops the server poll and clears all intervals", () => {
-    expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*clearInterval\(pollTimer\)/);
-    expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*clearInterval\(timerInterval\)/);
-    expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*clearInterval\(claimTimerInterval\)/);
-    expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*removeEventListener.*trapEventDrawerFocus/);
+  it("giveaways leave() unmounts the island and invalidates an in-flight enter", () => {
+    expect(giveawaysJs).toMatch(/export function leave\(\)[\s\S]*active = false;[\s\S]*generation \+= 1;[\s\S]*islandPromise\.then\(\(island\) => island\.leave\(\)\)/);
+    expect(giveawaysJs).toMatch(/export async function enter\(\)[\s\S]*const ticket = \+\+generation;[\s\S]*active && ticket === generation/);
+    expect(giveawaysPage).toMatch(/return \(\) => window\.clearInterval\(timer\)/);
+    expect(giveawaysPage).toMatch(/return \(\) => \{ active = false; \}/);
   });
 
-  it("giveaways enter() resets state and re-initializes for fresh re-entry", () => {
-    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*clearInterval\(pollTimer\)/);
-    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*session = null; entrants = \[\]/);
-    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*clearInterval\(timerInterval\)/);
-    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*init\(\)/);
+  it("giveaways enter() mounts a fresh React island on each route entry", () => {
+    expect(giveawaysJs).toMatch(/export async function enter\(\)[\s\S]*getIsland\(\)[\s\S]*island\.enter\(\)/);
+    expect(giveawaysJs).toContain('import("./react/giveaways.js")');
+    expect(giveawaysPage).toMatch(/export function GiveawaysPage/);
   });
 
   it("Audience leave() unmounts the island and clears timers and stale requests", () => {

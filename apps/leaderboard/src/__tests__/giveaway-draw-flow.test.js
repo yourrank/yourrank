@@ -1,32 +1,45 @@
-// Behavioral coverage for the Chat Giveaway draw flow: the client runs the
-// real giveaways.js against the rendered page markup in a DOM, with a virtual
-// clock and an in-memory API. The server picks the winner; the client only
+// Behavioral coverage for the Chat Giveaway React page with a virtual clock
+// and an injected in-memory API. The server picks the winner; the client only
 // visualizes it. Manual "Confirm Winner" persists via POST /finalize.
 //
 // Run: bun test src/__tests__/giveaway-draw-flow.test.js
 
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { Window } from "happy-dom";
-import { giveawaysHtml, renderGiveawaysHtml } from "../pages/giveaway-pages.js";
+import { renderGiveawaysHtml } from "../pages/giveaway-pages.js";
+import {
+  actGiveaways,
+  clickGiveaways,
+  document,
+  dispatchGiveaways,
+  mountGiveawaysPage,
+  restoreGiveawaysDomGlobals,
+  setGiveawaysInputValue,
+  unmountGiveawaysPage,
+  window,
+} from "./giveaways-react-utils.js";
 
-const window = new Window({ url: "http://localhost/dashboard/giveaways/chat" });
-const { document } = window;
-// This file runs inside a shared bun process with every other leaderboard
-// test: every global it installs must be restored in afterAll or later files
-// inherit a dead virtual clock and hang.
-const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle", "matchMedia", "localStorage", "fetch", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "requestAnimationFrame", "cancelAnimationFrame", "performance"];
-const originalGlobals = Object.fromEntries(INSTALLED_GLOBALS.map((k) => [k, globalThis[k]]));
 const originalDateNow = Date.now;
-for (const key of INSTALLED_GLOBALS.slice(0, 14)) {
-  globalThis[key] = key === "getComputedStyle" ? window.getComputedStyle.bind(window) : window[key];
-}
-window.Element.prototype.scrollIntoView = function () {};
-if (!window.Element.prototype.scrollTo) window.Element.prototype.scrollTo = function () {};
-window.Element.prototype.getClientRects = function () { return [{}]; };
-globalThis.localStorage = window.localStorage;
+const originalRuntime = {
+  clearInterval: globalThis.clearInterval,
+  clearTimeout: globalThis.clearTimeout,
+  matchMedia: globalThis.matchMedia,
+  performance: globalThis.performance,
+  requestAnimationFrame: globalThis.requestAnimationFrame,
+  setInterval: globalThis.setInterval,
+  setTimeout: globalThis.setTimeout,
+  cancelAnimationFrame: globalThis.cancelAnimationFrame,
+};
+const originalWindowRuntime = {
+  clearInterval: window.clearInterval,
+  clearTimeout: window.clearTimeout,
+  matchMedia: window.matchMedia,
+  requestAnimationFrame: window.requestAnimationFrame,
+  setInterval: window.setInterval,
+  setTimeout: window.setTimeout,
+  cancelAnimationFrame: window.cancelAnimationFrame,
+};
 
 // ---- Virtual clock: timers, rAF, and performance.now all run on `now`. ----
-const realSetTimeout = globalThis.setTimeout;
 let now = 0;
 let timerSeq = 0;
 const timers = [];
@@ -42,31 +55,41 @@ globalThis.clearTimeout = (id) => cancelTimer(id);
 globalThis.clearInterval = (id) => cancelTimer(id);
 globalThis.requestAnimationFrame = (cb) => scheduleTimer(() => cb(now), 16, 0);
 globalThis.cancelAnimationFrame = (id) => cancelTimer(id);
-Object.defineProperty(globalThis, "performance", { value: { now: () => now }, configurable: true });
+Object.defineProperty(globalThis, "performance", {
+  value: { now: () => now, measure() {}, getEntriesByType: () => [] },
+  configurable: true,
+});
+window.setTimeout = globalThis.setTimeout;
+window.setInterval = globalThis.setInterval;
+window.clearTimeout = globalThis.clearTimeout;
+window.clearInterval = globalThis.clearInterval;
+window.requestAnimationFrame = globalThis.requestAnimationFrame;
+window.cancelAnimationFrame = globalThis.cancelAnimationFrame;
 // Server timestamps (drawn_at) are generated inside the fake API and compared
 // against Date.now() by the client, so both must share the virtual clock.
 Date.now = () => now;
 
 async function flushMicrotasks() {
   for (let i = 0; i < 6; i++) await Promise.resolve();
-  await new Promise((r) => realSetTimeout(r, 0));
 }
 
 const clock = {
   async tick(ms) {
-    const target = now + ms;
-    let due;
-    while ((due = timers.filter((t) => !t.cancelled && t.time <= target).sort((a, b) => a.time - b.time || a.id - b.id)).length) {
-      const t = due[0];
-      now = Math.max(now, t.time);
-      if (t.interval) t.time = now + t.interval;
-      else t.cancelled = true;
+    await actGiveaways(async () => {
+      const target = now + ms;
+      let due;
+      while ((due = timers.filter((t) => !t.cancelled && t.time <= target).sort((a, b) => a.time - b.time || a.id - b.id)).length) {
+        const t = due[0];
+        now = Math.max(now, t.time);
+        if (t.interval) t.time = now + t.interval;
+        else t.cancelled = true;
+        await flushMicrotasks();
+        t.cb();
+        await flushMicrotasks();
+      }
+      now = target;
       await flushMicrotasks();
-      t.cb();
-      await flushMicrotasks();
-    }
-    now = target;
-    await flushMicrotasks();
+    });
   },
 };
 
@@ -95,7 +118,7 @@ const ENTRANTS = [
 const server = { session: null, entries: [], draws: [], drawRows: [], requests: [], predictions: null, predictionCreateResponse: null, responseRulesResponse: null, connection };
 function resetServer({ session, entries } = {}) {
   server.connection = connection;
-  server.session = session || { id: "gs-1", site_id: "site-1", provider: "kick", keyword: "!win", status: "stopped", rules: {}, winner_entry_id: null, drawn_at: null, winner_confirmed_at: null, winner_confirmation_message: null, winner_finalized_at: null, winner_finalized_by: null, winner_response_required: null, winner_response_timeout_seconds: null, winner_response_deadline: null, created_at: "2026-09-28T00:00:00Z" };
+  server.session = session || { id: "gs-1", site_id: "site-1", provider: "kick", keyword: "!win", status: "stopped", started_at: new Date(now).toISOString(), rules: {}, winner_entry_id: null, drawn_at: null, winner_confirmed_at: null, winner_confirmation_message: null, winner_finalized_at: null, winner_finalized_by: null, winner_response_required: null, winner_response_timeout_seconds: null, winner_response_deadline: null, created_at: "2026-09-28T00:00:00Z" };
   server.entries = (entries || ENTRANTS).map((e) => ({ ...e }));
   server.draws.length = 0;
   server.drawRows.length = 0;
@@ -118,7 +141,7 @@ globalThis.fetch = async (input, init = {}) => {
   if (path === "/api/site/list") return json({ ok: true, sites: [site] });
   if (path === "/api/giveaways/chat") return json(statePayload());
   if (path === "/api/giveaways/chat/start") {
-    server.session ||= { id: "gs-1", site_id: "site-1", winner_entry_id: null };
+    server.session ||= { id: "gs-1", site_id: "site-1", winner_entry_id: null, started_at: new Date(now).toISOString() };
     Object.assign(server.session, {
       status: "active",
       provider: body?.mode === "manual" ? "manual" : "kick",
@@ -224,7 +247,7 @@ globalThis.fetch = async (input, init = {}) => {
     // CAS: only the draw the client saw may be finalized.
     if (server.session?.winner_entry_id !== body.winnerEntryId
         || Date.parse(server.session?.drawn_at) !== Date.parse(body.drawnAt)) {
-      return json({ ok: false, error: "The giveaway winner changed. Refresh the current draw before confirming.", session: server.session }, 409);
+      return json({ ok: false, error: "The giveaway winner changed. Refresh the current draw before confirming." }, 409);
     }
     if (server.session.winner_finalized_at) return json(statePayload());
     if (server.session.winner_response_required && !server.session.winner_confirmed_at) {
@@ -243,31 +266,57 @@ globalThis.fetch = async (input, init = {}) => {
 };
 const requestsTo = (path) => server.requests.filter((r) => r.path === path);
 
-// Prevent the auto-init path; the SPA shell drives enter()/leave() instead.
-window.__yrSpaShell = true;
-document.body.innerHTML = giveawaysHtml;
-
-const { enter, leave } = await import("../assets/giveaways.js");
-
 const $id = (id) => document.getElementById(id);
 const confirmButtons = () => [$id("gw-btn-confirm"), $id("gw-modal-confirm")].filter(Boolean);
 const rerollButtons = () => [$id("gw-btn-reroll"), $id("gw-modal-reroll")].filter(Boolean);
+const click = (id) => clickGiveaways($id(id));
+async function clickAndFlush(id) {
+  await actGiveaways(async () => {
+    $id(id)?.click();
+    await flushMicrotasks();
+  });
+}
+async function dispatchAndFlush(target, event) {
+  await actGiveaways(async () => {
+    target.dispatchEvent(event);
+    await flushMicrotasks();
+  });
+}
+const setInput = (id, value, eventName = "input") => setGiveawaysInputValue($id(id), value, eventName);
+const setCheckbox = (id, checked) => {
+  if (($id(id).getAttribute("aria-checked") === "true") !== checked) click(id);
+};
+async function selectDuration(seconds) {
+  click("gw-opt-claim-duration");
+  await actGiveaways();
+  const option = [...document.querySelectorAll('[role="option"]')]
+    .find((item) => item.textContent.trim() === `${seconds} seconds`);
+  clickGiveaways(option);
+  await actGiveaways();
+}
+
+async function enter() {
+  const tab = document.getElementById("giveaway-root")?.getAttribute("data-tab") || "chat";
+  await mountGiveawaysPage({ tab, site: { id: "site-1", name: "Kick Cup" } });
+}
+
+async function leave() {
+  await unmountGiveawaysPage();
+}
 
 async function boot() {
-  enter();
+  await enter();
   await clock.tick(50);
   expect($id("gw-btn-roll").disabled).toBe(false);
 }
 
 async function tickUntilReveal() {
-  // Advance until the reveal lands; stop right away so later assertions see
-  // the state exactly at reveal time (e.g. the claim countdown's first value).
-  for (let i = 0; i < 90 && $id("gw-winner-stage").hidden; i++) await clock.tick(100);
-  expect($id("gw-winner-stage").hidden).toBe(false);
+  for (let i = 0; i < 90 && !$id("gw-winner-stage"); i++) await clock.tick(100);
+  expect($id("gw-winner-stage")).toBeTruthy();
 }
 
 async function drawWinner() {
-  $id("gw-btn-roll").click();
+  await clickAndFlush("gw-btn-roll");
   await tickUntilReveal();
 }
 
@@ -277,15 +326,12 @@ describe("Giveaway draw flow", () => {
     timers.length = 0;
     reducedMotion = false;
     resetServer();
-    // Fresh markup per test: enter() wires listeners onto the live DOM, and a
-    // re-render keeps each test at exactly one listener set.
-    document.body.innerHTML = giveawaysHtml;
-    document.getElementById("gw-opt-claim-duration").value = "30";
+    document.body.innerHTML = renderGiveawaysHtml("chat");
     window.localStorage.clear();
   });
 
-  afterEach(() => {
-    leave();
+  afterEach(async () => {
+    await leave();
     timers.forEach((t) => { t.cancelled = true; });
     timers.length = 0;
   });
@@ -293,58 +339,49 @@ describe("Giveaway draw flow", () => {
   afterAll(() => {
     // Hand every installed global back so the next test file sees real timers,
     // the real fetch, and the real Date.now.
-    for (const key of INSTALLED_GLOBALS) {
-      if (key === "performance") {
-        Object.defineProperty(globalThis, "performance", { value: originalGlobals.performance, configurable: true });
-      } else if (originalGlobals[key] === undefined) {
-        delete globalThis[key];
-      } else {
-        globalThis[key] = originalGlobals[key];
-      }
-    }
+    restoreGiveawaysDomGlobals();
+    Object.assign(globalThis, originalRuntime);
+    Object.assign(window, originalWindowRuntime);
+    Object.defineProperty(globalThis, "performance", { value: originalRuntime.performance, configurable: true });
     Date.now = originalDateNow;
   });
 
   it("with no response requirement the claim boxes stay hidden and confirm is ready", async () => {
     await boot();
     await drawWinner();
-    expect($id("gw-claim-box").hidden).toBe(true);
-    expect($id("gw-modal-claim-box").hidden).toBe(true);
+    expect($id("gw-claim-box")).toBeNull();
+    expect($id("gw-modal-claim-box")).toBeNull();
     for (const b of confirmButtons()) {
       expect(b.disabled).toBe(false);
-      expect(b.classList.contains("btn--accent")).toBe(true);
-      expect(b.classList.contains("gw-btn-confirmed")).toBe(false);
     }
     await clock.tick(950);
-    expect($id("gw-winner-modal").hidden).toBe(false);
+    expect($id("gw-winner-modal")).toBeTruthy();
   });
 
   it("starts a manual giveaway and adds dashboard-entered viewers without Kick links", async () => {
     server.session = null;
     server.entries = [];
     server.connection = { connected: false, chatReady: false, channelName: null };
-    enter();
+    await enter();
     await clock.tick(50);
 
-    expect($id("gw-manual-start-hint").hidden).toBe(false);
-    expect($id("gw-keyword-field").hidden).toBe(true);
+    expect($id("gw-manual-start-hint")).toBeTruthy();
+    expect($id("gw-keyword-field")).toBeNull();
     expect($id("gw-btn-listen").disabled).toBe(false);
     expect($id("gw-listen-btn-label").textContent).toBe("Start manual giveaway");
     expect($id("gw-entry-modes").hidden).toBe(true);
     expect($id("gw-kick-eligibility-section").hidden).toBe(true);
     expect($id("gw-winner-verification-section").hidden).toBe(true);
     expect($id("gw-anti-abuse-section").hidden).toBe(true);
-    expect($id("gw-rules-panel").open).toBe(true);
+    expect($id("gw-rules-card")).toBeTruthy();
     expect($id("gw-advanced-options").open).toBe(false);
 
-    $id("gw-advanced-options").open = true;
-    $id("gw-opt-skip-past").checked = true;
-    $id("gw-opt-skip-past").dispatchEvent(new window.Event("change", { bubbles: true }));
-    document.querySelector('input[name="gw-winner-repeat"][value="again"]').click();
+    await actGiveaways(() => { $id("gw-advanced-options").open = true; });
+    click("gw-opt-skip-past");
+    clickGiveaways(document.querySelector('input[name="gw-winner-repeat"][value="again"]'));
     expect($id("gw-rules-summary").textContent).toBe("Anyone in chat · Can win again · Exclude past winners · No chat response");
 
-    $id("gw-btn-listen").click();
-    await flushMicrotasks();
+    await clickAndFlush("gw-btn-listen");
     const startRequest = requestsTo("/api/giveaways/chat/start")[0];
     expect(startRequest.body.mode).toBe("manual");
     expect(startRequest.body.keyword).toBeUndefined();
@@ -361,15 +398,14 @@ describe("Giveaway draw flow", () => {
     });
     expect(server.session.provider).toBe("manual");
     expect(server.session.keyword).toBe("manual");
-    expect($id("gw-status-text").textContent).toBe("LIVE");
+    expect($id("gw-setup-card").textContent).toContain("LIVE");
     expect($id("gw-stat-keyword").textContent).toBe("Manual");
     expect($id("gw-add-entrant-form").hidden).toBe(false);
     expect($id("gw-layout").classList.contains("is-live")).toBe(true);
 
     const input = $id("gw-add-entrant-name");
-    input.value = "Alex Rivera";
-    $id("gw-add-entrant-form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
-    await flushMicrotasks();
+    setGiveawaysInputValue(input, "Alex Rivera");
+    await dispatchAndFlush($id("gw-add-entrant-form"), new window.Event("submit", { bubbles: true, cancelable: true }));
     const addRequest = requestsTo("/api/giveaways/chat/entries/add")[0];
     expect(addRequest.body).toMatchObject({ sessionId: "gs-1", username: "Alex Rivera", siteId: "site-1" });
     expect(input.value).toBe("");
@@ -378,30 +414,30 @@ describe("Giveaway draw flow", () => {
     const row = $id("entrant-manual-1");
     expect(row.querySelector("a")).toBeNull();
     expect(row.querySelector(".gw-entrant-name").tagName).toBe("SPAN");
-    expect(row.querySelector(".gw-entrant-avatar").src.startsWith("data:image/svg+xml")).toBe(true);
-    expect(row.querySelector(".gw-trust-badge").textContent).toBe("Added manually");
+    expect(row.querySelector("img").src.startsWith("data:image/svg+xml")).toBe(true);
+    expect(row.querySelector('[data-label="Status"]').textContent).toContain("Added manually");
     expect(row.querySelector(".gw-entrant-msg").textContent).toBe("—");
   });
 
   it("locks prediction entry points for a free owner while preserving the page", async () => {
     server.predictions = { ok: true, predictions: [], entitlement: { enabled: false } };
     document.body.innerHTML = renderGiveawaysHtml("preds");
-    enter();
+    await enter();
     await clock.tick(50);
 
-    expect($id("btn-create-pred").disabled).toBe(true);
     expect($id("btn-open-event-drawer").disabled).toBe(true);
-    expect($id("btn-create-pred").getAttribute("aria-describedby")).toBe("pred-plan-lock");
+    expect($id("btn-open-event-drawer").disabled).toBe(true);
+    expect($id("btn-open-event-drawer").getAttribute("aria-describedby")).toBe("pred-plan-lock");
     expect($id("btn-open-event-drawer").getAttribute("aria-describedby")).toBe("pred-plan-lock");
     expect($id("pred-plan-lock").hidden).toBe(false);
     expect($id("pred-plan-lock").querySelector('[data-plan-lock="predictions"]')).toBeTruthy();
-    expect($id("pred-drawer").hidden).toBe(true);
-    $id("btn-create-pred").disabled = false;
+    expect($id("pred-drawer")).toBeNull();
+    $id("btn-open-event-drawer").disabled = false;
     await new Promise((resolve) => {
-      $id("btn-create-pred").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+      dispatchGiveaways($id("btn-open-event-drawer"), new window.MouseEvent("click", { bubbles: true, cancelable: true }));
       resolve();
     });
-    expect($id("pred-drawer").hidden).toBe(true);
+    expect($id("pred-drawer")).toBeNull();
   });
 
   it("adds a safe upgrade link to a stale prediction entitlement error", async () => {
@@ -410,19 +446,18 @@ describe("Giveaway draw flow", () => {
       body: { ok: false, code: "entitlement_required", error: "Predictions is available on Starter and higher plans." },
     };
     document.body.innerHTML = renderGiveawaysHtml("preds");
-    enter();
+    await enter();
     await clock.tick(50);
-    $id("btn-create-pred").click();
-    $id("pred-title").value = "Who wins?";
-    $id("pred-opt-1").value = "Yes";
-    $id("pred-opt-2").value = "No";
-    $id("pred-min-bet").value = "1";
-    $id("pred-max-bet").value = "10";
-    $id("pred-form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
-    await flushMicrotasks();
+    click("btn-open-event-drawer");
+    setInput("pred-title", "Who wins?");
+    setInput("pred-opt-1", "Yes");
+    setInput("pred-opt-2", "No");
+    setInput("pred-min-bet", "1");
+    setInput("pred-max-bet", "10");
+    await dispatchAndFlush($id("pred-form"), new window.Event("submit", { bubbles: true, cancelable: true }));
 
     const status = $id("pred-status");
-    expect(status.classList.contains("error")).toBe(true);
+    expect(status.getAttribute("role")).toBe("alert");
     expect(status.textContent).toContain("Predictions is available on Starter and higher plans.");
     expect(status.querySelector("a").textContent).toBe("Upgrade your plan");
     expect(status.querySelector("a").getAttribute("href")).toBe("/dashboard/settings/billing?from=predictions");
@@ -433,8 +468,7 @@ describe("Giveaway draw flow", () => {
     server.session.rules = { winnerMustRespond: true, responseTimeout: 30 };
     await boot();
     await drawWinner();
-    expect($id("gw-claim-box").hidden).toBe(false);
-    expect($id("gw-modal-claim-box").hidden).toBe(false);
+    expect($id("gw-claim-box")).toBeTruthy();
     expect($id("gw-claim-status").textContent).toBe("Waiting for winner response…");
     // The roulette consumed part of the 30s window: the countdown derives
     // from drawn_at, not the checkbox duration.
@@ -444,9 +478,8 @@ describe("Giveaway draw flow", () => {
     for (const b of confirmButtons()) {
       expect(b.disabled).toBe(true);
       expect(b.title).toBe("Waiting for the winner to respond in chat");
-      expect(b.classList.contains("btn--accent")).toBe(false);
     }
-    for (const b of rerollButtons()) expect(b.classList.contains("btn--ghost")).toBe(true);
+    expect(rerollButtons().every((button) => !button.disabled)).toBe(true);
   });
 
   it("a chat reply before the deadline unlocks confirmation", async () => {
@@ -454,15 +487,20 @@ describe("Giveaway draw flow", () => {
     server.session.rules = { winnerMustRespond: true, responseTimeout: 30 };
     await boot();
     await drawWinner();
+    expect($id("gw-confetti")).toBeTruthy();
     server.session.winner_confirmed_at = "2026-09-28T00:01:30Z";
     server.session.winner_confirmation_message = "I am here";
     await clock.tick(4000); // next poll carries the confirmed state
-    expect($id("gw-claim-status").textContent).toContain("Responded:");
+    expect($id("gw-claim-status").textContent).toBe("I am here");
     expect($id("gw-claim-countdown").textContent).toBe("Verified");
-    expect($id("gw-modal-verify-chip").hidden).toBe(false);
+    expect($id("gw-modal-verify-chip")).toBeTruthy();
+    const feed = $id("gw-winner-chat-feed");
+    expect(feed.getAttribute("aria-live")).toBe("polite");
+    expect(feed.textContent).toContain(`@${winnerEntry().username}:`);
+    expect(feed.textContent).toContain("!win");
+    expect(feed.textContent).toContain("I am here");
     for (const b of confirmButtons()) {
       expect(b.disabled).toBe(false);
-      expect(b.classList.contains("btn--accent")).toBe(true);
     }
   });
 
@@ -472,11 +510,10 @@ describe("Giveaway draw flow", () => {
     await boot();
     await drawWinner();
     await clock.tick(31000);
-    expect($id("gw-claim-status").textContent).toBe("Winner did not respond within 30 seconds");
-    for (const b of rerollButtons()) expect(b.classList.contains("btn--accent")).toBe(true);
+    expect($id("gw-claim-status").textContent).toBe("Winner did not respond");
+    expect(rerollButtons().every((button) => !button.disabled)).toBe(true);
     for (const b of confirmButtons()) {
       expect(b.disabled).toBe(true);
-      expect(b.classList.contains("btn--accent")).toBe(false);
       expect(b.title).toBe("The winner did not respond — re-roll to pick another winner");
     }
   });
@@ -485,8 +522,8 @@ describe("Giveaway draw flow", () => {
     await boot();
     await drawWinner();
     await clock.tick(950);
-    expect($id("gw-winner-modal").hidden).toBe(false);
-    $id("gw-modal-confirm").click();
+    expect($id("gw-winner-modal")).toBeTruthy();
+    click("gw-modal-confirm");
     await clock.tick(0);
     const finalize = requestsTo("/api/giveaways/chat/finalize");
     expect(finalize).toHaveLength(1);
@@ -495,21 +532,19 @@ describe("Giveaway draw flow", () => {
     expect(finalize[0].body.drawnAt).toBe(server.session.drawn_at);
     for (const b of confirmButtons()) {
       expect(b.disabled).toBe(true);
-      expect(b.classList.contains("gw-btn-confirmed")).toBe(true);
     }
-    expect($id("gw-winner-modal").hidden).toBe(true);
+    expect($id("gw-winner-modal")).toBeNull();
     expect($id("gw-winner-stage").classList.contains("gw-winner-stage--confirmed")).toBe(true);
 
     // Reload: the finalized rendering is server truth, not local memory.
-    leave();
-    enter();
+    await leave();
+    await enter();
     await clock.tick(50);
-    expect($id("gw-winner-stage").classList.contains("gw-winner-stage--confirmed")).toBe(true);
-    for (const b of confirmButtons()) expect(b.classList.contains("gw-btn-confirmed")).toBe(true);
+    expect($id("gw-winner-stage").className).toContain("gw-winner-stage--confirmed");
     await clock.tick(1500);
-    expect($id("gw-winner-modal").hidden).toBe(true);
-    expect($id("gw-claim-box").hidden).toBe(true);
-    expect($id("gw-modal-claim-box").hidden).toBe(true);
+    expect($id("gw-winner-modal")).toBeNull();
+    expect($id("gw-claim-box")).toBeNull();
+    expect($id("gw-modal-claim-box")).toBeNull();
   });
 
   it("confirm never bypasses a pending required response", async () => {
@@ -517,7 +552,7 @@ describe("Giveaway draw flow", () => {
     server.session.rules = { winnerMustRespond: true, responseTimeout: 30 };
     await boot();
     await drawWinner();
-    $id("gw-modal-confirm").click();
+    click("gw-btn-confirm");
     await clock.tick(0);
     expect(requestsTo("/api/giveaways/chat/finalize")).toHaveLength(0);
   });
@@ -526,7 +561,7 @@ describe("Giveaway draw flow", () => {
     await boot();
     await drawWinner();
     expect(server.session.winner_entry_id).toBe("e3");
-    $id("gw-btn-reroll").click();
+    click("gw-btn-reroll");
     await tickUntilReveal();
     const draws = requestsTo("/api/giveaways/chat/draw");
     expect(draws).toHaveLength(2);
@@ -538,30 +573,34 @@ describe("Giveaway draw flow", () => {
 
   it("the roulette lands on the server's pick, not a client guess", async () => {
     await boot();
-    await drawWinner();
-    // Server always drew the last submitted id.
-    expect($id("gw-winner-name").textContent).toBe("charlie");
+    click("gw-btn-roll");
+    await clock.tick(2_000);
     const items = [...$id("gw-roller-track").querySelectorAll(".gw-roulette-item")];
     expect(items.at(-1).textContent).toBe("@charlie");
     expect(items.at(-2).textContent).not.toBe("@charlie");
+    expect($id("gw-winner-stage")).toBeNull();
+    await tickUntilReveal();
+    // Server always drew the last submitted id.
+    expect($id("gw-winner-name").textContent).toBe("charlie");
   });
 
   it("reduced motion reveals the winner quickly with no motion blur", async () => {
     reducedMotion = true;
     await boot();
-    $id("gw-btn-roll").click();
-    await clock.tick(1500);
-    expect($id("gw-winner-stage").hidden).toBe(false);
-    expect($id("gw-roller-track").classList.contains("gw-roulette-track--blur")).toBe(false);
+    click("gw-btn-roll");
+    await clock.tick(200);
+    expect($id("gw-roller-track").classList.contains("blur-[1px]")).toBe(false);
+    await tickUntilReveal();
+    expect($id("gw-winner-stage")).toBeTruthy();
   });
 
   it("the verification modal opens only after the reveal lands", async () => {
     await boot();
     await drawWinner();
-    expect($id("gw-winner-stage").hidden).toBe(false);
-    expect($id("gw-winner-modal").hidden).toBe(true);
+    expect($id("gw-winner-stage")).toBeTruthy();
+    expect($id("gw-winner-modal")).toBeNull();
     await clock.tick(950);
-    expect($id("gw-winner-modal").hidden).toBe(false);
+    expect($id("gw-winner-modal")).toBeTruthy();
   });
 
   it("a reload during a required response window resumes the claim, not the confirm", async () => {
@@ -569,17 +608,16 @@ describe("Giveaway draw flow", () => {
     server.session.rules = { winnerMustRespond: true, responseTimeout: 30 };
     await boot();
     await drawWinner();
-    leave();
-    enter();
+    await leave();
+    await enter();
     await clock.tick(50);
-    expect($id("gw-claim-box").hidden).toBe(false);
-    expect($id("gw-modal-claim-box").hidden).toBe(false);
+    expect($id("gw-claim-box")).toBeTruthy();
     expect($id("gw-claim-status").textContent).toBe("Waiting for winner response…");
     for (const b of confirmButtons()) {
       expect(b.disabled).toBe(true);
       expect(b.title).toContain("Waiting for the winner");
     }
-    expect($id("gw-winner-modal").hidden).toBe(true);
+    expect($id("gw-winner-modal")).toBeNull();
   });
 
   it("the countdown on reload is derived from drawn_at, not the full window", async () => {
@@ -590,8 +628,8 @@ describe("Giveaway draw flow", () => {
     // Reach exactly 10s after the server's drawn_at before reloading.
     const drawnAt = Date.parse(server.session.drawn_at);
     await clock.tick(Math.max(0, drawnAt + 10_000 - now));
-    leave();
-    enter();
+    await leave();
+    await enter();
     await clock.tick(50);
     expect($id("gw-claim-countdown").textContent).toBe("20s");
     await clock.tick(5000);
@@ -603,20 +641,19 @@ describe("Giveaway draw flow", () => {
     server.session.rules = { winnerMustRespond: true, responseTimeout: 30 };
     await boot();
     await drawWinner();
-    leave();
+    await leave();
     await clock.tick(31_000);
-    enter();
+    await enter();
     await clock.tick(50);
-    expect($id("gw-claim-box").hidden).toBe(false);
-    expect($id("gw-claim-status").textContent).toBe("Winner did not respond within 30 seconds");
-    for (const b of rerollButtons()) expect(b.classList.contains("btn--accent")).toBe(true);
+    expect($id("gw-claim-box")).toBeTruthy();
+    expect($id("gw-claim-status").textContent).toBe("Winner did not respond");
+    expect(rerollButtons().every((button) => !button.disabled)).toBe(true);
     for (const b of confirmButtons()) {
       expect(b.disabled).toBe(true);
-      expect(b.classList.contains("btn--accent")).toBe(false);
     }
     // No countdown was restarted.
     await clock.tick(2000);
-    expect($id("gw-claim-status").textContent).toBe("Winner did not respond within 30 seconds");
+    expect($id("gw-claim-status").textContent).toBe("Winner did not respond");
   });
 
   it("a reload after the winner responded in chat renders the verified state", async () => {
@@ -626,26 +663,25 @@ describe("Giveaway draw flow", () => {
     await drawWinner();
     server.session.winner_confirmed_at = new Date(now).toISOString();
     server.session.winner_confirmation_message = "here!";
-    leave();
-    enter();
+    await leave();
+    await enter();
     await clock.tick(50);
-    expect($id("gw-claim-status").textContent).toContain("Responded:");
+    expect($id("gw-claim-status").textContent).toBe("here!");
     expect($id("gw-claim-countdown").textContent).toBe("Verified");
-    expect($id("gw-modal-verify-chip").hidden).toBe(false);
+    expect($id("gw-winner-modal")).toBeNull();
     for (const b of confirmButtons()) {
       expect(b.disabled).toBe(false);
-      expect(b.classList.contains("btn--accent")).toBe(true);
     }
   });
 
   it("a reload with no response requirement keeps claim boxes hidden and confirm ready", async () => {
     await boot();
     await drawWinner();
-    leave();
-    enter();
+    await leave();
+    await enter();
     await clock.tick(50);
-    expect($id("gw-claim-box").hidden).toBe(true);
-    expect($id("gw-modal-claim-box").hidden).toBe(true);
+    expect($id("gw-claim-box")).toBeNull();
+    expect($id("gw-modal-claim-box")).toBeNull();
     for (const b of confirmButtons()) expect(b.disabled).toBe(false);
   });
 
@@ -656,8 +692,8 @@ describe("Giveaway draw flow", () => {
     await drawWinner();
     const atReveal = parseInt($id("gw-claim-countdown").textContent, 10);
     await clock.tick(5000);
-    leave();
-    enter();
+    await leave();
+    await enter();
     await clock.tick(50);
     // ~5s later than the reveal value, from the same drawn_at deadline.
     const afterReload = parseInt($id("gw-claim-countdown").textContent, 10);
@@ -665,16 +701,14 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-claim-status").textContent).toBe("Waiting for winner response…");
   });
 
-  it("a re-roll keeps the rules persisted at start, not the current controls", async () => {
+  it("a re-roll sends no client-side rule overrides", async () => {
     server.session.rules = { winnerMustRespond: true, responseTimeout: 90 };
     await boot();
     await drawWinner();
     // Changing the controls after the draw cannot change this session's rules:
     // the draw request carries none of them and the server keeps the persisted
     // 90s required-response window.
-    $id("gw-opt-claim-req").checked = false;
-    $id("gw-opt-claim-duration").value = "30";
-    $id("gw-btn-reroll").click();
+    click("gw-btn-reroll");
     await tickUntilReveal();
     const draws = requestsTo("/api/giveaways/chat/draw");
     expect(draws).toHaveLength(2);
@@ -684,7 +718,7 @@ describe("Giveaway draw flow", () => {
     expect(server.session.winner_response_required).toBe(true);
     expect(server.session.winner_response_timeout_seconds).toBe(90);
     // The persisted rules drive the UI; the roulette consumed a few seconds.
-    expect($id("gw-claim-box").hidden).toBe(false);
+    expect($id("gw-claim-box")).toBeTruthy();
     const shown = parseInt($id("gw-claim-countdown").textContent, 10);
     expect(shown).toBeLessThanOrEqual(88);
     expect(shown).toBeGreaterThanOrEqual(83);
@@ -696,7 +730,7 @@ describe("Giveaway draw flow", () => {
     const firstDraw = requestsTo("/api/giveaways/chat/draw").at(-1);
     expect(firstDraw.body.expectedWinnerEntryId).toBeNull();
     expect(firstDraw.body.expectedDrawnAt).toBeNull();
-    $id("gw-btn-reroll").click();
+    click("gw-btn-reroll");
     await tickUntilReveal();
     const second = requestsTo("/api/giveaways/chat/draw").at(-1);
     expect(second.body.expectedWinnerEntryId).toBe("e3");
@@ -712,7 +746,7 @@ describe("Giveaway draw flow", () => {
       winner_entry_id: "e2", drawn_at: new Date(now).toISOString(),
       winner_confirmed_at: null, winner_finalized_at: null,
     });
-    $id("gw-modal-confirm").click();
+    click("gw-btn-confirm");
     await clock.tick(0);
     const finalize = requestsTo("/api/giveaways/chat/finalize");
     expect(finalize).toHaveLength(1);
@@ -731,7 +765,7 @@ describe("Giveaway draw flow", () => {
       winner_entry_id: "e1", drawn_at: new Date(now + 1000).toISOString(),
       winner_confirmed_at: null, winner_finalized_at: null,
     });
-    $id("gw-btn-reroll").click();
+    click("gw-btn-reroll");
     await clock.tick(3000);
     const draws = requestsTo("/api/giveaways/chat/draw");
     expect(draws).toHaveLength(2);
@@ -747,9 +781,9 @@ describe("Giveaway draw flow", () => {
     server.session.status = "active";
     await boot();
     expect(document.querySelector('input[name="gw-entry-mode"]:checked').value).toBe("verified");
-    leave();
-    document.body.innerHTML = giveawaysHtml;
-    enter();
+    await leave();
+    document.body.innerHTML = renderGiveawaysHtml("chat");
+    await enter();
     await clock.tick(50);
     expect(document.querySelector('input[name="gw-entry-mode"]:checked').value).toBe("verified");
   });
@@ -758,20 +792,18 @@ describe("Giveaway draw flow", () => {
     await boot();
     const details = $id("gw-advanced-options");
     expect(details.open).toBe(false);
-    expect($id("gw-opt-subscriber").closest("#gw-advanced-options")).toBe(details);
-    expect($id("gw-opt-ip").closest("#gw-advanced-options")).toBe(details);
+    expect(details.innerHTML).toContain('id="gw-opt-subscriber"');
+    expect(details.innerHTML).toContain('id="gw-opt-ip"');
   });
 
   it("opening and closing Advanced options is a local preference, not a rule", async () => {
     await boot();
     const details = $id("gw-advanced-options");
-    details.open = true;
-    details.dispatchEvent(new Event("toggle"));
+    await actGiveaways(() => { details.open = true; });
     expect(localStorage.getItem("yr:gw-advanced-open")).toBe("1");
-    details.open = false;
-    details.dispatchEvent(new Event("toggle"));
+    await actGiveaways(() => { details.open = false; });
     expect(localStorage.getItem("yr:gw-advanced-open")).toBe("0");
-    $id("gw-btn-listen").click();
+    click("gw-btn-listen");
     await clock.tick(50);
     const start = requestsTo("/api/giveaways/chat/start").at(-1);
     expect(Object.keys(start.body.rules).sort()).toEqual(
@@ -781,10 +813,10 @@ describe("Giveaway draw flow", () => {
 
   it("advanced settings keep their values while collapsed", async () => {
     await boot();
-    $id("gw-advanced-options").open = true;
-    $id("gw-opt-subscriber").checked = true;
-    $id("gw-advanced-options").open = false;
-    $id("gw-btn-listen").click();
+    await actGiveaways(() => { $id("gw-advanced-options").open = true; });
+    setCheckbox("gw-opt-subscriber", true);
+    await actGiveaways(() => { $id("gw-advanced-options").open = false; });
+    click("gw-btn-listen");
     await clock.tick(50);
     expect(requestsTo("/api/giveaways/chat/start").at(-1).body.rules.subscriberOnly).toBe(true);
   });
@@ -792,7 +824,7 @@ describe("Giveaway draw flow", () => {
   it("the default winner rule is Win once per giveaway", async () => {
     await boot();
     expect($id("gw-winner-repeat-once").checked).toBe(true);
-    $id("gw-btn-listen").click();
+    click("gw-btn-listen");
     await clock.tick(50);
     expect(requestsTo("/api/giveaways/chat/start").at(-1).body.rules.winnerRepeat).toBe("once");
   });
@@ -801,7 +833,7 @@ describe("Giveaway draw flow", () => {
     await boot();
     await drawWinner();
     const firstId = server.session.winner_entry_id;
-    $id("gw-btn-reroll").click();
+    click("gw-btn-reroll");
     await tickUntilReveal();
     expect(server.session.winner_entry_id).not.toBe(firstId);
     expect(server.draws).toContain(firstId);
@@ -811,24 +843,24 @@ describe("Giveaway draw flow", () => {
   it("Can win again lets a re-roll land on the same participant", async () => {
     resetServer({ entries: [ENTRANTS[0]] });
     await boot();
-    $id("gw-winner-repeat-again").click();
-    $id("gw-btn-listen").click();
+    click("gw-winner-repeat-again");
+    click("gw-btn-listen");
     await clock.tick(50);
     expect(server.session.rules.winnerRepeat).toBe("again");
     await drawWinner();
     const firstId = server.session.winner_entry_id;
-    $id("gw-btn-reroll").click();
+    click("gw-btn-reroll");
     await tickUntilReveal();
     expect(server.session.winner_entry_id).toBe(firstId);
-    expect($id("gw-page-alert").textContent).toBe("");
-    expect($id("gw-winner-stage").hidden).toBe(false);
+    expect($id("gw-page-alert")).toBeNull();
+    expect($id("gw-winner-stage")).toBeTruthy();
   });
 
   it("with no other eligible entrant a Win-once re-roll shows a clear error", async () => {
     resetServer({ entries: [ENTRANTS[0]] });
     await boot();
     await drawWinner();
-    $id("gw-btn-reroll").click();
+    click("gw-btn-reroll");
     await clock.tick(3000);
     expect($id("gw-page-alert").textContent).toContain("No other eligible entrants remain.");
     // The reveal that already happened is untouched by the failed re-roll.
@@ -840,21 +872,23 @@ describe("Giveaway draw flow", () => {
     server.session.rules = { winnerRepeat: "again" };
     await boot();
     expect($id("gw-winner-repeat-again").checked).toBe(true);
-    leave();
-    document.body.innerHTML = giveawaysHtml;
-    enter();
+    await leave();
+    document.body.innerHTML = renderGiveawaysHtml("chat");
+    await enter();
     await clock.tick(50);
     expect($id("gw-winner-repeat-again").checked).toBe(true);
   });
 
   it("a stale tab's re-roll follows the server-persisted rule", async () => {
     resetServer({ entries: [ENTRANTS[0]] });
+    server.session.status = "active";
     await boot();
     await drawWinner();
     // The fieldset is locked while the giveaway runs; even a forged control
     // change cannot alter the rule persisted at start.
-    $id("gw-winner-repeat-again").checked = true;
-    $id("gw-btn-reroll").click();
+    click("gw-winner-repeat-again");
+    expect($id("gw-winner-repeat-again").checked).toBe(false);
+    click("gw-btn-reroll");
     await clock.tick(3000);
     expect(server.session.rules.winnerRepeat ?? "once").toBe("once");
     expect($id("gw-page-alert").textContent).toContain("No other eligible entrants remain.");
@@ -862,8 +896,8 @@ describe("Giveaway draw flow", () => {
 
   it("historical past-winner exclusion stays separate from winner repeat", async () => {
     await boot();
-    $id("gw-opt-skip-past").checked = true;
-    $id("gw-btn-listen").click();
+    setCheckbox("gw-opt-skip-past", true);
+    await clickAndFlush("gw-btn-listen");
     await clock.tick(50);
     const rules = requestsTo("/api/giveaways/chat/start").at(-1).body.rules;
     expect(rules.excludePreviousWinners).toBe(true);
@@ -874,12 +908,10 @@ describe("Giveaway draw flow", () => {
   it("response timeout appears only when the winner must respond", async () => {
     await boot();
     expect($id("gw-claim-duration-wrap").hidden).toBe(true);
-    $id("gw-opt-claim-req").click();
-    await flushMicrotasks();
+    await clickAndFlush("gw-opt-claim-req");
     expect($id("gw-claim-duration-wrap").hidden).toBe(false);
     expect($id("gw-opt-claim-duration").disabled).toBe(false);
-    $id("gw-opt-claim-req").click();
-    await flushMicrotasks();
+    await clickAndFlush("gw-opt-claim-req");
     expect($id("gw-claim-duration-wrap").hidden).toBe(true);
   });
 
@@ -895,14 +927,14 @@ describe("Giveaway draw flow", () => {
   it("auto re-roll follows the response verification toggle", async () => {
     await boot();
     expect($id("gw-auto-reroll-wrap").hidden).toBe(true);
-    $id("gw-opt-claim-req").click();
-    await flushMicrotasks();
+    click("gw-opt-claim-req");
+    await actGiveaways();
     expect($id("gw-auto-reroll-wrap").hidden).toBe(false);
     expect($id("gw-opt-auto-reroll").disabled).toBe(false);
-    $id("gw-opt-claim-req").click();
-    await flushMicrotasks();
+    click("gw-opt-claim-req");
+    await actGiveaways();
     expect($id("gw-auto-reroll-wrap").hidden).toBe(true);
-    expect($id("gw-opt-auto-reroll").checked).toBe(false);
+    expect($id("gw-opt-auto-reroll").getAttribute("aria-checked")).toBe("false");
   });
 
   it("keeps winner verification editable on a live Kick giveaway while entry rules stay locked", async () => {
@@ -917,17 +949,15 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-opt-claim-req").disabled).toBe(false);
     expect($id("gw-opt-claim-duration").disabled).toBe(false);
     expect($id("gw-opt-auto-reroll").disabled).toBe(false);
-    expect($id("gw-response-live-note").hidden).toBe(false);
+    expect($id("gw-response-live-note")).toBeTruthy();
     expect($id("gw-settings-note").textContent).toContain("Entry rules are locked");
 
-    $id("gw-opt-claim-duration").value = "30";
-    $id("gw-opt-claim-duration").dispatchEvent(new window.Event("change", { bubbles: true }));
-    await flushMicrotasks();
+    await selectDuration(30);
     const req = requestsTo("/api/giveaways/chat/response-rules").at(-1);
     expect(req.method).toBe("POST");
     expect(req.body).toMatchObject({ sessionId: "gs-1", siteId: "site-1", winnerMustRespond: true, responseTimeout: 30, autoReroll: false });
     expect(server.session.rules.responseTimeout).toBe(30);
-    expect($id("gw-opt-claim-duration").value).toBe("30");
+    expect($id("gw-opt-claim-duration").textContent).toBe("30 seconds");
   });
 
   it("restores the persisted response rules when the live save fails", async () => {
@@ -936,13 +966,11 @@ describe("Giveaway draw flow", () => {
     server.responseRulesResponse = { status: 409, body: { ok: false, error: "Winner verification can't change after the winner is confirmed or the giveaway ends." } };
     await boot();
 
-    $id("gw-opt-claim-duration").value = "90";
-    $id("gw-opt-claim-duration").dispatchEvent(new window.Event("change", { bubbles: true }));
-    await flushMicrotasks();
+    await selectDuration(90);
     expect(requestsTo("/api/giveaways/chat/response-rules")).toHaveLength(1);
     expect($id("gw-page-alert").textContent).toContain("Winner verification can't change");
-    expect($id("gw-opt-claim-duration").value).toBe("60");
-    expect($id("gw-opt-claim-req").checked).toBe(true);
+    expect($id("gw-opt-claim-duration").textContent).toBe("60 seconds");
+    expect($id("gw-opt-claim-req").getAttribute("aria-checked")).toBe("true");
     expect($id("gw-opt-claim-duration").disabled).toBe(false);
   });
 
@@ -952,12 +980,12 @@ describe("Giveaway draw flow", () => {
     await boot();
 
     await drawWinner(); // server picks e3 (charlie)
-    expect($id("gw-draw-history").hidden).toBe(false);
+    expect($id("gw-draw-history")).toBeTruthy();
     expect([...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent)).toEqual([
       expect.stringContaining("Drew charlie"),
     ]);
 
-    $id("gw-btn-reroll").click();
+    await clickAndFlush("gw-btn-reroll");
     await tickUntilReveal();
     const items = [...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent);
     expect(items).toHaveLength(2);
@@ -976,13 +1004,16 @@ describe("Giveaway draw flow", () => {
     await clock.tick(31_000);
     expect(requestsTo("/api/giveaways/chat/draw").at(-1).body.automatic).toBe(true);
     expect(server.session.auto_reroll_exhausted_at).not.toBeNull();
-    const notice = $id("gw-auto-reroll-stopped");
-    expect(notice.hidden).toBe(false);
-    expect(notice.getAttribute("role")).toBe("status");
-    expect(notice.textContent).toContain("alpha");
-    expect(notice.textContent).toContain("no other eligible entrants");
+    expect($id("gw-page-alert").textContent).toBe("No other eligible entrants remain.");
+    expect($id("gw-auto-reroll-stopped").textContent).toBe(
+      "Auto re-roll stopped — alpha didn't respond and no other eligible entrants remain, so re-roll isn't possible. Start a new giveaway when you're ready.",
+    );
+    expect($id("gw-modal-auto-reroll-stopped").textContent).toBe(
+      "Auto re-roll stopped — alpha didn't respond and no other eligible entrants remain, so re-roll isn't possible. Start a new giveaway when you're ready.",
+    );
     const items2 = [...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent);
     expect(items2[0]).toContain("Auto re-roll stopped — no other eligible entrants left (alpha didn't respond)");
+    expect(items2[1]).toContain("Auto re-roll to alpha — bravo didn't respond in time");
     // Confirm stays disabled (unanswered required response); nothing else hid.
     for (const b of confirmButtons()) expect(b.disabled).toBe(true);
   });
@@ -990,32 +1021,29 @@ describe("Giveaway draw flow", () => {
   it("shows a no-match state when the entrant search filters out every row", async () => {
     await boot();
     const search = $id("gw-search-entrants");
-    const noMatch = $id("gw-entrants-no-match");
-    const rows = () => [...$id("gw-entrants-list").querySelectorAll("tr")];
+    const rows = () => [...($id("gw-entrants-list")?.querySelectorAll("tr") || [])];
     const visible = () => rows().filter((r) => !r.hidden);
     expect(visible()).toHaveLength(3);
-    expect(noMatch.hidden).toBe(true);
+    expect($id("gw-entrants-no-match")).toBeNull();
 
     // A term matching nothing hides all rows but shows the no-match state.
-    search.value = "zzz";
-    search.dispatchEvent(new window.Event("input", { bubbles: true }));
+    setInput("gw-search-entrants", "zzz");
     expect(visible()).toHaveLength(0);
-    expect(noMatch.hidden).toBe(false);
-    expect(noMatch.getAttribute("role")).toBe("status");
+    expect($id("gw-entrants-no-match")).toBeTruthy();
+    expect($id("gw-entrants-no-match").getAttribute("role")).toBe("status");
     expect($id("gw-entrants-no-match-text").textContent).toBe('No entrants match "zzz"');
-    expect($id("gw-entrants-empty").hidden).toBe(true);
+    expect($id("gw-entrants-empty")).toBeNull();
 
     // Clear search restores every row and hides the notice.
-    $id("gw-btn-clear-search").click();
+    await clickAndFlush("gw-btn-clear-search");
     expect(search.value).toBe("");
     expect(visible()).toHaveLength(3);
-    expect(noMatch.hidden).toBe(true);
+    expect($id("gw-entrants-no-match")).toBeNull();
 
     // A partial match shows only the matching row and no notice.
-    search.value = "alp";
-    search.dispatchEvent(new window.Event("input", { bubbles: true }));
+    setInput("gw-search-entrants", "alp");
     expect(visible().map((r) => r.dataset.username)).toEqual(["alpha"]);
-    expect(noMatch.hidden).toBe(true);
+    expect($id("gw-entrants-no-match")).toBeNull();
   });
 
   it("a manually-added winner shows the no-response hint instead of the claim box", async () => {
@@ -1025,9 +1053,9 @@ describe("Giveaway draw flow", () => {
     await boot();
     await drawWinner();
     expect(server.session.winner_response_required).toBe(false);
-    expect($id("gw-claim-box").hidden).toBe(true);
+    expect($id("gw-claim-box")).toBeNull();
     const hint = $id("gw-winner-manual-hint");
-    expect(hint.hidden).toBe(false);
+    expect(hint).toBeTruthy();
     expect(hint.textContent).toContain("no chat response needed");
     for (const b of confirmButtons()) expect(b.disabled).toBe(false);
   });

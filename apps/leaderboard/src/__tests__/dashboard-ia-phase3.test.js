@@ -81,7 +81,8 @@ describe("Phase 3 dashboard information architecture", () => {
     expect(GIVEAWAY_TABS.map(([, label]) => label)).toEqual(["Chat Giveaway", "Raffle", "Prediction"]);
     expect(REWARDS_TABS.map(({ label }) => label)).toEqual(["Overview", "Ways to earn", "Shop", "Claims"]);
     expect(PAGES.rewardsShop.Component({ user: {} }).toString()).not.toContain("gw-subnav");
-    expect(renderGiveawaysContentHtml("chat")).toContain('class="v3-tabs gw-subnav" aria-label="Giveaways"');
+    expect(renderGiveawaysContentHtml("chat")).toContain('id="giveaway-root"');
+    expect(renderGiveawaysContentHtml("chat")).toContain('data-tab="chat"');
   });
 
   it("renames palette destinations without dropping legacy search terms", () => {

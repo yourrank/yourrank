@@ -53,9 +53,6 @@ const EXCEPTIONS = {
     { match: 'location.href = "/login"; return;', reason: "no session on a standalone settings document: redirect to login" },
     { match: "history.replaceState({}, \"\", `${location.pathname}${inviteParams.size ? `?${inviteParams}` : \"\"}${location.hash}`);", reason: "one-shot ?invite=1 param scrub after opening the invite modal: same document, no navigation" },
   ],
-  "giveaways.js": [
-    { match: "location.href = loginRedirectPath(location);", reason: "cross-tab logout on a standalone document: session gone" },
-  ],
   "react/pages/tournaments/page.tsx": [
     { match: 'window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);', reason: "one-shot ?new=1 query scrub after opening the create modal: same document, no navigation" },
   ],
