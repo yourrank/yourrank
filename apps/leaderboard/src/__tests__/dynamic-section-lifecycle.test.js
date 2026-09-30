@@ -7,15 +7,24 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 import { Window } from "happy-dom";
 import { renderGiveawaysHtml } from "../pages/giveaway-pages.js";
-import { ActivitiesPage } from "../pages/activities.jsx";
+import { activitiesContentHtml } from "../pages/activities.jsx";
 import { clearSession } from "../assets/dashboard/session.js";
 
 const window = new Window({ url: "http://localhost/dashboard/giveaways/tournaments" });
 const { document } = window;
-const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle", "matchMedia", "localStorage", "fetch"];
+const REACT_DOM_GLOBALS = [
+  "DocumentFragment", "FocusEvent", "HTMLButtonElement", "HTMLFormElement",
+  "HTMLInputElement", "HTMLSelectElement", "HTMLTextAreaElement",
+  "MutationObserver", "NodeFilter", "PointerEvent", "ShadowRoot", "SVGElement",
+  "requestAnimationFrame", "cancelAnimationFrame",
+];
+const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle", "matchMedia", ...REACT_DOM_GLOBALS, "localStorage", "fetch"];
 const originalGlobals = Object.fromEntries(INSTALLED_GLOBALS.map((k) => [k, globalThis[k]]));
 for (const key of INSTALLED_GLOBALS.slice(0, 15)) {
   globalThis[key] = key === "getComputedStyle" ? window.getComputedStyle.bind(window) : window[key];
+}
+for (const key of REACT_DOM_GLOBALS) {
+  globalThis[key] = key.endsWith("AnimationFrame") ? window[key].bind(window) : window[key];
 }
 window.Element.prototype.scrollIntoView = function () {};
 window.Element.prototype.getClientRects = function () { return [{}]; };
@@ -44,7 +53,7 @@ const FRAGMENTS = {
   "/dashboard/giveaways/tournaments": () => renderGiveawaysHtml("tournaments"),
   "/dashboard/giveaways/chat": () => renderGiveawaysHtml("chat"),
   "/dashboard/giveaways": () => renderGiveawaysHtml("hub"),
-  "/dashboard/activities": () => ActivitiesPage({ fragment: true }).toString(),
+  "/dashboard/activities": () => activitiesContentHtml,
 };
 
 let fragmentStatus = 200;
@@ -83,8 +92,20 @@ const $id = (id) => document.getElementById(id);
 
 const routes = await import("../assets/dashboard/routes.js");
 const ds = await import("../assets/dashboard/dynamic-section.js");
+const { api } = await import("../react/lib/api.js");
+const { setActivitiesPageDependenciesForTests } = await import("../assets/react/activities.js");
+const loadBoardShell = async () => ({ activeSiteId: site.id, board: site });
+setActivitiesPageDependenciesForTests({
+  api,
+  loadBoardShell,
+  preserveSiteContextLinks() {},
+  showToast() {},
+  wirePlanLock() {},
+  loginRedirectPath: () => "/login?next=%2Fdashboard%2Factivities",
+});
 
 afterAll(() => {
+  setActivitiesPageDependenciesForTests(null);
   for (const key of INSTALLED_GLOBALS) globalThis[key] = originalGlobals[key];
 });
 
@@ -112,6 +133,7 @@ describe("dynamic-section lifecycle", () => {
 
     // Away to Activities: tournaments leave runs, activities enter succeeds.
     expect(await ds.loadDynamicSection("activities", "overview")).toBe(true);
+    await flushReactUpdates();
     expect($id("tournament-app")).toBeNull();
     expect($id("act-live-loading").hidden).toBe(true);
     expect($id("act-live-error").hidden).toBe(true);
