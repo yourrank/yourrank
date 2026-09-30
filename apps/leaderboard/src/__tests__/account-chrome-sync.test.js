@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { UnifiedSettingsPage, SETTINGS_TABS } from "../pages/account.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
 
-const accountJs = readFileSync(new URL("../assets/account.js", import.meta.url), "utf8");
+const settingsPage = readFileSync(new URL("../react/pages/settings/page.tsx", import.meta.url), "utf8");
 const shellJs = readFileSync(new URL("../assets/dashboard/shell.js", import.meta.url), "utf8");
 
 function installShellGlobals() {
@@ -63,7 +63,7 @@ describe("account settings chrome synchronization", () => {
       const chrome = chromeStateFor("settings", tab, { exact: true });
       const html = UnifiedSettingsPage({ activePath: `/dashboard/settings/${tab}`, tab, user: { email: "test@example.com" } }).toString();
       expect(chrome?.tabLabel, tab).toBe(label);
-      expect(html, tab).toContain(`<h1 data-chrome-h1="true">${label}</h1>`);
+      expect(html, tab).toContain(`data-settings-active="${tab}"`);
     }
   });
 
@@ -86,14 +86,14 @@ describe("account settings chrome synchronization", () => {
   });
 
   it("keeps chrome ownership in shell.js and delegates from Account", () => {
-    expect(accountJs).toContain("syncRouteChrome");
-    expect(accountJs).toContain('syncRouteChrome("settings", tab)');
-    expect(accountJs).toContain('const tab = parseDynamicPath(location.pathname)?.tab || "account";');
-    expect(accountJs).toContain("select(tab);");
-    expect(accountJs).not.toContain("document.title");
-    expect(accountJs).not.toContain("chromeStateFor");
-    expect(accountJs).not.toContain("tabLabel");
-    expect(accountJs).not.toContain("crumbs");
+    expect(settingsPage).toContain("syncRouteChrome");
+    expect(settingsPage).toContain("syncRouteChrome(\"settings\", tab)");
+    expect(settingsPage).toContain("parseDynamicPath(location.pathname)");
+    expect(settingsPage).toContain("select(tab);");
+    expect(settingsPage).not.toContain("document.title");
+    expect(settingsPage).not.toContain("chromeStateFor");
+    expect(settingsPage).not.toContain("tabLabel");
+    expect(settingsPage).not.toContain("crumbs");
     expect(shellJs).toContain("heading.textContent = chrome.tabLabel");
   });
 });

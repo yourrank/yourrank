@@ -16,7 +16,8 @@ const shellJs = readFileSync(new URL("../assets/dashboard/shell.js", import.meta
 const sessionJs = readFileSync(new URL("../assets/dashboard/session.js", import.meta.url), "utf8");
 const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", import.meta.url), "utf8");
 const creditsJs = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
-const accountJs = readFileSync(new URL("../assets/account.js", import.meta.url), "utf8");
+const accountEntry = readFileSync(new URL("../assets/account.js", import.meta.url), "utf8");
+const settingsPage = readFileSync(new URL("../react/pages/settings/page.tsx", import.meta.url), "utf8");
 const giveawaysJs = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
 const dashboardJs = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 const shellNavJs = readFileSync(new URL("../assets/shell-nav.js", import.meta.url), "utf8");
@@ -115,12 +116,13 @@ describe("lifecycle cleanup", () => {
   it("account leave() removes the popstate listener it installed", () => {
     // Account's wireUnifiedSettingsTabs adds a window popstate listener.
     // Without teardown, repeated enter/leave cycles stack duplicate handlers.
-    expect(accountJs).toContain("_accountPopstate");
-    expect(accountJs).toMatch(/leave[\s\S]*removeEventListener.*popstate.*_accountPopstate/);
+    expect(settingsPage).toContain('removeEventListener("popstate", onPopState)');
+    expect(settingsPage).toContain("registerRouteRenderer");
   });
 
   it("account enter() re-initializes against the fresh fragment DOM", () => {
-    expect(accountJs).toMatch(/export function enter[\s\S]*init\(\)/);
+    expect(accountEntry).toMatch(/export async function enter[\s\S]*generation/);
+    expect(accountEntry).toContain('import("./react/settings.js")');
   });
 });
 
@@ -226,24 +228,27 @@ describe("direct load / fragment parity", () => {
 
 describe("account team scope", () => {
   it("loadTeam requests the selected site from state, URL, or rendered data and falls back to an unscoped request", () => {
-    const loadTeamSource = accountJs.slice(accountJs.indexOf("async function loadTeam"));
-    expect(loadTeamSource).toContain("state.ACTIVE_SITE_ID");
-    expect(loadTeamSource).toContain('new URLSearchParams(location.search).get("siteId")');
-    expect(loadTeamSource).toContain("teamSiteId");
+    const teamSource = settingsPage.slice(settingsPage.indexOf("function TeamPanel"), settingsPage.indexOf("function ConnectionsPanel"));
+    const loadTeamSource = teamSource.slice(teamSource.indexOf("const loadTeam"));
+    expect(teamSource).toContain("state.ACTIVE_SITE_ID");
+    expect(teamSource).toContain('new URLSearchParams(location.search).get("siteId")');
+    expect(loadTeamSource).toContain("selectedSiteId");
     expect(loadTeamSource).toContain("/api/site/team?siteId=");
     expect(loadTeamSource).toContain('"/api/site/team"');
   });
 
   it("uses the rendered team siteId for every mutation and reload", () => {
-    expect(accountJs).toContain('teamSiteId = data.siteId;');
-    expect(accountJs).toMatch(/const siteId = teamSiteId;[\s\S]*?showConfirmModal\("Remove team member"[\s\S]*?"\/api\/site\/team\/remove", \{ targetUserId, siteId \}/);
-    expect(accountJs).toMatch(/const siteId = teamSiteId;[\s\S]*?showConfirmModal\("Revoke invitation"[\s\S]*?"\/api\/site\/team\/invite\/revoke", \{ inviteId, siteId \}/);
-    expect(accountJs).toContain('"/api/site/team/invite", { email, role: "moderator", siteId: teamSiteId }');
+    expect(settingsPage).toContain("const siteId = data?.siteId ||");
+    expect(settingsPage).toMatch(/const requestSiteId = siteId;[\s\S]*?\/api\/site\/team\/remove/);
+    expect(settingsPage).toMatch(/const requestSiteId = siteId;[\s\S]*?\/api\/site\/team\/invite\/revoke/);
+    expect(settingsPage).toContain('"/api/site/team/invite", { email: invite.email, role: "moderator", siteId: requestSiteId, sendEmail: true }');
+    expect(settingsPage).toContain('"/api/site/team/invite", { email, role: "moderator", siteId: requestSiteId }');
   });
 
   it("reloads the team list after remove, invite, and revoke mutations", () => {
-    expect(accountJs).toMatch(/setStatus\("Member removed"[\s\S]{0,60}loadTeam\(\)/);
-    expect(accountJs).toMatch(/setStatus\("Invitation revoked"[\s\S]{0,60}loadTeam\(\)/);
-    expect(accountJs).toMatch(/"Invitation ready!"[\s\S]{0,200}loadTeam\(\)/);
+    expect(settingsPage).toMatch(/reportStatus\("Member removed"\);[\s\S]{0,30}loadTeam\(\)/);
+    expect(settingsPage).toMatch(/reportStatus\("Invitation revoked"\);[\s\S]{0,30}loadTeam\(\)/);
+    expect(settingsPage).toMatch(/setInviteStatus\("Invitation ready!"\)/);
+    expect(settingsPage).toMatch(/setInviteStatus\("Invitation ready!"\)[\s\S]{0,100}loadTeam\(\)/);
   });
 });
