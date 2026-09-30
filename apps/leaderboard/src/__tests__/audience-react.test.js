@@ -10,9 +10,11 @@ import {
   setReactInputValue,
   window,
 } from "./rewards-react-utils.js";
-import { AudiencePage } from "../react/pages/audience/page.tsx";
+import { AudiencePage, setAudiencePageDependenciesForTests } from "../react/pages/audience/page.tsx";
 
 let root;
+let audienceEntry;
+let audienceEntryMounted = false;
 
 function member(id, displayName = id) {
   return {
@@ -65,16 +67,75 @@ async function unmountAudiencePage() {
   root = null;
 }
 
+async function unmountAudienceEntry() {
+  if (!audienceEntryMounted || !audienceEntry) return;
+  await actAndFlush(() => audienceEntry.leave());
+  audienceEntryMounted = false;
+}
+
+async function cleanupAudience() {
+  await unmountAudienceEntry();
+  await unmountAudiencePage();
+  setAudiencePageDependenciesForTests(null);
+}
+
 function deferred() {
   let resolve;
   const promise = new Promise((resolvePromise) => { resolve = resolvePromise; });
   return { promise, resolve };
 }
 
-afterEach(unmountAudiencePage);
+afterEach(cleanupAudience);
 afterAll(restoreRewardsDomGlobals);
 
 describe("React Audience page", () => {
+  it("reads the current tab on each SPA island entry", async () => {
+    const calls = [];
+    setAudiencePageDependenciesForTests({
+      api: async (path) => {
+        calls.push(path);
+        if (path.startsWith("/api/people/members?")) {
+          return { members: [member("member-1", "Alice")], page: { hasMore: false }, total: 1 };
+        }
+        if (path.startsWith("/api/people/reviews?")) {
+          return {
+            reviews: [{
+              id: "review-spa",
+              status: "pending",
+              statusLabel: "Needs review",
+              subject: { displayName: "Review member" },
+              reason: { label: "Duplicate entry", explanation: "A matching eligibility signal was found." },
+              source: { workflow: "Tournament signup", title: "SPA review signup" },
+              createdAt: "2026-07-02T12:00:00.000Z",
+            }],
+            counts: { pending: 1, resolved: 0 },
+          };
+        }
+        return {};
+      },
+      loadBoardShell: async () => ({ activeSiteId: "site-1", board: { name: "Creator site" } }),
+      preserveSiteContextLinks: async () => {},
+    });
+
+    await window.happyDOM.setURL("http://localhost/dashboard/audience/members?siteId=site-1");
+    document.body.innerHTML = '<main><div id="audience-app" data-audience-tab="viewers"></div></main>';
+    audienceEntry = await import("../react/pages/audience/entry.tsx");
+    await actAndFlush(() => audienceEntry.enter());
+    audienceEntryMounted = true;
+
+    expect(calls.some((path) => path.startsWith("/api/people/members?"))).toBe(true);
+
+    await unmountAudienceEntry();
+    await window.happyDOM.setURL("http://localhost/dashboard/audience/reviews?siteId=site-1");
+    document.body.innerHTML = '<main><div id="audience-app" data-audience-tab="reviews"></div></main>';
+    await actAndFlush(() => audienceEntry.enter());
+    audienceEntryMounted = true;
+
+    expect(calls.some((path) => path.startsWith("/api/people/reviews?"))).toBe(true);
+    expect(document.querySelector(".audience-react h1")?.textContent).toBe("Reviews");
+    expect(document.getElementById("people-reviews-list")?.textContent).toContain("SPA review signup");
+  });
+
   it("opens the site-scoped member drawer from ?member=", async () => {
     const calls = [];
     await mountAudiencePage({

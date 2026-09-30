@@ -31,7 +31,7 @@ describe("React Kick channel card contract", () => {
     expect(audienceMarkupSource).toContain('rootId="cr-dash"');
     expect(audienceMarkupSource).toContain('id="audience-app" data-audience-tab={tab}');
     expect(dashboardRoutesSource).toContain('audience: dynamicSection("audience", { boot: "people", boardContext: "selector", rootId: "cr-dash" })');
-    expect(audienceEntrySource).toContain('defineIsland("audience-app"');
+    expect(audienceEntrySource).toContain('defineIsland<{ tab: AudienceTab }>("audience-app", AudiencePage, () =>');
     expect(audiencePageSource).toContain('id="cr-bulk-award"');
     expect(audienceEntrySource).toContain('getAttribute("data-audience-tab")');
     expect(audienceShimSource).toContain('import("./react/audience.js")');

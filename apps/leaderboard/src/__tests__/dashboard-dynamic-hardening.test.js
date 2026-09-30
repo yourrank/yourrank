@@ -117,7 +117,7 @@ describe("lifecycle cleanup", () => {
     expect(audienceShimJs).toMatch(/active && ticket === generation[\s\S]*island\.enter\(\)/);
     expect(audienceShimJs).toContain("if (!window.__yrSpaShell)");
     expect(audienceShimJs).toContain("document.addEventListener(\"DOMContentLoaded\", boot");
-    expect(audienceEntryTsx).toContain('defineIsland("audience-app"');
+    expect(audienceEntryTsx).toContain('defineIsland<{ tab: AudienceTab }>("audience-app", AudiencePage, () =>');
   });
 
   it("Rewards leave() unmounts its React island and the dispatcher delegates teardown", () => {

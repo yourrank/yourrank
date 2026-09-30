@@ -87,6 +87,12 @@ const defaultDependencies: PageDependencies = {
   },
 };
 
+let testDependencies: Partial<PageDependencies> = {};
+
+export function setAudiencePageDependenciesForTests(dependencies: Partial<PageDependencies> | null) {
+  testDependencies = dependencies ?? {};
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : null;
 }
@@ -245,7 +251,7 @@ export function AudiencePage({
   tab: AudienceTab;
   dependencies?: Partial<PageDependencies>;
 }) {
-  const deps = useMemo(() => ({ ...defaultDependencies, ...dependencies }), [dependencies]);
+  const deps = useMemo(() => ({ ...defaultDependencies, ...testDependencies, ...dependencies }), [dependencies]);
   const [siteId, setSiteId] = useState("");
   const [siteName, setSiteName] = useState("");
   const [shellError, setShellError] = useState(false);
