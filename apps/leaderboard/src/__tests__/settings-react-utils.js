@@ -28,6 +28,9 @@ export function installSettingsDomGlobals() {
 
 installSettingsDomGlobals();
 
+const shell = await import("../assets/dashboard/shell.js");
+export const { requestDashboardRoute } = shell;
+
 const React = await import("react");
 export const { act, createElement } = React;
 export const { createRoot } = await import("react-dom/client");

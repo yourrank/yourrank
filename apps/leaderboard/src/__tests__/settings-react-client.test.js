@@ -3,6 +3,7 @@ import {
   actAndFlush,
   document,
   mountSettingsPage,
+  requestDashboardRoute,
   unmountSettingsPage,
   window,
 } from "./settings-react-utils.js";
@@ -79,6 +80,22 @@ describe("Settings React account and connection actions", () => {
     await actAndFlush(() => resolveUser(user));
     expect(calls).toContain("/api/site/team?siteId=alpha");
     expect(calls).toContain("/api/account/postbacks");
+  });
+
+  it("opens the invite dialog when the active Team route receives an invite query", async () => {
+    const { request } = requestFor();
+    await mountSettingsPage({
+      user,
+      tab: "team",
+      url: "/dashboard/settings/team?siteId=alpha",
+      deps: { request },
+    });
+    expect(document.getElementById("inviteEmail")).toBeNull();
+
+    await actAndFlush(() => requestDashboardRoute("settings", "team", { query: "?invite=1&siteId=alpha" }));
+
+    expect(document.getElementById("inviteEmail")).not.toBeNull();
+    expect(window.location.search).toBe("?siteId=alpha");
   });
 
   it("resends account verification with the original empty JSON body", async () => {
@@ -219,5 +236,52 @@ describe("Settings React account and connection actions", () => {
 
     expect(document.getElementById("deleteAccountModalStatus").textContent).toBe("Couldn't delete account. Try again.");
     expect(document.getElementById("deleteAccountConfirmBtn").disabled).toBe(false);
+  });
+
+  it("clears account export polling when the Settings island unmounts", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const originalGlobalFetch = globalThis.fetch;
+    const originalFetch = window.fetch;
+    const pollTimers = [];
+    const clearedPollTimers = [];
+    globalThis.setTimeout = (callback, delay, ...args) => {
+      const timer = originalSetTimeout(callback, delay, ...args);
+      if (delay === 2000) pollTimers.push(timer);
+      return timer;
+    };
+    globalThis.clearTimeout = (timer) => {
+      if (pollTimers.includes(timer)) clearedPollTimers.push(timer);
+      return originalClearTimeout(timer);
+    };
+
+    try {
+      await mountSettingsPage({ user, tab: "data", deps: { request: requestFor().request } });
+      window.fetch = async (input, init) => {
+        const url = typeof input === "string" ? input : input.url;
+        const path = new URL(url, window.location.origin).pathname;
+        const payload = path === "/api/account/export" && init?.method === "POST"
+          ? { ok: true, exportId: "export-1", status: "processing" }
+          : path === "/api/account/export/export-1/status"
+            ? { ok: true, exportId: "export-1", status: "processing" }
+            : { ok: true, sessions: [] };
+        return new Response(JSON.stringify(payload), { headers: { "content-type": "application/json" } });
+      };
+
+      await actAndFlush(() => document.getElementById("accExportData").click());
+      expect(pollTimers).toHaveLength(1);
+      const timer = pollTimers[0];
+
+      await unmountSettingsPage();
+
+      expect(clearedPollTimers).toContain(timer);
+    } finally {
+      await unmountSettingsPage();
+      window.fetch = originalFetch;
+      globalThis.fetch = originalGlobalFetch;
+      for (const timer of pollTimers) originalClearTimeout(timer);
+      globalThis.setTimeout = originalSetTimeout;
+      globalThis.clearTimeout = originalClearTimeout;
+    }
   });
 });

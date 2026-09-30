@@ -89,7 +89,8 @@ describe("account settings chrome synchronization", () => {
     expect(settingsPage).toContain("syncRouteChrome");
     expect(settingsPage).toContain("syncRouteChrome(\"settings\", tab)");
     expect(settingsPage).toContain("parseDynamicPath(location.pathname)");
-    expect(settingsPage).toContain("select(tab);");
+    expect(settingsPage).toContain("refreshRoute(tab);");
+    expect(settingsPage).toContain("select(key);");
     expect(settingsPage).not.toContain("document.title");
     expect(settingsPage).not.toContain("chromeStateFor");
     expect(settingsPage).not.toContain("tabLabel");

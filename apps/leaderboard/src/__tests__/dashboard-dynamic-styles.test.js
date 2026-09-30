@@ -246,10 +246,12 @@ describe("Engagement style requirements are declared by one owner", () => {
     expect(payload.title).toBe(giveawaysConfig.title);
   });
 
-  it("reports an empty list for a section with no extra feature stylesheet", async () => {
+  it("includes shared React styles without feature-specific styles", async () => {
     const fragment = resolveFragment("/dashboard/settings/account");
     const payload = await renderFragmentPayload(PAGES[fragment.pageKey], { user, tab: fragment.tab });
-    expect(payload.styles).not.toContain(ENGAGEMENT_CSS);
+    expect(payload.styles).toContain(ENGAGEMENT_CSS);
+    expect(payload.styles).not.toContain("/assets/react/audience.css");
+    expect(payload.styles).not.toContain("/assets/react/rewards.css");
     expect(payload.styles.length).toBeGreaterThan(0);
   });
 });

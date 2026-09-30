@@ -235,8 +235,9 @@ function AccountPanel({ user, deps }: { user: User; deps: SettingsDependencies }
     (state as MutableSettingsState).ME = user;
     const resend = document.getElementById("accResendVerification") as (HTMLButtonElement & { _wired?: boolean }) | null;
     if (resend) resend._wired = true;
-    wireAccount();
+    const cleanup = wireAccount();
     setVerification(user.emailVerified ? "Verified" : "Not verified");
+    return cleanup;
   }, [user]);
 
   async function resendVerification() {
@@ -859,22 +860,27 @@ function DataPanel({ deps }: { deps: SettingsDependencies }) {
 function SettingsPage({ deps }: { deps?: Partial<SettingsDependencies> }) {
   const resolved = useMemo(() => ({ ...defaults, ...deps }), [deps]);
   const [active, setActive] = useState(initialTab);
+  const [routeRevision, setRouteRevision] = useState(0);
   const [user, setUser] = useState<User | null>(null);
   const [authError, setAuthError] = useState("");
   const select = useCallback((key: string) => setActive(SETTINGS_TABS.some(([tab]) => tab === key) ? key : "account"), []);
+  const refreshRoute = useCallback((key: string) => {
+    select(key);
+    setRouteRevision((revision) => revision + 1);
+  }, [select]);
 
   useEffect(() => {
-    const unregister = registerRouteRenderer("settings", ({ tab }: { tab?: string }) => select(tab || "account"));
+    const unregister = registerRouteRenderer("settings", ({ tab }: { tab?: string }) => refreshRoute(tab || "account"));
     const onPopState = () => {
       const parsed = parseDynamicPath(location.pathname);
       const tab = parsed?.tab || initialTab();
-      select(tab);
+      refreshRoute(tab);
       syncRouteChrome("settings", tab);
     };
     const inShell = (window as Window & { __yrSpaShell?: boolean }).__yrSpaShell;
     if (!inShell) addEventListener("popstate", onPopState);
     return () => { unregister(); if (!inShell) removeEventListener("popstate", onPopState); };
-  }, [select]);
+  }, [refreshRoute]);
 
   useEffect(() => {
     let mounted = true;
@@ -919,7 +925,7 @@ function SettingsPage({ deps }: { deps?: Partial<SettingsDependencies> }) {
     <div className="yr-react account-body account-settings" data-settings-root="true">
       <div className="v3-head"><h1 data-chrome-h1="true">{activeInfo[1]}</h1><p className="v3-head-sub" data-settings-page-description>{activeInfo[2]}</p></div>
       <nav className="v3-tabs" aria-label="Settings sections" role="tablist">{SETTINGS_TABS.map(([key, label, description], index) => <a className={`v3-tab${active === key ? " is-on" : ""}`} href={`/dashboard/settings/${key === "plan" ? "billing" : key}`} id={`settings-tab-${key}`} role="tab" aria-controls={`settings-panel-${key}`} aria-selected={active === key} aria-current={active === key ? "page" : undefined} data-settings-tab={key} data-settings-description={description} tabIndex={active === key ? 0 : -1} key={key} onClick={(event) => navigateTab(key, event)} onKeyDown={(event) => navigateTabByKeyboard(index, event)}>{label}</a>)}</nav>
-      <div className="account-settings-layout"><div className="account-settings-main"><section id="settings-panel-account" role="tabpanel" aria-labelledby="settings-tab-account" data-settings-panel="account" hidden={active !== "account"}>{user ? <AccountPanel user={user} deps={resolved} /> : <p className="hint">Loading account…</p>}</section><section id="settings-panel-team" role="tabpanel" aria-labelledby="settings-tab-team" data-settings-panel="team" hidden={active !== "team"}>{user ? <TeamPanel user={user} deps={resolved} /> : <p className="hint">Loading team…</p>}</section><section id="settings-panel-plan" role="tabpanel" aria-labelledby="settings-tab-plan" data-settings-panel="plan" hidden={active !== "plan"}>{user ? <PlanPanel /> : <p className="hint">Loading billing…</p>}</section><section id="settings-panel-connections" role="tabpanel" aria-labelledby="settings-tab-connections" data-settings-panel="connections" hidden={active !== "connections"}>{user ? <ConnectionsPanel deps={resolved} /> : <p className="hint">Loading connections…</p>}</section><section id="settings-panel-data" role="tabpanel" aria-labelledby="settings-tab-data" data-settings-panel="data" hidden={active !== "data"}>{user ? <><DataPanel deps={resolved} /><div className="account-related-setting"><div><strong>Looking for one site's data?</strong><p>Resetting, archiving, or deleting a site affects only the selected site.</p></div><a className="btn btn--ghost" href="/dashboard/site?tab=danger">Manage site data</a></div></> : <p className="hint">Loading account…</p>}</section></div><div className="account-settings-help"><span>Account settings apply to you. To change your website, use Site settings.</span><a href="/dashboard/site">Open Site settings</a><span aria-hidden="true">·</span><a href="/help/support?area=account">Open Help &amp; feedback</a></div></div>
+      <div className="account-settings-layout"><div className="account-settings-main"><section id="settings-panel-account" role="tabpanel" aria-labelledby="settings-tab-account" data-settings-panel="account" hidden={active !== "account"}>{user ? <AccountPanel user={user} deps={resolved} /> : <p className="hint">Loading account…</p>}</section><section id="settings-panel-team" role="tabpanel" aria-labelledby="settings-tab-team" data-settings-panel="team" hidden={active !== "team"}>{user ? <TeamPanel key={routeRevision} user={user} deps={resolved} /> : <p className="hint">Loading team…</p>}</section><section id="settings-panel-plan" role="tabpanel" aria-labelledby="settings-tab-plan" data-settings-panel="plan" hidden={active !== "plan"}>{user ? <PlanPanel /> : <p className="hint">Loading billing…</p>}</section><section id="settings-panel-connections" role="tabpanel" aria-labelledby="settings-tab-connections" data-settings-panel="connections" hidden={active !== "connections"}>{user ? <ConnectionsPanel key={routeRevision} deps={resolved} /> : <p className="hint">Loading connections…</p>}</section><section id="settings-panel-data" role="tabpanel" aria-labelledby="settings-tab-data" data-settings-panel="data" hidden={active !== "data"}>{user ? <><DataPanel deps={resolved} /><div className="account-related-setting"><div><strong>Looking for one site's data?</strong><p>Resetting, archiving, or deleting a site affects only the selected site.</p></div><a className="btn btn--ghost" href="/dashboard/site?tab=danger">Manage site data</a></div></> : <p className="hint">Loading account…</p>}</section></div><div className="account-settings-help"><span>Account settings apply to you. To change your website, use Site settings.</span><a href="/dashboard/site">Open Site settings</a><span aria-hidden="true">·</span><a href="/help/support?area=account">Open Help &amp; feedback</a></div></div>
       {authError && <p className="error" role="alert">{authError}</p>}
     </div>
   );
