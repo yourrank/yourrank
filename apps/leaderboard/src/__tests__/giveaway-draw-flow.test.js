@@ -40,7 +40,6 @@ const originalWindowRuntime = {
 };
 
 // ---- Virtual clock: timers, rAF, and performance.now all run on `now`. ----
-const realSetTimeout = globalThis.setTimeout;
 let now = 0;
 let timerSeq = 0;
 const timers = [];
@@ -72,7 +71,6 @@ Date.now = () => now;
 
 async function flushMicrotasks() {
   for (let i = 0; i < 6; i++) await Promise.resolve();
-  await new Promise((r) => realSetTimeout(r, 0));
 }
 
 const clock = {
@@ -278,6 +276,12 @@ async function clickAndFlush(id) {
     await flushMicrotasks();
   });
 }
+async function dispatchAndFlush(target, event) {
+  await actGiveaways(async () => {
+    target.dispatchEvent(event);
+    await flushMicrotasks();
+  });
+}
 const setInput = (id, value, eventName = "input") => setGiveawaysInputValue($id(id), value, eventName);
 const setCheckbox = (id, checked) => {
   if (($id(id).getAttribute("aria-checked") === "true") !== checked) click(id);
@@ -377,8 +381,7 @@ describe("Giveaway draw flow", () => {
     clickGiveaways(document.querySelector('input[name="gw-winner-repeat"][value="again"]'));
     expect($id("gw-rules-summary").textContent).toBe("Anyone in chat · Can win again · Exclude past winners · No chat response");
 
-    click("gw-btn-listen");
-    await flushMicrotasks();
+    await clickAndFlush("gw-btn-listen");
     const startRequest = requestsTo("/api/giveaways/chat/start")[0];
     expect(startRequest.body.mode).toBe("manual");
     expect(startRequest.body.keyword).toBeUndefined();
@@ -402,8 +405,7 @@ describe("Giveaway draw flow", () => {
 
     const input = $id("gw-add-entrant-name");
     setGiveawaysInputValue(input, "Alex Rivera");
-    dispatchGiveaways($id("gw-add-entrant-form"), new window.Event("submit", { bubbles: true, cancelable: true }));
-    await flushMicrotasks();
+    await dispatchAndFlush($id("gw-add-entrant-form"), new window.Event("submit", { bubbles: true, cancelable: true }));
     const addRequest = requestsTo("/api/giveaways/chat/entries/add")[0];
     expect(addRequest.body).toMatchObject({ sessionId: "gs-1", username: "Alex Rivera", siteId: "site-1" });
     expect(input.value).toBe("");
@@ -452,10 +454,7 @@ describe("Giveaway draw flow", () => {
     setInput("pred-opt-2", "No");
     setInput("pred-min-bet", "1");
     setInput("pred-max-bet", "10");
-    await actGiveaways(async () => {
-      dispatchGiveaways($id("pred-form"), new window.Event("submit", { bubbles: true, cancelable: true }));
-      await flushMicrotasks();
-    });
+    await dispatchAndFlush($id("pred-form"), new window.Event("submit", { bubbles: true, cancelable: true }));
 
     const status = $id("pred-status");
     expect(status.getAttribute("role")).toBe("alert");
@@ -909,12 +908,10 @@ describe("Giveaway draw flow", () => {
   it("response timeout appears only when the winner must respond", async () => {
     await boot();
     expect($id("gw-claim-duration-wrap").hidden).toBe(true);
-    click("gw-opt-claim-req");
-    await flushMicrotasks();
+    await clickAndFlush("gw-opt-claim-req");
     expect($id("gw-claim-duration-wrap").hidden).toBe(false);
     expect($id("gw-opt-claim-duration").disabled).toBe(false);
-    click("gw-opt-claim-req");
-    await flushMicrotasks();
+    await clickAndFlush("gw-opt-claim-req");
     expect($id("gw-claim-duration-wrap").hidden).toBe(true);
   });
 
@@ -988,7 +985,7 @@ describe("Giveaway draw flow", () => {
       expect.stringContaining("Drew charlie"),
     ]);
 
-    click("gw-btn-reroll");
+    await clickAndFlush("gw-btn-reroll");
     await tickUntilReveal();
     const items = [...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent);
     expect(items).toHaveLength(2);
@@ -1038,7 +1035,7 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-entrants-empty")).toBeNull();
 
     // Clear search restores every row and hides the notice.
-    click("gw-btn-clear-search");
+    await clickAndFlush("gw-btn-clear-search");
     expect(search.value).toBe("");
     expect(visible()).toHaveLength(3);
     expect($id("gw-entrants-no-match")).toBeNull();

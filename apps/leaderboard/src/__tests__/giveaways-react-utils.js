@@ -58,9 +58,7 @@ let root = null;
 let mountKey = 0;
 
 export async function flushGiveawaysReactUpdates() {
-  for (let index = 0; index < 12; index += 1) {
-    await new Promise((resolve) => realSetTimeout(resolve, 0));
-  }
+  await new Promise((resolve) => realSetTimeout(resolve, 0));
 }
 
 export async function actGiveaways(callback = () => {}) {
