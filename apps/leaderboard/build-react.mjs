@@ -18,8 +18,8 @@ const entries = fs.readdirSync(pagesDir, { withFileTypes: true })
   }))
   .filter((item) => fs.existsSync(item.path));
 const dashboardRuntime = {
-    name: "dashboard-runtime",
-    setup(build) {
+  name: "dashboard-runtime",
+  setup(build) {
     build.onResolve({ filter: /^\.\.\/\.\.\/\.\.\/assets\/dashboard\/[^/]+\.js$/ }, ({ path: importPath }) => ({
       path: `../dashboard/${path.basename(importPath)}`,
       external: true,
