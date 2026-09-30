@@ -81,9 +81,9 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
   });
 
   it("keeps Activities as the owner of Code Drop creation and lifecycle", () => {
-    const activities = read("../assets/activities.js");
-    expect(activities).toContain('sitePath("/api/events/drops", activeSiteId)');
-    expect(activities).toContain('sitePath("/api/activities/close", activeSiteId)');
+    const activities = read("../react/pages/activities/page.tsx");
+    expect(activities).toContain('"/api/events/drops"');
+    expect(activities).toContain('"/api/activities/close"');
 
     const registered = (path, method) => ROUTES.some((r) => r.path === path && r.method === method);
     expect(registered("/api/activities", "GET")).toBe(true);
@@ -102,7 +102,7 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
       "../assets/dashboard/shell.js",
       "../assets/dashboard.js",
       "../pages/dashboard-shell.jsx",
-      "../assets/activity-pages.js",
+      "../react/pages/activities/page.tsx",
     ]) {
       expect(read(rel), rel).not.toContain(LEGACY_DROPS);
       expect(read(rel), rel).not.toContain('"giveaways", "drops"');
