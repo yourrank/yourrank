@@ -27,7 +27,7 @@ describe("Audience members body", () => {
   });
 
   it("does not use internal platform IDs as the visible member name", () => {
-    const source = readFileSync(path.join(SRC_ROOT, "assets/credits.js"), "utf8");
+    const source = readFileSync(path.join(SRC_ROOT, "assets/audience-credits.js"), "utf8");
     const identity = source.match(/function memberIdentity\(v\) \{[\s\S]*?\n\}/)?.[0] || "";
     expect(identity).toContain('v.displayName || "Unnamed member"');
     expect(identity).not.toContain("kick_user_id");
@@ -38,7 +38,7 @@ describe("Audience members body", () => {
 
   it("opens site-scoped member detail in an accessible drawer", () => {
     const html = AudienceMembersPage({ fragment: true }).toString();
-    const source = readFileSync(path.join(SRC_ROOT, "assets/credits.js"), "utf8");
+    const source = readFileSync(path.join(SRC_ROOT, "assets/audience-credits.js"), "utf8");
     expect(html).toContain('id="cr-member-history-drawer"');
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');

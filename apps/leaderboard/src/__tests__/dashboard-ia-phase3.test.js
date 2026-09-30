@@ -17,8 +17,7 @@ import { defaultTab } from "../assets/dashboard/routes.js";
 const palette = readFileSync(new URL("../assets/dashboard/command-palette.js", import.meta.url), "utf8");
 const dashboardPageSource = readFileSync(new URL("../pages/dashboard.jsx", import.meta.url), "utf8");
 const siteClientSource = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
-const creditsPageSource = readFileSync(new URL("../pages/credits-pages.js", import.meta.url), "utf8");
-const creditsClientSource = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
+const rewardsPageSource = readFileSync(new URL("../react/pages/rewards/page.tsx", import.meta.url), "utf8");
 
 function dashboardHtml(activePath = "/dashboard") {
   return PAGES.dashboard.Component({ activePath }).toString();
@@ -126,10 +125,9 @@ describe("Phase 3 dashboard information architecture", () => {
     expect(palette).toContain('paletteEl.hidden = true');
     expect(palette).toContain('backdropEl.hidden = true');
     expect(palette).toContain('canRestorePaletteFocus(paletteTrigger)');
-    expect(creditsPageSource).toContain('role="region" aria-labelledby="cr-shop-drawer-title"');
-    expect(creditsPageSource).toContain('aria-label="Close reward editor"');
-    expect(creditsClientSource).toContain('drawer.setAttribute("role", modal ? "dialog" : "region")');
-    expect(creditsClientSource).toContain('window.YRDialog?.trap(drawer, closeShop)');
+    expect(rewardsPageSource).toContain('<DialogContent className="yr-react cr-react-shop-dialog"');
+    expect(rewardsPageSource).toContain('aria-describedby="cr-shop-dialog-description"');
+    expect(rewardsPageSource).toContain("onCloseAutoFocus={(event) => { event.preventDefault(); triggerRef.current?.focus(); }}");
   });
 
   it("preserves shipped dashboard aliases", () => {

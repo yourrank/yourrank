@@ -2,18 +2,9 @@
 /** @jsxImportSource hono/jsx */
 
 import { raw } from "hono/html";
-import {
-  channelPage,
-  overviewPage,
-  rulesPage,
-  shopPage,
-  redemptionsPage,
-} from "./credits-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
 import { subnavHtml } from "@yourrank/shared/dashboard-ui";
-
-const PAGES = { channel: channelPage, overview: overviewPage, rules: rulesPage, shop: shopPage, redemptions: redemptionsPage };
 
 export const REWARDS_TABS = [
   { key: "overview", label: "Overview", href: "/dashboard/rewards" },
@@ -27,11 +18,10 @@ function RewardsTabs({ active }) {
 }
 
 function RewardsContent({ tab, subnav = true }) {
-  const body = PAGES[tab] || overviewPage;
   return <div class="cr-workspace-content">
     {subnav ? <RewardsTabs active={tab} /> : null}
     <div id="cr-loading" class="ui-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner"></div><span class="sr-only">Loading rewards…</span></div>
-    <div id="cr-app" data-cr-tab={tab} hidden dangerouslySetInnerHTML={{ __html: body }}></div>
+    <div id="cr-app" data-cr-tab={tab} hidden></div>
     <div id="cr-empty" class="empty cr-loading-state" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><p>Loading your rewards dashboard…</p></div>
   </div>;
 }
@@ -62,7 +52,7 @@ export function RewardsRulesPage({ user, fragment } = {}) { return <RewardsPage 
 export function RewardsShopPage({ user, fragment } = {}) { return <RewardsPage tab="shop" user={user} fragment={fragment} />; }
 export function RewardsRedemptionsPage({ user, fragment } = {}) { return <RewardsPage tab="redemptions" user={user} fragment={fragment} />; }
 
-const rewardsConfigBase = { styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"], scripts: ['<script src="/assets/credits.js?v=4" type="module"></script>', '<script src="/assets/shell-nav.js?v=4" defer></script>'], nav: false, footer: false, wide: true, bootWatchdog: true };
+const rewardsConfigBase = { styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css", "/assets/react/react.css", "/assets/react/rewards.css"], scripts: ['<script src="/assets/credits.js?v=4" type="module"></script>', '<script src="/assets/shell-nav.js?v=4" defer></script>'], nav: false, footer: false, wide: true, bootWatchdog: true };
 export const rewardsChannelConfig = { ...rewardsConfigBase, title: chromeStateFor("siteConnections", "channel").documentTitle, canonical: "https://yourrank.site/dashboard/site/connections" };
 export const rewardsOverviewConfig = { ...rewardsConfigBase, title: chromeStateFor("rewards", "overview").documentTitle, canonical: "https://yourrank.site/dashboard/rewards" };
 export const rewardsRulesConfig = { ...rewardsConfigBase, title: chromeStateFor("rewards", "rules").documentTitle, canonical: "https://yourrank.site/dashboard/rewards/rules" };

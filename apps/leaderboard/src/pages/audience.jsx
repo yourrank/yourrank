@@ -3,7 +3,7 @@
 
 import { raw } from "hono/html";
 import { subnavHtml } from "@yourrank/shared/dashboard-ui";
-import { membersPage, memberActivityPage } from "./credits-pages.js";
+import { membersPage, memberActivityPage } from "./audience-credits-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
 

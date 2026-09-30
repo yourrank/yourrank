@@ -156,10 +156,11 @@ describe("Wave H Rewards capability split", () => {
 
   it("keeps provider identifiers out of the dashboard response and hides owner-only controls", () => {
     const handler = readFileSync(new URL("../handlers/credits.js", import.meta.url), "utf8");
-    const client = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
+    const client = readFileSync(new URL("../react/pages/rewards/page.tsx", import.meta.url), "utf8");
     expect(handler).toContain("connected: Boolean(channel?.kick_channel_external_id && channel?.channel_verified)");
     expect(handler).not.toContain("externalId: channel?.kick_channel_external_id");
-    expect(client).toContain('toggleAttribute("hidden", !capabilities.manageConnections)');
+    expect(client).toContain('capabilities.manageConnections !== false');
+    expect(client).toContain("{canManage && <Button type=\"button\" variant=\"destructive\"");
     expect(handler).toContain('"canRoleAdjustCredits"');
   });
 });

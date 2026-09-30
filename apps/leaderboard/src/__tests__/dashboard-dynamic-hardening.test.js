@@ -16,6 +16,9 @@ const shellJs = readFileSync(new URL("../assets/dashboard/shell.js", import.meta
 const sessionJs = readFileSync(new URL("../assets/dashboard/session.js", import.meta.url), "utf8");
 const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", import.meta.url), "utf8");
 const creditsJs = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
+const audienceCreditsJs = readFileSync(new URL("../assets/audience-credits.js", import.meta.url), "utf8");
+const rewardsEntryTsx = readFileSync(new URL("../react/pages/rewards/entry.tsx", import.meta.url), "utf8");
+const islandTsx = readFileSync(new URL("../react/lib/island.tsx", import.meta.url), "utf8");
 const accountJs = readFileSync(new URL("../assets/account.js", import.meta.url), "utf8");
 const giveawaysJs = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
 const giveawaysPage = readFileSync(new URL("../react/pages/giveaways/page.tsx", import.meta.url), "utf8");
@@ -98,18 +101,22 @@ describe("lifecycle cleanup", () => {
     expect(giveawaysPage).toMatch(/export function GiveawaysPage/);
   });
 
-  it("credits leave() clears status timers and destroys list controllers", () => {
-    expect(creditsJs).toMatch(/export function leave[\s\S]*clearTimeout/);
-    expect(creditsJs).toMatch(/export function leave[\s\S]*statusClearTimers/);
-    expect(creditsJs).toMatch(/export function leave[\s\S]*viewerCtrl.*destroy/);
-    expect(creditsJs).toMatch(/export function leave[\s\S]*redemptionCtrl.*destroy/);
-    expect(creditsJs).toMatch(/export function leave[\s\S]*rewardCtrl.*destroy/);
+  it("Audience credits leave() clears status timers and destroys list controllers", () => {
+    expect(audienceCreditsJs).toMatch(/export function leave[\s\S]*clearTimeout/);
+    expect(audienceCreditsJs).toMatch(/export function leave[\s\S]*statusClearTimers/);
+    expect(audienceCreditsJs).toMatch(/export function leave[\s\S]*viewerCtrl.*destroy/);
   });
 
-  it("credits enter() resets wired flag and module state for re-entry", () => {
-    expect(creditsJs).toMatch(/export function enter[\s\S]*wired = false/);
-    expect(creditsJs).toMatch(/export function enter[\s\S]*state = \{\}/);
-    expect(creditsJs).toMatch(/export function enter[\s\S]*activeSiteId = ""/);
+  it("Audience credits enter() resets wired flag and module state for re-entry", () => {
+    expect(audienceCreditsJs).toMatch(/export function enter[\s\S]*wired = false/);
+    expect(audienceCreditsJs).toMatch(/export function enter[\s\S]*state = \{\}/);
+    expect(audienceCreditsJs).toMatch(/export function enter[\s\S]*activeSiteId = ""/);
+  });
+
+  it("Rewards leave() unmounts its React island and the dispatcher delegates teardown", () => {
+    expect(rewardsEntryTsx).toContain("export const leave = island.leave");
+    expect(islandTsx).toMatch(/function leave\(\)[\s\S]*current\?\.unmount\(\)/);
+    expect(creditsJs).toMatch(/export function leave\(\)[\s\S]*activeModule\?\.leave\(\)/);
   });
 
   it("account leave() removes the popstate listener it installed", () => {
