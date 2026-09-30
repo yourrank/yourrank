@@ -142,8 +142,7 @@ describe("authenticated page chrome", () => {
     expect(accountSource).toContain('chromeStateFor("settings", active)');
     // Client-side tab selection must move `aria-current`, or two tabs read as
     // selected once the paint no longer differs by colour.
-    const accountJs = readAsset("account.js");
-    expect(accountJs).toContain('tab.setAttribute("aria-current", "page")');
-    expect(accountJs).toContain('tab.removeAttribute("aria-current")');
+    const settingsPage = fs.readFileSync(path.resolve(import.meta.dir, "../react/pages/settings/page.tsx"), "utf8");
+    expect(settingsPage).toContain('aria-current={active === key ? "page" : undefined}');
   });
 });

@@ -16,6 +16,7 @@ const assetsUrl = (rel) => new URL(`../assets/${rel}`, import.meta.url);
 const reactSourceUrl = (rel) => new URL(`../${rel}`, import.meta.url);
 const REACT_SOURCE_MODULES = [
   "react/pages/tournaments/page.tsx",
+  "react/pages/settings/page.tsx",
   "react/pages/rewards/page.tsx",
 ];
 const moduleUrl = (rel) =>
@@ -49,12 +50,12 @@ const EXCEPTIONS = {
     { match: "location.href = loginRedirectPath(location);", reason: "boot without a session: redirect to login" },
     { match: 'location.href = "/admin"; return;', reason: "admin accounts without a dashboard: off-dashboard destination" },
   ],
-  "account.js": [
-    { match: 'location.href = "/login"; return;', reason: "no session on a standalone settings document: redirect to login" },
-    { match: "history.replaceState({}, \"\", `${location.pathname}${inviteParams.size ? `?${inviteParams}` : \"\"}${location.hash}`);", reason: "one-shot ?invite=1 param scrub after opening the invite modal: same document, no navigation" },
-  ],
   "react/pages/tournaments/page.tsx": [
     { match: 'window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);', reason: "one-shot ?new=1 query scrub after opening the create modal: same document, no navigation" },
+  ],
+  "react/pages/settings/page.tsx": [
+    { match: 'window.location.href = path;', reason: "post-account-deletion: the session and dashboard no longer exist" },
+    { match: 'history.replaceState({}, "", `${location.pathname}${params.size ? `?${params}` : ""}${location.hash}`);', reason: "one-shot ?invite=1 query scrub after opening the invite modal: same document, no navigation" },
   ],
   "react/pages/rewards/page.tsx": [
     { match: 'history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}${location.hash}`);', reason: "one-shot ?new=1 query scrub after opening the shop editor: same document, no navigation" },
@@ -63,9 +64,6 @@ const EXCEPTIONS = {
   "dashboard/account.js": [
     { match: "location.href = loginRedirectPath(location);", reason: "session expired: redirect to login" },
     { match: 'location.href = "/dashboard";', reason: "post-board-deletion reset: the current context no longer exists" },
-  ],
-  "dashboard/account-delete-modal.js": [
-    { match: 'location.href = "/";', reason: "post-account-deletion: the session and dashboard no longer exist" },
   ],
   "dashboard/utils.js": [
     { match: "location.href = loginRedirectPath();", reason: "401 on a dashboard API call: session gone, redirect to login" },

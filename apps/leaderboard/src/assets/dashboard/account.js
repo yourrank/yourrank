@@ -186,9 +186,11 @@ function wireRevokeSessions() {
 
 function wireExport() {
   const btn = $("accExportData");
-  if (!btn) return;
+  if (!btn) return () => {};
   let timer = null;
+  let active = true;
   const renderJob = (job) => {
+    if (!active) return;
     const status = $("accExportStatus");
     if (!status) return;
     if (job.status === "completed") {
@@ -210,21 +212,34 @@ function wireExport() {
     }
   };
   const poll = async (exportId) => {
+    if (!active) return;
     try {
       const res = await fetch(`/api/account/export/${encodeURIComponent(exportId)}/status`, { credentials: "include" });
+      if (!active) return;
       const data = await res.json().catch(() => ({}));
+      if (!active) return;
       if (!res.ok || !data.ok) throw new Error(data.message || "Could not load export status.");
       renderJob(data);
-      if (!["completed", "failed", "expired"].includes(data.status)) timer = setTimeout(() => poll(exportId), 2000);
+      if (!["completed", "failed", "expired"].includes(data.status)) {
+        timer = setTimeout(() => {
+          timer = null;
+          void poll(exportId);
+        }, 2000);
+      }
     } catch (e) {
+      if (!active) return;
       logError("exportStatus", e);
       setStatus($("accExportStatus"), "Could not check export status. Refresh to try again.", true);
       btn.disabled = false;
     }
   };
-  btn.addEventListener("click", async () => {
+  const onClick = async () => {
+    if (!active) return;
     const status = $("accExportStatus");
-    if (timer) clearTimeout(timer);
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
     setStatus(status, "Starting export…", false);
     btn.disabled = true;
     try {
@@ -233,7 +248,9 @@ function wireExport() {
         credentials: "include",
         headers: { "x-csrf-token": getCsrf() },
       });
+      if (!active) return;
       const data = await res.json().catch(() => ({}));
+      if (!active) return;
       if (!res.ok || !data.ok) {
         // The async pipeline needs the ACCOUNT_EXPORTS bucket + queue; when a
         // deployment lacks them the worker streams the same export inline at
@@ -243,12 +260,15 @@ function wireExport() {
           // inline instead of navigating the tab to a raw JSON response.
           try {
             const res2 = await fetch("/api/account/export", { credentials: "include" });
+            if (!active) return;
             if (!res2.ok) {
               const err = await res2.json().catch(() => ({}));
+              if (!active) return;
               renderJob({ status: "failed", message: err?.error || err?.message || "Export failed." });
               return;
             }
             const blob = await res2.blob();
+            if (!active) return;
             const a = document.createElement("a");
             const cd = res2.headers.get("content-disposition") || "";
             const m = cd.match(/filename="?([^";]+)"?/i);
@@ -259,6 +279,7 @@ function wireExport() {
             setStatus(status, "Your export is downloading — check your downloads folder.", false);
             btn.disabled = false;
           } catch (e2) {
+            if (!active) return;
             logError("exportInline", e2);
             renderJob({ status: "failed", message: "Export failed." });
           }
@@ -273,19 +294,28 @@ function wireExport() {
       renderJob(data);
       poll(data.exportId);
     } catch (e) {
+      if (!active) return;
       logError("exportData", e);
       setStatus(status, "Download failed.", true);
       btn.disabled = false;
     }
-  });
+  };
+  btn.addEventListener("click", onClick);
+  return () => {
+    active = false;
+    if (timer) clearTimeout(timer);
+    timer = null;
+    btn.removeEventListener("click", onClick);
+  };
 }
 
 export function wireAccount() {
   wireChangePassword();
   wireRevokeSessions();
   wireSignOut();
-  wireExport();
+  const cleanupExport = wireExport();
   loadSessions();
+  return cleanupExport;
 }
 
 function wireSettingsTabs(initialTab = "customize") {
