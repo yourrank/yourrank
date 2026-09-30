@@ -373,6 +373,11 @@ export function openBrandModal() {
 }
 
 globalThis.addEventListener?.("pagehide", () => { unloading = true; });
+globalThis.addEventListener?.("pageshow", (event) => {
+  if (!event.persisted) return;
+  unloading = false;
+  if (document.querySelector('[data-page="home"].is-on')) void loadOverviewLiveData();
+});
 
 async function loadHomeSection(key, siteId, token, loadBundle) {
   const spec = HOME_SECTIONS[key];

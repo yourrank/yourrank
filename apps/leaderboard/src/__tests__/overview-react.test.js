@@ -467,4 +467,82 @@ describe("React Home island", () => {
     expect(document.querySelector("#ovSiteName").textContent).toBe("Day Owls");
     expect(document.body.textContent).not.toContain("stale-drop");
   });
+
+  it("refreshes Home after a back-forward cache restore", async () => {
+    const addEventListenerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "addEventListener");
+    const eventListeners = new Map();
+    globalThis.addEventListener = (type, listener) => eventListeners.set(type, listener);
+    try {
+      installOverviewDomGlobals();
+      document.body.innerHTML = '<section class="lb-page is-on" data-page="home"><div id="ov-app" class="yr-react"></div><input id="f_name" value="Night Owls"><input id="f_ends" value=""></section>';
+      state.ACTIVE_SITE_ID = SITE;
+      state.SLUG = "night-owls";
+      state.BOARDS = [{ id: SITE, name: "Night Owls", userRole: "owner" }];
+      state.ME = { emailVerified: true };
+      state.ONBOARDING = {};
+      state.PUBLISHED = false;
+      state.IS_DRAFT = true;
+      state.SAMPLE_PLAYERS = false;
+      state.PLAYERS = [];
+      state.SAVED_PLAYERS = [];
+      state.CREDITS = { usage: { pendingRedemptions: 0 }, channel: null };
+
+      const { loadOverviewLiveData: loadIsolatedOverviewLiveData } = await import("../assets/dashboard/overview.js?overview-bfcache-resume");
+      let activityRequests = 0;
+      let releaseOldActivities;
+      let firstActivityRequestStarted;
+      const firstActivityStarted = new Promise((resolve) => { firstActivityRequestStarted = resolve; });
+      const response = (body, status = 200) => new Response(JSON.stringify(body), {
+        status,
+        headers: { "content-type": "application/json" },
+      });
+      globalThis.fetch = async (url) => {
+        const target = new URL(String(url), "http://localhost");
+        if (target.pathname === "/api/activities") {
+          activityRequests += 1;
+          if (activityRequests === 1) {
+            firstActivityRequestStarted();
+            return new Promise((resolve) => {
+              releaseOldActivities = () => resolve(response({ ok: false, error: "Temporary failure" }, 503));
+            });
+          }
+          return response({
+            ok: true,
+            total: 1,
+            activities: [{
+              id: "restored-drop",
+              source: { kind: "code_drop" },
+              type: "drop",
+              state: "open",
+              progress: { claimed: 1, capacity: 2 },
+              reward: { creditsPerClaim: 3 },
+            }],
+            automation: { schedules: [] },
+          });
+        }
+        if (target.pathname === "/api/giveaways/chat") return response({ ok: true, session: null, entries: [] });
+        if (target.pathname === "/api/insights") return response({ ok: true });
+        if (target.pathname === "/api/home/activity") return response({ ok: true, events: [] });
+        return response({});
+      };
+
+      let firstEntry;
+      await actAndFlush(async () => {
+        firstEntry = loadIsolatedOverviewLiveData({ loadBundle: () => Promise.resolve(builtOverview) });
+        await firstActivityStarted;
+      });
+
+      eventListeners.get("pagehide")?.({ persisted: true });
+      const restore = eventListeners.get("pageshow")?.({ persisted: true });
+      if (restore) await actAndFlush(() => restore);
+      releaseOldActivities();
+      await actAndFlush(() => firstEntry);
+
+      expect(activityRequests).toBe(2);
+      expect(document.querySelector("#ovLiveNow").hidden).toBe(false);
+    } finally {
+      if (addEventListenerDescriptor) Object.defineProperty(globalThis, "addEventListener", addEventListenerDescriptor);
+      else delete globalThis.addEventListener;
+    }
+  });
 });
