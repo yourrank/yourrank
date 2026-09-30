@@ -19,30 +19,34 @@ const installedGlobals = [
 ];
 const originalGlobals = Object.fromEntries(installedGlobals.map((key) => [key, globalThis[key]]));
 
-for (const key of installedGlobals.slice(0, 14)) {
-  globalThis[key] = key === "getComputedStyle" ? window.getComputedStyle.bind(window) : window[key];
+export function installTournamentDomGlobals() {
+  for (const key of installedGlobals.slice(0, 14)) {
+    globalThis[key] = key === "getComputedStyle" ? window.getComputedStyle.bind(window) : window[key];
+  }
+  for (const key of browserGlobals) {
+    globalThis[key] = key.endsWith("AnimationFrame") ? window[key].bind(window) : window[key];
+  }
+  window.Element.prototype.scrollIntoView = function () {};
+  window.Element.prototype.getClientRects = function () { return [{}]; };
+  globalThis.localStorage = window.localStorage;
+  window.matchMedia = (query) => ({
+    matches: false,
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+  });
+  globalThis.matchMedia = window.matchMedia;
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 }
-for (const key of browserGlobals) {
-  globalThis[key] = key.endsWith("AnimationFrame") ? window[key].bind(window) : window[key];
-}
-window.Element.prototype.scrollIntoView = function () {};
-window.Element.prototype.getClientRects = function () { return [{}]; };
-globalThis.localStorage = window.localStorage;
-window.matchMedia = (query) => ({
-  matches: false,
-  media: query,
-  addEventListener() {},
-  removeEventListener() {},
-  addListener() {},
-  removeListener() {},
-});
-globalThis.matchMedia = window.matchMedia;
-globalThis.ResizeObserver = class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-};
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+installTournamentDomGlobals();
 
 const React = await import("react");
 export const { act, createElement } = React;
@@ -60,6 +64,7 @@ export async function flushReactUpdates() {
 }
 
 export async function actAndFlush(callback = () => {}) {
+  installTournamentDomGlobals();
   await act(async () => {
     await callback();
     await flushReactUpdates();
@@ -67,6 +72,7 @@ export async function actAndFlush(callback = () => {}) {
 }
 
 export async function mountTournamentPage({ site = {}, deps = {} } = {}) {
+  installTournamentDomGlobals();
   if (!document.getElementById("tournament-root")) {
     document.body.innerHTML = '<main id="tournament-app"><div id="tournament-root" class="yr-react"></div></main>';
   }
