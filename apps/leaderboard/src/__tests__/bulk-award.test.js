@@ -4,6 +4,7 @@ import { bulkAwardSummary, isRateLimitError, remainingSelection, runBulkAward } 
 
 const ids = ["A", "B", "C", "D", "E"];
 const rateLimit = () => Object.assign(new Error("Too many"), { code: "RATE_LIMITED", status: 429 });
+const audiencePage = readFileSync(new URL("../react/pages/audience/page.tsx", import.meta.url), "utf8");
 
 function awarder(failures = {}) {
   const calls = [];
@@ -76,18 +77,22 @@ describe("runBulkAward partial-failure contract", () => {
   });
 });
 
-describe("bulk award idempotency wiring in credits.js", () => {
-  const src = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
-
+describe("bulk award wiring in the Audience React page", () => {
   it("reuses the persisted operation key per (site, member, delta, reason) and never mints one for a blind retry", () => {
-    expect(src).toContain('"yr:credit-adjustment:" + JSON.stringify([activeSiteId, id, delta, reason])');
-    expect(src).toMatch(/let operationId = sessionStorage\.getItem\(storageKey\);\s*if \(!operationId\) \{\s*operationId = crypto\.randomUUID\(\);\s*sessionStorage\.setItem\(storageKey, operationId\);/);
-    expect(src).toContain("sessionStorage.removeItem(storageKey);");
+    expect(audiencePage).toContain('"yr:credit-adjustment:" + JSON.stringify([activeSiteId, id, delta, reason])');
+    expect(audiencePage).toMatch(/let operationId = storage\.getItem\(storageKey\);\s*if \(!operationId\) \{\s*operationId = deps\.randomUUID\(\);\s*storage\.setItem\(storageKey, operationId\);/);
+    expect(audiencePage).toContain("storage.removeItem(storageKey);");
   });
 
   it("feeds the bulk outcome back into the selection so failed and unattempted members stay selected", () => {
-    expect(src).toContain("runBulkAward(ids, (id) => adjustMemberCredits(id, amount, reason))");
-    expect(src).toContain("memberSelection.retain(remainingSelection(outcome))");
-    expect(src).toContain("bulkAwardSummary(outcome, amount)");
+    expect(audiencePage).toMatch(/runBulkAward\(ids, \(id(?:: string)?\) => adjustMemberCredits\([\s\S]*?amount,[\s\S]*?reason/);
+    expect(audiencePage).toContain("selection.retain(remainingSelection(outcome))");
+    expect(audiencePage).toContain("bulkAwardSummary(outcome, amount)");
+  });
+
+  it("enforces the 25-member apply cap in the UI and before calling the helper", () => {
+    expect(audiencePage).toContain("const BULK_AWARD_MAX = 25;");
+    expect(audiencePage).toContain("if (ids.length > BULK_AWARD_MAX)");
+    expect(audiencePage).toContain("disabled={!selection.size || selection.size > BULK_AWARD_MAX}");
   });
 });

@@ -18,7 +18,13 @@ const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", 
 const creditsJs = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
 const accountEntry = readFileSync(new URL("../assets/account.js", import.meta.url), "utf8");
 const settingsPage = readFileSync(new URL("../react/pages/settings/page.tsx", import.meta.url), "utf8");
+const audienceShimJs = readFileSync(new URL("../assets/people.js", import.meta.url), "utf8");
+const audienceEntryTsx = readFileSync(new URL("../react/pages/audience/entry.tsx", import.meta.url), "utf8");
+const audiencePageTsx = readFileSync(new URL("../react/pages/audience/page.tsx", import.meta.url), "utf8");
+const rewardsEntryTsx = readFileSync(new URL("../react/pages/rewards/entry.tsx", import.meta.url), "utf8");
+const islandTsx = readFileSync(new URL("../react/lib/island.tsx", import.meta.url), "utf8");
 const giveawaysJs = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
+const giveawaysPage = readFileSync(new URL("../react/pages/giveaways/page.tsx", import.meta.url), "utf8");
 const dashboardJs = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 const shellNavJs = readFileSync(new URL("../assets/shell-nav.js", import.meta.url), "utf8");
 
@@ -85,32 +91,40 @@ describe("stale-navigation race protection", () => {
 });
 
 describe("lifecycle cleanup", () => {
-  it("giveaways leave() stops the server poll and clears all intervals", () => {
-    expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*clearInterval\(pollTimer\)/);
-    expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*clearInterval\(timerInterval\)/);
-    expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*clearInterval\(claimTimerInterval\)/);
-    expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*removeEventListener.*trapEventDrawerFocus/);
+  it("giveaways leave() unmounts the island and invalidates an in-flight enter", () => {
+    expect(giveawaysJs).toMatch(/export function leave\(\)[\s\S]*active = false;[\s\S]*generation \+= 1;[\s\S]*islandPromise\.then\(\(island\) => island\.leave\(\)\)/);
+    expect(giveawaysJs).toMatch(/export async function enter\(\)[\s\S]*const ticket = \+\+generation;[\s\S]*active && ticket === generation/);
+    expect(giveawaysPage).toMatch(/return \(\) => window\.clearInterval\(timer\)/);
+    expect(giveawaysPage).toMatch(/return \(\) => \{ active = false; \}/);
   });
 
-  it("giveaways enter() resets state and re-initializes for fresh re-entry", () => {
-    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*clearInterval\(pollTimer\)/);
-    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*session = null; entrants = \[\]/);
-    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*clearInterval\(timerInterval\)/);
-    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*init\(\)/);
+  it("giveaways enter() mounts a fresh React island on each route entry", () => {
+    expect(giveawaysJs).toMatch(/export async function enter\(\)[\s\S]*getIsland\(\)[\s\S]*island\.enter\(\)/);
+    expect(giveawaysJs).toContain('import("./react/giveaways.js")');
+    expect(giveawaysPage).toMatch(/export function GiveawaysPage/);
   });
 
-  it("credits leave() clears status timers and destroys list controllers", () => {
-    expect(creditsJs).toMatch(/export function leave[\s\S]*clearTimeout/);
-    expect(creditsJs).toMatch(/export function leave[\s\S]*statusClearTimers/);
-    expect(creditsJs).toMatch(/export function leave[\s\S]*viewerCtrl.*destroy/);
-    expect(creditsJs).toMatch(/export function leave[\s\S]*redemptionCtrl.*destroy/);
-    expect(creditsJs).toMatch(/export function leave[\s\S]*rewardCtrl.*destroy/);
+  it("Audience leave() unmounts the island and clears timers and stale requests", () => {
+    expect(audienceShimJs).toMatch(/export function leave[\s\S]*generation \+= 1/);
+    expect(audienceShimJs).toContain("island.leave()");
+    expect(audienceEntryTsx).toContain("export const leave = island.leave");
+    expect(audiencePageTsx).toContain("window.clearTimeout(tipCloseTimerRef.current)");
+    expect(audiencePageTsx).toContain("return () => window.clearTimeout(timer)");
+    expect(audiencePageTsx).toContain("memberRequestRef.current += 1;");
   });
 
-  it("credits enter() resets wired flag and module state for re-entry", () => {
-    expect(creditsJs).toMatch(/export function enter[\s\S]*wired = false/);
-    expect(creditsJs).toMatch(/export function enter[\s\S]*state = \{\}/);
-    expect(creditsJs).toMatch(/export function enter[\s\S]*activeSiteId = ""/);
+  it("Audience enter() guards async re-entry and supports both section and direct-load boots", () => {
+    expect(audienceShimJs).toMatch(/export async function enter[\s\S]*const ticket = \+\+generation/);
+    expect(audienceShimJs).toMatch(/active && ticket === generation[\s\S]*island\.enter\(\)/);
+    expect(audienceShimJs).toContain("if (!window.__yrSpaShell)");
+    expect(audienceShimJs).toContain("document.addEventListener(\"DOMContentLoaded\", boot");
+    expect(audienceEntryTsx).toContain('defineIsland<{ tab: AudienceTab }>("audience-app", AudiencePage, () =>');
+  });
+
+  it("Rewards leave() unmounts its React island and the dispatcher delegates teardown", () => {
+    expect(rewardsEntryTsx).toContain("export const leave = island.leave");
+    expect(islandTsx).toMatch(/function leave\(\)[\s\S]*current\?\.unmount\(\)/);
+    expect(creditsJs).toMatch(/export function leave\(\)[\s\S]*activeModule\?\.leave\(\)/);
   });
 
   it("account leave() removes the popstate listener it installed", () => {

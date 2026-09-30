@@ -14,7 +14,11 @@ import { readFileSync, readdirSync } from "node:fs";
 
 const assetsUrl = (rel) => new URL(`../assets/${rel}`, import.meta.url);
 const reactSourceUrl = (rel) => new URL(`../${rel}`, import.meta.url);
-const REACT_SOURCE_MODULES = ["react/pages/tournaments/page.tsx", "react/pages/settings/page.tsx"];
+const REACT_SOURCE_MODULES = [
+  "react/pages/tournaments/page.tsx",
+  "react/pages/settings/page.tsx",
+  "react/pages/rewards/page.tsx",
+];
 const moduleUrl = (rel) =>
   REACT_SOURCE_MODULES.includes(rel) ? reactSourceUrl(rel) : assetsUrl(rel);
 
@@ -61,6 +65,10 @@ const EXCEPTIONS = {
   "react/pages/settings/page.tsx": [
     { match: 'window.location.href = path;', reason: "post-account-deletion: the session and dashboard no longer exist" },
     { match: 'history.replaceState({}, "", `${location.pathname}${params.size ? `?${params}` : ""}${location.hash}`);', reason: "one-shot ?invite=1 query scrub after opening the invite modal: same document, no navigation" },
+  ],
+  "react/pages/rewards/page.tsx": [
+    { match: 'history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}${location.hash}`);', reason: "one-shot ?new=1 query scrub after opening the shop editor: same document, no navigation" },
+    { match: 'history.replaceState({}, "", `${clean.pathname}${clean.search}${clean.hash}`);', reason: "one-shot OAuth feedback param scrub: same document, no navigation" },
   ],
   "dashboard/account.js": [
     { match: "location.href = loginRedirectPath(location);", reason: "session expired: redirect to login" },

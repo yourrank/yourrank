@@ -279,12 +279,16 @@ describe("manifest parity: navigation-state query parameters", () => {
   });
 
   it("keeps one-shot parameters out of the manifest and in the audit", () => {
-    const credits = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
+    const audiencePage = readFileSync(new URL("../react/pages/audience/page.tsx", import.meta.url), "utf8");
+    const rewardsPage = readFileSync(new URL("../react/pages/rewards/page.tsx", import.meta.url), "utf8");
     // The audit's one-shot classifications reflect real consumption sites.
-    expect(credits).toContain('get("edit")');
-    expect(credits).toContain('get("viewer")');
-    expect(credits).toContain('searchParams.delete("kick_connected")');
-    expect(credits).toContain('searchParams.delete("error")');
+    expect(rewardsPage).toContain('get("edit")');
+    expect(rewardsPage).toContain('get("new")');
+    expect(audiencePage).toContain('get("viewer")');
+    expect(rewardsPage).toContain('searchParams.delete("kick_connected")');
+    expect(rewardsPage).toContain('searchParams.delete("error")');
+    expect(rewardsPage).toContain('params.delete("new")');
+    expect(audiencePage).toContain('get("viewer")');
     for (const route of DASHBOARD_ROUTES) {
       for (const p of ["edit", "viewer", "kick_connected", "error", "nav", "tab", "plan"]) {
         expect(route.navParams.includes(p), `${route.id} must not declare ${p}`).toBe(false);
@@ -405,7 +409,7 @@ describe("query-parameter audit enforcement (mechanical gate)", () => {
       }
     }
     // The scanner has real coverage (guards against a silently broken regex).
-    for (const expected of ["nav", "tab", "plan", "board", "siteId", "edit", "viewer"]) {
+    for (const expected of ["nav", "tab", "plan", "board", "siteId"]) {
       expect(discovered.has(expected), `scanner lost ${expected}`).toBe(true);
     }
     for (const [param, files] of discovered) {

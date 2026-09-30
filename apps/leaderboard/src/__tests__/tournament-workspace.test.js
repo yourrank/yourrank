@@ -147,8 +147,8 @@ describe("tournament workspace chrome", () => {
     expect(html).not.toContain("engage-back");
     // The pane's only h1s live inside the tournament app itself.
     expect(html).not.toContain("<h1>Tournaments</h1>");
-    // Other panes keep their chrome untouched.
-    expect(renderGiveawaysContentHtml("chat")).toContain('v3-tabs gw-subnav');
+    // The server provides the React root; the mounted page owns the Giveaways tabs.
+    expect(renderGiveawaysContentHtml("chat")).toContain('data-tab="chat"');
   });
 
   it("shows the shared plan lock and blocks creation when tournaments are unavailable", async () => {
