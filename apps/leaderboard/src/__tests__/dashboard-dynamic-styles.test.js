@@ -14,7 +14,7 @@ import { clearSession } from "../assets/dashboard/session.js";
 
 const user = { display_name: "Test operator", plan: "pro" };
 const ENGAGEMENT_CSS = "/assets/react/react.css";
-const ACTIVITIES_CSS = "/assets/activities.css";
+const ACTIVITIES_CSS = "/assets/react/react.css";
 
 // This file can share a process with other test files, so every replaced
 // global is restored in afterEach.
@@ -222,13 +222,14 @@ function stylesheetHrefs(links) {
 }
 
 describe("Engagement style requirements are declared by one owner", () => {
-  it("declares activities.css on the Activities document and fragment", async () => {
+  it("declares React styles on the Activities document and fragment", async () => {
     expect(activitiesConfig.styles).toContain(ACTIVITIES_CSS);
     expect(PAGES.activities.config.styles).toContain(ACTIVITIES_CSS);
     const fragment = resolveFragment("/dashboard/activities");
     const payload = await renderFragmentPayload(PAGES[fragment.pageKey], { user, tab: fragment.tab });
     expect(payload.styles).toEqual(activitiesConfig.styles);
-    expect(payload.html).toContain("No purchase or stake is required.");
+    expect(payload.html).toContain('id="activities-root"');
+    expect(payload.html).not.toContain("No purchase or stake is required.");
   });
 
   it("declares the React stylesheet on the full Giveaways document", () => {

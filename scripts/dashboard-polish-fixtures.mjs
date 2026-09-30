@@ -23,7 +23,16 @@ site.boards = [
   { id: secondarySite.id, siteId: secondarySite.siteId, slug: secondarySite.slug, name: secondarySite.name, published: secondarySite.published, plan: secondarySite.plan },
 ];
 secondarySite.boards = site.boards;
-const activities = Array.from({ length: 7 }, (_, i) => ({ id: `drop-${i}`, title: i === 0 ? 'Community celebration with an unusually long activity title' : `Community drop ${i + 1}`, type: 'drop', source: { kind: 'code_drop' }, typeLabel: 'Code drop', state: i < 3 ? 'open' : 'ended', stateLabel: i < 3 ? 'Open' : 'Ended', createdAt: now, endsAt: new Date(Date.now() + 86400000).toISOString(), reward: { creditsPerClaim: 250 }, progress: { claimed: 32, capacity: 100 }, actions: { canEnd: i < 3 } }));
+const activities = Array.from({ length: 15 }, (_, i) => ({ id: `drop-${i}`, title: i === 0 ? 'Community celebration with an unusually long activity title' : `Community drop ${i + 1}`, type: 'drop', source: { kind: 'code_drop' }, typeLabel: 'Code drop', state: i < 3 ? 'open' : 'ended', stateLabel: i < 3 ? 'Open' : ['Ended by creator', 'Expired', 'Claimed out'][i % 3], createdAt: now, endsAt: new Date(Date.now() + 86400000).toISOString(), reward: { creditsPerClaim: 250 }, progress: { claimed: 32, capacity: 100 }, actions: { canEnd: i < 3 } }));
+const activityTemplates = [
+  { id: 'template-1', name: 'Stream break drop', kind: 'safe_code_drop', config: { pointsReward: 250, maxClaims: 100, expireMinutes: 30 } },
+  { id: 'template-2', name: 'Community milestone celebration with a longer template name', kind: 'safe_code_drop', config: { pointsReward: 1000, maxClaims: 25, expireMinutes: 0 } },
+];
+const activitySchedules = [
+  { id: 'schedule-1', templateId: 'template-1', templateName: 'Stream break drop', status: 'failed', recurrence: 'daily', nextRunAt: new Date(Date.now() + 3600000).toISOString(), attentionMessage: 'The last run failed because the plan changed. Reschedule to try again.' },
+  { id: 'schedule-2', templateId: 'template-1', templateName: 'Stream break drop', status: 'scheduled', recurrence: 'weekly', nextRunAt: new Date(Date.now() + 86400000).toISOString() },
+  { id: 'schedule-3', templateId: 'template-2', templateName: 'Community milestone celebration with a longer template name', status: 'cancelled', recurrence: 'once', nextRunAt: new Date(Date.now() - 86400000).toISOString() },
+];
 const members = Array.from({ length: 12 }, (_, i) => ({ id: `member-${i}`, displayName: i === 1 ? name : `Community member ${i + 1}`, linkedIdentities: [{ provider: 'kick' }], balance: 1250 + i * 100, totalEarned: 12000, totalSpent: 500, joinedAt: now, lastSeenAt: now }));
 const shopItems = Array.from({ length: 4 }, (_, i) => ({ id: `reward-${i}`, name: i === 1 ? 'Choose the theme for our next community celebration stream' : ['Community shout-out', '', 'Suggest a stream topic', 'Choose a community emote'][i], description: 'A creator reward for participating in the community. Claim it with earned credits.', cost: 500 + i * 250, stock: null, active: true, cooldown_seconds: 0 }));
 const claims = members.slice(0, 4).map((m, i) => ({ id: `redemption:claim-${i}`, source: { id: `claim-${i}`, title: shopItems[i].name }, subject: { displayName: m.displayName }, reward: shopItems[i], status: 'submitted', statusLabel: 'Needs fulfillment', submittedAt: now }));
@@ -287,8 +296,14 @@ const server = createServer(async (req, res) => {
     if (path === '/api/credits/status') return json(res, empty ? { ...credits, shopItems: [], mappings: [] } : credits);
     if (path === '/api/activities') {
       const state = url.searchParams.get('state') || 'all';
-      const rows = empty ? [] : activities.filter((a) => state === 'all' || (state === 'open' ? a.state === 'open' : a.state !== 'open'));
-      return json(res, { activities: rows, total: rows.length, page: { hasMore: false, nextCursor: null }, automation: { templates: [], schedules: [], entitlement: { canAutomate: true } } });
+      const matching = empty ? [] : activities.filter((a) => state === 'all' || (state === 'open' ? a.state === 'open' : a.state !== 'open'));
+      const limit = Number(url.searchParams.get('limit')) || 50;
+      const offset = Number(url.searchParams.get('cursor')) || 0;
+      const rows = matching.slice(offset, offset + limit);
+      const hasMore = offset + limit < matching.length;
+      const canAutomate = mode !== 'free';
+      const automation = { templates: empty || !canAutomate ? [] : activityTemplates, schedules: empty || !canAutomate ? [] : activitySchedules, entitlement: canAutomate ? { canAutomate: true } : { canAutomate: false, message: 'Manual code drops remain available on Free. Upgrade to reuse templates and run drops on a schedule.' } };
+      return json(res, { activities: rows, total: matching.length, page: { limit, hasMore, nextCursor: hasMore ? String(offset + limit) : null }, ...(offset ? {} : { automation }) });
     }
     if (path === '/api/people/members') return json(res, { members: empty ? [] : members, total: empty ? 0 : members.length, page: { hasMore: false, nextCursor: null } });
     if (path === '/api/claims') return json(res, { claims: empty ? [] : claims, total: empty ? 0 : claims.length, page: { hasMore: false, nextCursor: null } });

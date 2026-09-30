@@ -311,20 +311,33 @@ describe("Wave E safe Activities foundation", () => {
   it("ships a real private page, fragment, and API route without restricted workflow hooks", () => {
     expect(PAGES.activities.Component).toBeTruthy();
     expect(activitiesConfig.canonical).toBe("https://yourrank.site/dashboard/activities");
-    expect(activitiesConfig.styles).toContain("/assets/activities.css");
-    expect(activitiesContentHtml).toContain("No purchase or stake is required.");
+    expect(activitiesConfig.styles).toContain("/assets/react/react.css");
+    expect(activitiesConfig.styles).not.toContain("/assets/activities.css");
+    expect(activitiesContentHtml).toContain('id="activities-root"');
+    expect(activitiesContentHtml).toContain(">Activities</h1>");
+    const client = readFileSync(new URL("../react/pages/activities/page.tsx", import.meta.url), "utf8");
+    expect(client).toContain("No purchase or stake is required.");
     // Drops (live + history) render before the secondary Automation panel.
-    expect(activitiesContentHtml.indexOf('id="act-panel-drops"')).toBeLessThan(activitiesContentHtml.indexOf('id="act-panel-automation"'));
-    expect(activitiesContentHtml).toContain("Templates and schedules");
-    expect(activitiesContentHtml).toContain('id="act-automation" hidden');
+    expect(client.indexOf('id="act-panel-drops"')).toBeLessThan(client.indexOf('id="act-panel-automation"'));
+    expect(client).toContain("Templates and schedules need Pro or Team");
+    expect(client).toContain('id="act-automation" hidden={!automationLoaded || automationError || !canAutomate}');
     expect(activitiesContentHtml).not.toMatch(/Raffles|Predictions|Games|wagering|stakes/i);
     expect(ROUTES.some((route) => route.path === "/api/activities" && route.method === "GET")).toBe(true);
     expect(ROUTES.some((route) => route.path === "/api/activities/close" && route.method === "POST")).toBe(true);
 
-    const client = readFileSync(new URL("../assets/activities.js", import.meta.url), "utf8");
-    expect(client).toContain('sitePath("/api/activities"');
-    expect(client).toContain('sitePath("/api/events/drops"');
+    const shim = readFileSync(new URL("../assets/activities.js", import.meta.url), "utf8");
+    expect(shim).toContain('import("./react/activities.js")');
+    expect(shim).toContain('import "./dashboard/command-palette.js";');
+    expect(client).toContain('"/api/events/drops"');
+    expect(client).toContain('"/api/activities/close"');
     expect(client).not.toMatch(/\/api\/(?:predictions|tournaments|games)|\/api\/events\/raffles/i);
+    expect(client).toContain("AbortSignal.timeout(10_000)");
+    expect(client).toContain('"The request timed out."');
+    expect(client).toContain('error?.status === 401');
+    expect(client).toContain('error?.status === 403 && !body?.error');
+    expect(client).toContain('`The server returned HTTP ${error.status}.`');
+    const api = readFileSync(new URL("../react/lib/api.ts", import.meta.url), "utf8");
+    expect(api).toContain("error.status = response.status");
   });
 
   it("maps a creator-closed drop to an ended state that offers no further action", () => {

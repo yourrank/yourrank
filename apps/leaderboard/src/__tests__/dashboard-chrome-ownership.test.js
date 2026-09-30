@@ -464,6 +464,9 @@ describe("dashboard chrome ownership", () => {
     const activities = PAGES.activities.Component({ user }).toString();
     expect(strip(activities, "gw-subnav")).toBe("");
     expect(strip(activities, "engage-tabs")).toBe("");
+    expect(activities).toContain('id="activities-root"');
+    const activitiesClient = readFileSync(new URL("../react/pages/activities/page.tsx", import.meta.url), "utf8");
+    expect(activitiesClient).toContain('role="tablist" aria-label="Activities"');
 
     const shop = PAGES.rewardsShop.Component({ user }).toString();
     const shopTabs = [...strip(shop, "rewards-tabs").matchAll(/<a\b[^>]*class="v3-tab[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</g)]
