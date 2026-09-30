@@ -485,11 +485,19 @@ export function ViewerAccountPage({ signal, onFirstLoadCommitted }: ViewerAccoun
     else if (authStateRef.current === "unauthenticated" && nextView) focusElement("vd-login-card");
   }, []);
 
+  const handlePageShow = useCallback((event: PageTransitionEvent) => {
+    if (event.persisted) void loadAccount();
+  }, [loadAccount]);
+
   useEffect(() => {
     window.addEventListener("hashchange", handleHashChange);
+    window.addEventListener("pageshow", handlePageShow);
     void loadAccount();
-    return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [handleHashChange, loadAccount]);
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [handleHashChange, handlePageShow, loadAccount]);
 
   useEffect(() => wireViewerRailLogout(() => logoutRef.current()), []);
 

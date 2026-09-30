@@ -51,6 +51,7 @@ function evaluateShim(environment, { countMounts = false, bundleLoader } = {}) {
 
 function observeLifecycleListeners(window, document) {
   const hashListeners = new Set();
+  const pageshowListeners = new Set();
   const unmountListeners = new Set();
   const addWindowListener = window.addEventListener.bind(window);
   const removeWindowListener = window.removeEventListener.bind(window);
@@ -58,10 +59,12 @@ function observeLifecycleListeners(window, document) {
   const removeDocumentListener = document.removeEventListener.bind(document);
   window.addEventListener = (type, listener, options) => {
     if (type === "hashchange") hashListeners.add(listener);
+    if (type === "pageshow") pageshowListeners.add(listener);
     return addWindowListener(type, listener, options);
   };
   window.removeEventListener = (type, listener, options) => {
     if (type === "hashchange") hashListeners.delete(listener);
+    if (type === "pageshow") pageshowListeners.delete(listener);
     return removeWindowListener(type, listener, options);
   };
   document.addEventListener = (type, listener, options) => {
@@ -72,7 +75,7 @@ function observeLifecycleListeners(window, document) {
     if (type === "yr:viewer-unmount") unmountListeners.delete(listener);
     return removeDocumentListener(type, listener, options);
   };
-  return { hashListeners, unmountListeners };
+  return { hashListeners, pageshowListeners, unmountListeners };
 }
 
 describe("Viewer Account React lifecycle", () => {
@@ -88,28 +91,33 @@ describe("Viewer Account React lifecycle", () => {
     await environment.ready();
     expect(counts.mounts).toBe(1);
     expect(listeners.hashListeners.size).toBe(1);
+    expect(listeners.pageshowListeners.size).toBe(1);
     expect(listeners.unmountListeners.size).toBe(1);
 
     expect(environment.window.YRInitViewerAccount()).toBe(firstReady);
     await actAndFlush();
     expect(counts.mounts).toBe(1);
     expect(listeners.hashListeners.size).toBe(1);
+    expect(listeners.pageshowListeners.size).toBe(1);
     expect(listeners.unmountListeners.size).toBe(1);
 
     await actAndFlush(() => environment.document.dispatchEvent(new environment.window.Event("yr:viewer-unmount")));
     expect(listeners.hashListeners.size).toBe(0);
+    expect(listeners.pageshowListeners.size).toBe(0);
     expect(listeners.unmountListeners.size).toBe(0);
     environment.document.documentElement.innerHTML = viewerDashboardPage();
     await actAndFlush(() => environment.window.YRInitViewerAccount());
     await environment.ready();
     expect(counts.mounts).toBe(2);
     expect(listeners.hashListeners.size).toBe(1);
+    expect(listeners.pageshowListeners.size).toBe(1);
     expect(listeners.unmountListeners.size).toBe(1);
 
     await actAndFlush(() => environment.window.YRInitViewerAccount());
     expect(counts.mounts).toBe(2);
     expect(listeners.hashListeners.size).toBe(1);
     await environment.close();
+    expect(listeners.pageshowListeners.size).toBe(0);
   });
 
   it("does nothing when the account mount is absent", async () => {
@@ -145,6 +153,42 @@ describe("Viewer Account React lifecycle", () => {
     await actAndFlush();
     expect(environment.mount.innerHTML).toBe("");
     expect(environment.document.getElementById("vd-communities")).toBeNull();
+    await environment.close();
+  });
+
+  it("refreshes account state after a persisted pageshow restore", async () => {
+    let accountRequests = 0;
+    const environment = await makeViewerAccountEnvironment({
+      auth: SIGNED_IN_DOCUMENT,
+      mountReact: false,
+      response: (path) => {
+        if (path !== "/api/viewer/me") return { body: {} };
+        accountRequests += 1;
+        return accountRequests === 1
+          ? { body: ACCOUNT }
+          : { status: 401, body: { error: "unauthorized" } };
+      },
+    });
+    evaluateShim(environment);
+    await environment.ready();
+    expect(environment.authState()).toBe("authenticated");
+    expect(environment.calls).toHaveLength(1);
+
+    const initialPageShow = new environment.window.Event("pageshow");
+    Object.defineProperty(initialPageShow, "persisted", { value: false });
+    await actAndFlush(() => environment.window.dispatchEvent(initialPageShow));
+    expect(environment.calls).toHaveLength(1);
+
+    const restoredPageShow = new environment.window.Event("pageshow");
+    Object.defineProperty(restoredPageShow, "persisted", { value: true });
+    await actAndFlush(() => environment.window.dispatchEvent(restoredPageShow));
+    expect(environment.calls.map(({ path, method }) => ({ path, method }))).toEqual([
+      { path: "/api/viewer/me", method: "GET" },
+      { path: "/api/viewer/me", method: "GET" },
+    ]);
+    expect(environment.authState()).toBe("unauthenticated");
+    expect(environment.$("vd-login-card").hidden).toBe(false);
+    expect(environment.$("vd-communities-card").hidden).toBe(true);
     await environment.close();
   });
 
