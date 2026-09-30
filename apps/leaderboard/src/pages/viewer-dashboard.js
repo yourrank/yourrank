@@ -56,7 +56,7 @@ export function viewerDashboardPage(community = null, providerAvailability = { k
   contentOwnsMain: true,
   nav: false,
   footer: false,
-  styles: ["/assets/site-shell.css", "/assets/viewer-shell.css"],
+  styles: ["/assets/site-shell.css", "/assets/viewer-shell.css", "/assets/react/react.css"],
   designContract: VIEWER_DESIGN_CONTRACT,
   scripts: [
     '<script src="/assets/viewer-app.js" defer></script>',
@@ -65,8 +65,9 @@ export function viewerDashboardPage(community = null, providerAvailability = { k
 ${viewerNavigation({ accountHref, community, signedIn, viewerName: signedIn ? viewerName(viewer) : "", viewerMark: signedIn ? viewerMark(viewer) : "", signInHref: unauthenticated ? `${accountHref}#vd-login-card` : "" })}
 <main class="viewer-main" id="main-content" tabindex="-1">
 
-  <div id="vd-loading" class="vd-loading" role="status" aria-live="polite" aria-busy="true"${unauthenticated ? " hidden" : ""}><span class="sr-only">${signedIn ? "Loading your communities…" : "Checking your sign-in…"}</span><div class="vd-skeleton" aria-hidden="true"><span></span><span></span><span></span></div></div>
   ${viewerCommunityReturnLink(community, "yr-sec-link vd-return")}
+  <div id="vd-app" class="yr-react">
+  <div id="vd-loading" class="vd-loading" role="status" aria-live="polite" aria-busy="true"${unauthenticated ? " hidden" : ""}><span class="sr-only">${signedIn ? "Loading your communities…" : "Checking your sign-in…"}</span><div class="vd-skeleton" aria-hidden="true"><span></span><span></span><span></span></div></div>
   <div class="vd-head">
     <p class="vd-breadcrumb" id="vd-breadcrumb" hidden>Settings <span aria-hidden="true">›</span> <span id="vd-breadcrumb-current"></span></p>
     <h1 class="vd-h1" id="vd-title" tabindex="-1">${unauthenticated ? GUEST_TITLE : "My communities"}</h1>
@@ -141,6 +142,7 @@ ${viewerNavigation({ accountHref, community, signedIn, viewerName: signedIn ? vi
   <section id="vd-security" tabindex="-1" hidden><div class="vd-settings-card vd-providers-card"><h2>Authentication</h2><div id="vd-security-providers" class="vd-provider-list"></div><p class="vd-note">${viewerIcon('info')}Sign-in security is managed by your connected provider.</p></div><div class="vd-settings-card vd-privacy-card"><h2>Privacy</h2><p>Your YourRank account identifies you across communities. Credits, claims and activity stay scoped to each community.</p><a class="btn" href="/privacy">Privacy policy ${viewerIcon('external')}</a></div></section>
   <section id="vd-data" tabindex="-1" hidden><div class="vd-settings-card"><h2>Account Information</h2><p>Your basic YourRank account information.</p><dl class="vd-facts"><div><dt>Display name</dt><dd id="vd-data-name"></dd></div><div><dt>Member since</dt><dd id="vd-data-created"></dd></div></dl></div><div class="vd-settings-card"><h2>Export Your Data</h2><p>Download a copy of your YourRank viewer data.</p><div class="vd-export-row"><p>Your viewer identity, provider connections, community memberships, credits, claims, and supported participation records.</p><div class="vd-export-actions"><button class="btn btn--accent" id="vd-export" type="button">Request Data Export</button><button class="btn" id="vd-export-check" type="button" hidden>Check export status</button><a class="btn" id="vd-export-download" hidden>Download data</a></div></div><div class="vd-export-progress" id="vd-export-progress" hidden><p>Keep this page open to check the export and download it when ready.</p><p id="vd-export-status" class="status" role="status" aria-live="polite"></p></div></div><div class="vd-settings-card vd-danger-card"><h2>Delete Account</h2><p>Permanently delete your YourRank account and associated account data.</p><p>Contact support to request account deletion.</p><a class="btn btn--danger" href="${helpHref}">Contact support ${viewerIcon('arrow')}</a></div></section>
   <p class="status" id="vd-account-status" role="status" aria-live="polite" tabindex="-1"></p>
+  </div>
   </div>
   <footer class="vd-footer">
     <p class="vd-footer-brand"><b>YourRank</b> · One viewer account for every community you join.</p>

@@ -9,7 +9,7 @@ import { viewerDashboardPage } from "../pages/viewer-dashboard.js";
 
 const appCss = readFileSync(new URL("../assets/viewer-shell.css", import.meta.url), "utf8");
 const shellCss = readFileSync(new URL("../assets/site-shell.css", import.meta.url), "utf8");
-const clientSource = readFileSync(new URL("../assets/viewer-dashboard.js", import.meta.url), "utf8");
+const clientSource = readFileSync(new URL("../react/pages/viewer-account/page.tsx", import.meta.url), "utf8");
 const shellSource = readFileSync(new URL("../assets/site-shell.js", import.meta.url), "utf8");
 
 const LONG_NAME = "R".repeat(100);
@@ -556,7 +556,7 @@ describe("the global account page", () => {
     expect(page).toContain('id="vd-communities"');
     expect(page).not.toContain('id="vd-site-card"');
     expect(page).not.toContain('id="vd-back"');
-    expect(clientSource).toContain('class="vd-site-mark"');
+    expect(clientSource).toContain('className="vd-site-mark"');
   });
 
   it("links to the canonical creator membership without a client router", () => {
@@ -564,7 +564,7 @@ describe("the global account page", () => {
     expect(clientSource).not.toContain('"popstate"');
     expect(clientSource).not.toContain("pushState");
     expect(clientSource).not.toContain("/api/viewer/site");
-    for (const banned of ["react", "vue", "page.js", "navigo"]) {
+    for (const banned of ["react-router", "vue", "page.js", "navigo"]) {
       expect(clientSource.toLowerCase()).not.toContain(`import ${banned}`);
     }
   });
@@ -578,7 +578,8 @@ describe("the global account page", () => {
   });
 
   it("groups large credit numbers so a balance stays readable", () => {
-    expect(clientSource).toContain('function fmtNum(value) { return Number(value || 0).toLocaleString("en-US"); }');
-    expect(clientSource).toContain("${fmtNum(community.balance)} Credits");
+    expect(clientSource).toContain('function fmtNum(value?: number | string | null)');
+    expect(clientSource).toContain('return Number(value || 0).toLocaleString("en-US");');
+    expect(clientSource).toContain('`${fmtNum(community.balance)} Credits`');
   });
 });

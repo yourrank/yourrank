@@ -27,7 +27,7 @@ const rewardsPageSource = readFileSync(new URL("../react/pages/rewards/page.tsx"
 const rewardsEntrySource = readFileSync(new URL("../react/pages/rewards/entry.tsx", import.meta.url), "utf8");
 const rewardsDispatcherSource = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
 const dashboardV4Source = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
-const viewerClientSource = readFileSync(new URL("../assets/viewer-dashboard.js", import.meta.url), "utf8");
+const viewerClientSource = readFileSync(new URL("../react/pages/viewer-account/page.tsx", import.meta.url), "utf8");
 const CHECKIN_AMOUNT_ERROR = "Check-in credits must be a whole number from 1 to 1,000.";
 
 describe("server-rendered rewards entry points", () => {

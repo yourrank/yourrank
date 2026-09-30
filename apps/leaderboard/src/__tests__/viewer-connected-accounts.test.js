@@ -1,13 +1,8 @@
-// Connected Accounts presentation: the real viewer-dashboard.js renders provider
-// rows into the real server-rendered account page in a DOM, so logos, status
-// hierarchy and copy are asserted on what the browser would actually show.
+// Connected Accounts presentation is asserted on the canonical React island
+// mounted into the real server-rendered account page.
 import { afterEach, describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { Window } from "happy-dom";
-import { viewerDashboardPage } from "../pages/viewer-dashboard.js";
+import { makeViewerAccountEnvironment } from "./viewer-account-react-utils.js";
 
-const dashboardSource = readFileSync(join(import.meta.dir, "../assets/viewer-dashboard.js"), "utf8");
 const ORIGIN = "https://example.test";
 
 const me = {
@@ -22,22 +17,21 @@ const me = {
 };
 
 async function openAccountPage(payload = me) {
-  const window = new Window({ url: `${ORIGIN}/me#vd-connections`, settings: { disableJavaScriptEvaluation: true, disableCSSFileLoading: true, disableErrorCapturing: true } });
-  const { document } = window;
-  const html = await viewerDashboardPage(null, payload.authProviders, { state: "authenticated", viewer: null });
-  document.documentElement.innerHTML = typeof html === "string" ? html : await html.text();
-  const json = (body) => new window.Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
-  window.fetch = async (path) => json(path === "/api/viewer/export" ? { ok: true, exportId: "exp-1" } : payload);
-  const globals = ["window", "document", "location", "history", "fetch", "Event", "URL", "AbortController"];
-  new Function(...globals, dashboardSource)(window, document, window.location, window.history, window.fetch, window.Event, window.URL, window.AbortController);
-  for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  await window.happyDOM.waitUntilComplete();
-  return { window, document };
+  const browser = await makeViewerAccountEnvironment({
+    auth: { state: "authenticated", viewer: null },
+    response: (path) => ({
+      body: path === "/api/viewer/export" ? { ok: true, exportId: "exp-1" } : payload,
+    }),
+    url: `${ORIGIN}/me#vd-connections`,
+    providerAvailability: payload.authProviders,
+  });
+  await browser.ready();
+  return browser;
 }
 
 describe("Connected Accounts provider presentation", () => {
   let browser;
-  afterEach(async () => { await browser?.window.happyDOM.close(); browser = null; });
+  afterEach(async () => { await browser?.close(); browser = null; });
 
   it("does not repeat the page heading inside the card and starts with provider rows", async () => {
     browser = await openAccountPage();
@@ -127,8 +121,7 @@ describe("Connected Accounts provider presentation", () => {
     expect(exportCard.querySelector("h3")).toBeNull();
     expect(exportCard.querySelector("#vd-export-progress").hidden).toBe(true);
     expect(exportCard.querySelector(".vd-export-actions #vd-export")).not.toBeNull();
-    exportCard.querySelector("#vd-export").click();
-    for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    await browser.click(exportCard.querySelector("#vd-export"));
     expect(exportCard.querySelector("#vd-export-progress").hidden).toBe(false);
     expect(exportCard.querySelector("#vd-export-progress").textContent).toContain("Keep this page open");
     expect(exportCard.querySelector("#vd-export-status").textContent).toContain("being prepared");
