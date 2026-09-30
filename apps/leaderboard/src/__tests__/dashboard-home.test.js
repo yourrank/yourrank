@@ -15,6 +15,7 @@ import {
   recentActivityItems,
   setupProgress,
 } from "../assets/dashboard/overview-state.js";
+import { buildHomeViewModel } from "../assets/dashboard/overview.js";
 import { HOME_ACTIVITY_LIMIT, handleHomeActivity, normalizeHomeEvent } from "../handlers/home.js";
 import { ROUTES } from "../routes.js";
 
@@ -25,6 +26,30 @@ const dashboardCss = readFileSync(new URL("../assets/dashboard-v4.css", import.m
 const SITE = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 
+function homeInputs(overrides = {}) {
+  return {
+    state: {
+      ACTIVE_SITE_ID: SITE,
+      SLUG: "night-owls",
+      BOARDS: [{ id: SITE, name: "Night Owls", userRole: "owner" }],
+      ME: { emailVerified: true },
+      ONBOARDING: {},
+      CREDITS: { usage: { pendingRedemptions: 0 }, channel: null },
+    },
+    status: { live: false, published: false, emailVerified: true },
+    siteName: "Night Owls",
+    steps: { brand: false, players: false, publish: false },
+    sections: {
+      activities: { status: "idle", data: null, error: null },
+      giveaway: { status: "idle", data: null, error: null },
+      insights: { status: "idle", data: null, error: null },
+      recent: { status: "idle", data: null, error: null },
+    },
+    now: Date.parse("2026-09-30T12:00:00Z"),
+    ...overrides,
+  };
+}
+
 describe("Home: community header", () => {
   it("derives the status word from existing publish/verification state", () => {
     expect(communityStatus({ live: true, published: true })).toEqual({ state: "live", label: "Live" });
@@ -33,8 +58,10 @@ describe("Home: community header", () => {
   });
 
   it("offers the public link only while the selected community is live, using its slug", () => {
-    expect(overviewJs).toContain("publicLink.hidden = !status.live || !state.SLUG");
-    expect(overviewJs).toContain("publicLink.href = state.SLUG ? `/${state.SLUG}` : \"/\"");
+    const live = buildHomeViewModel(homeInputs({ status: { live: true, published: true, emailVerified: true } }));
+    const draft = buildHomeViewModel(homeInputs());
+    expect(live.header).toMatchObject({ publicHidden: false, publicHref: "/night-owls" });
+    expect(draft.header.publicHidden).toBe(true);
     expect(dashboardJsx).not.toContain("ov-hero");
   });
 });
@@ -45,7 +72,7 @@ describe("Home: needs attention", () => {
   it("is empty for a healthy community so the section hides", () => {
     expect(attentionItems(healthy)).toEqual([]);
     expect(attentionItems({ ...healthy, connection: { homeAttention: false, connected: true } })).toEqual([]);
-    expect(overviewJs).toContain("attentionSection.hidden = attention.length === 0");
+    expect(buildHomeViewModel(homeInputs()).attention.hidden).toBe(true);
   });
 
   it("routes email verification to /verify-email only when publishing is actually blocked", () => {
@@ -217,8 +244,15 @@ describe("Home: community pulse", () => {
 
   it("requests the site-scoped 30-day Insights window and never paints zeros before it arrives", () => {
     expect(overviewJs).toContain("/api/insights?${params}&days=${HOME_PULSE_DAYS}");
-    expect(overviewJs).toContain('if (insights.status === "ready") setMetricValue(el, number(metric.value));');
-    expect(overviewJs).toContain('else if (insights.status === "loading" || insights.status === "idle") setMetricLoading(el);');
+    const loading = buildHomeViewModel(homeInputs()).pulse;
+    const ready = buildHomeViewModel(homeInputs({
+      sections: {
+        ...homeInputs().sections,
+        insights: { status: "ready", data: { window: { effectiveDays: 30 }, community: { newMembers: 0 } }, error: null },
+      },
+    })).pulse;
+    expect(loading.metrics.every((metric) => metric.value === null)).toBe(true);
+    expect(ready.metrics[0].value).toBe("0");
     expect(dashboardJsx).not.toContain("<canvas");
   });
 });
@@ -260,8 +294,16 @@ describe("Home: setup progress", () => {
   });
 
   it("hides the section once core setup is done unless publishing awaits verification", () => {
-    expect(overviewJs).toContain("const showSetup = !progress.done || pendingVerification;");
-    expect(overviewJs).toContain("setupSection.hidden = !showSetup");
+    const complete = buildHomeViewModel(homeInputs({
+      steps: { brand: true, players: true, publish: true },
+      status: { live: true, published: true, emailVerified: true },
+    }));
+    const pending = buildHomeViewModel(homeInputs({
+      steps: { brand: true, players: true, publish: true },
+      status: { live: false, published: true, emailVerified: false },
+    }));
+    expect(complete.setup.hidden).toBe(true);
+    expect(pending.setup.hidden).toBe(false);
     expect(overviewJs).not.toContain("state.CREDITS?.channel?.connected");
   });
 });
@@ -270,11 +312,10 @@ describe("Home: section loading and error isolation", () => {
   it("loads each section independently and resets everything on a site switch", () => {
     for (const key of ["activities", "giveaway", "insights", "recent"]) expect(overviewJs).toContain(`${key}: {`);
     expect(overviewJs).toContain("const token = ++loadToken;");
-    expect(overviewJs).toContain("home = { siteId, sections:");
+    expect(overviewJs).toMatch(/home = \{\s*siteId,\s*sections:/);
     expect(overviewJs).toContain("if (token !== loadToken || home.siteId !== siteId) return;");
-    expect(overviewJs).toContain('if (err?.status === 403) home.sections[key] = { status: "forbidden"');
-    expect(overviewJs).toContain('data-home-retry="${key}"');
-    expect(overviewJs).toContain("loadHomeSection(button.dataset.homeRetry, state.ACTIVE_SITE_ID, loadToken)");
+    const page = readFileSync(new URL("../react/pages/overview/page.tsx", import.meta.url), "utf8");
+    expect(page).toContain("data-home-retry={error.key}");
     expect(overviewJs).not.toContain("Promise.all([\n      fetchDashboardJson");
   });
 
@@ -291,10 +332,19 @@ describe("Home: section loading and error isolation", () => {
   });
 
   it("hides optional sections when empty and shows a compact skeleton while loading", () => {
-    expect(overviewJs).toContain("liveSection.hidden = !liveLoading && !liveError && live.items.length === 0");
-    expect(overviewJs).toContain("upcomingSection.hidden = !loading && !error && upcoming.length === 0");
-    expect(overviewJs).toContain("SKELETON_ROW");
-    for (const id of ["ovAttention", "ovLiveNow", "ovComingNext", "ovSetup"]) expect(dashboardJsx).toMatch(new RegExp(`id="${id}"[^>]*hidden`));
+    const root = dashboardJsx.match(/<div id="ov-app"[\s\S]*?<\/div>/)?.[0] || "";
+    expect(root).toContain("Your community at a glance.");
+    expect(root).not.toContain('id="ovLiveNow"');
+    const loading = buildHomeViewModel(homeInputs({
+      sections: {
+        activities: { status: "loading", data: null, error: null },
+        giveaway: { status: "loading", data: null, error: null },
+        insights: { status: "loading", data: null, error: null },
+        recent: { status: "loading", data: null, error: null },
+      },
+    }));
+    expect(loading.live).toMatchObject({ hidden: false, loading: true });
+    expect(loading.upcoming).toMatchObject({ hidden: false, loading: true });
   });
 
   it("wraps Home content on narrow screens instead of scrolling sideways", () => {

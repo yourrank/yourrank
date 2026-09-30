@@ -469,6 +469,10 @@ Home now has one setup action with a collapsed checklist; People empty-state nes
 
 Live-browser evidence covers Home, empty People, Rewards setup, and the demo profile. The configured root regression run passed; credential-dependent integration skips remain skips. This is not a full-site or production verification. See `docs/design/yourrank-dashboard-redesign-verification.md` for evidence and remaining limits.
 
+## Creator dashboard Home React island — 2026-09-30
+
+Home remains a core vanilla SPA section: `overview.js` owns dashboard state, requests, site/token guards, and a serializable presentation model; `react/pages/overview` owns Home markup and dialog presentation. Existing callers, request contracts, and `overview-state.js` projections are unchanged. The island is pushed-props and lazy-loaded only when the Home root exists.
+
 ## Viewer structural replacement — 2026-09-06
 
 The Channel guide replaces the rejected mixed viewer shell on global `/me` and supported creator public sections. Shared `viewer-shell.ts` / `viewer-shell.css` own navigation and material; stored template styling and devin are excluded there. Global Account remains a membership directory with login maintenance; community Membership owns its balance, claims, participation and free-code entry. Restricted Games remain on their existing shell; identities, route ownership and permissions are unchanged.

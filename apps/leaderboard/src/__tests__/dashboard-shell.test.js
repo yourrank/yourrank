@@ -5,6 +5,7 @@ import { RewardsChannelPage, RewardsRedemptionsPage } from "../pages/rewards.jsx
 import { AudienceActivityPage, AudienceMembersPage, AudienceReviewsPage } from "../pages/audience.jsx";
 import { UnifiedSettingsPage } from "../pages/account.jsx";
 import { PAGES } from "../pages.jsx";
+import { buildHomeViewModel } from "../assets/dashboard/overview.js";
 const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", import.meta.url), "utf8");
 
 const user = { display_name: "Pro user", plan: "pro" };
@@ -224,8 +225,10 @@ describe("signed-in shell navigation", () => {
 
   it("composes the Overview as a single-column operating flow", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard", user }).toString();
+    expect(html).toContain('<div id="ov-app" class="yr-react">');
+    expect(html).toContain("Checking…");
+    expect(html).toContain("Your community at a glance.");
     expect(html).toContain('id="ovSetupMessage"');
-    expect(html).toContain('id="ovSetupAction"');
     expect(html).not.toContain('id="ovStepBrand"');
     expect(html).toContain(">Home</h1>");
     // One column, in the operational order — no bento grid, no side column.
@@ -233,9 +236,8 @@ describe("signed-in shell navigation", () => {
     expect(html).not.toContain('id="ovOnboardingBento"');
     expect(html).not.toContain('id="ovActiveBento"');
     expect(html).not.toContain('class="ov-lists"');
-    const order = ["ovAttention", "ovLiveNow", "ovComingNext", "ovPulse", "ovRecent", "ovQuickActions", "ovSetup"].map((id) => html.indexOf(`id="${id}"`));
-    expect(order.every((index) => index > 0)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html).toMatch(/id="ovAttention"[^>]*\shidden(?:="[^"]*")?(?:\s|>)/);
+    expect(html).toMatch(/id="ovSetup"[^>]*\shidden(?:="[^"]*")?(?:\s|>)/);
   });
 
   it("does not duplicate peer products below the rail", () => {
@@ -346,12 +348,24 @@ describe("signed-in shell navigation", () => {
 
   it("keeps operational data visible while launch setup is incomplete", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard", user }).toString();
-    // The summary figures and lists are never gated behind setup completion.
-    expect(html).toContain('class="ov-figures" id="ovFigures"');
-    expect(html).not.toMatch(/id="ovFigures"[^>]*hidden/);
-    expect(html).not.toMatch(/class="ov-lists"[^>]*hidden/);
-    expect(html).toContain("0 of 3 done");
-    expect(html).not.toContain('id="ovStepKickStatus"');
+    expect(html).toContain('id="ovFigures"');
+    expect(html).toContain('id="ovRecent"');
+    expect(html).toContain('id="ovQuickActions"');
+    const vm = buildHomeViewModel({
+      state: { ACTIVE_SITE_ID: "site-1", SLUG: "night-owls", BOARDS: [], ME: { emailVerified: true }, CREDITS: {} },
+      status: { live: false, published: false, emailVerified: true },
+      steps: { brand: false, players: false, publish: false },
+      sections: {
+        activities: { status: "idle", data: null, error: null },
+        giveaway: { status: "idle", data: null, error: null },
+        insights: { status: "idle", data: null, error: null },
+        recent: { status: "idle", data: null, error: null },
+      },
+    });
+    expect(vm.pulse.hidden).toBe(false);
+    expect(vm.recent.hidden).toBe(false);
+    expect(vm.setup.hidden).toBe(false);
+    expect(vm.setup.countText).toBe("0 of 3 done");
   });
 
   it("keeps one page heading and a contiguous outline on every dashboard view", () => {
