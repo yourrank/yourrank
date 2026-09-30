@@ -40,7 +40,7 @@ import type {
 
 declare global {
   interface Window {
-    __yrBoot?: { signal?: () => void; fail?: (message: string) => void };
+    __yrBoot?: { signal: () => void; fail: (message: string) => void };
   }
 }
 

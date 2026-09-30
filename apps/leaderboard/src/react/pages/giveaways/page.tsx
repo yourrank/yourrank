@@ -56,8 +56,8 @@ declare global {
   interface Window {
     webkitAudioContext?: typeof AudioContext;
     __yrBoot?: {
-      fail?: (message: string) => void;
-      signal?: () => void;
+      fail: (message: string) => void;
+      signal: () => void;
     };
   }
 }
@@ -415,7 +415,7 @@ export function GiveawaysPage({ initialTab, dependencies }: GiveawayPageProps) {
     }).catch((error: unknown) => {
       if (!active) return;
       setBootError(errorMessage(error, "The dashboard shell could not be loaded."));
-      window.__yrBoot?.fail?.(errorMessage(error, "The dashboard shell could not be loaded."));
+      window.__yrBoot?.fail(errorMessage(error, "The dashboard shell could not be loaded."));
     });
     return () => { active = false; };
   }, [deps]);
@@ -430,7 +430,7 @@ export function GiveawaysPage({ initialTab, dependencies }: GiveawayPageProps) {
   }, [setTabFromRoot]);
 
   useEffect(() => {
-    if (bootReady && !bootError) window.__yrBoot?.signal?.();
+    if (bootReady && !bootError) window.__yrBoot?.signal();
   }, [bootReady, bootError]);
 
   const alert = (message: string) => setPageAlert(message);
