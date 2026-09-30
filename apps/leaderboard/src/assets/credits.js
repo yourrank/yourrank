@@ -3,16 +3,10 @@ import { state as dashboardState } from "./dashboard/state.js";
 import { sitePath, siteQuery } from "./dashboard/board-shell.js";
 
 let rewardsIslandPromise;
-let audienceModulePromise;
 let generation = 0;
 let activeModule;
 
 function getModule() {
-  const tab = document.getElementById("cr-app")?.dataset.crTab || "";
-  if (tab === "viewers" || tab === "history") {
-    audienceModulePromise ||= import("./audience-credits.js");
-    return audienceModulePromise;
-  }
   rewardsIslandPromise ||= import("./react/rewards.js");
   return rewardsIslandPromise;
 }

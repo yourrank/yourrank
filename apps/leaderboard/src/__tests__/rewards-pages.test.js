@@ -22,7 +22,6 @@ const pages = [
   ["rules", RewardsRulesPage],
   ["shop", RewardsShopPage],
   ["redemptions", RewardsRedemptionsPage],
-  ["viewers", AudienceMembersPage],
 ];
 const rewardsPageSource = readFileSync(new URL("../react/pages/rewards/page.tsx", import.meta.url), "utf8");
 const rewardsEntrySource = readFileSync(new URL("../react/pages/rewards/entry.tsx", import.meta.url), "utf8");
@@ -39,6 +38,12 @@ describe("server-rendered rewards entry points", () => {
       expect(html).not.toContain(`<div data-cr-tab="${tab}">`);
     });
   }
+
+  it("mounts Audience Members on its dedicated React root", () => {
+    const html = AudienceMembersPage({ fragment: true }).toString();
+    expect(html).toContain('<div id="audience-app" data-audience-tab="viewers"></div>');
+    expect(html).not.toContain('<div id="cr-app" data-cr-tab="viewers"');
+  });
 
   it("groups every rewards destination under the Rewards workspace", () => {
     for (const config of [rewardsOverviewConfig, rewardsRulesConfig, rewardsShopConfig, rewardsRedemptionsConfig]) {

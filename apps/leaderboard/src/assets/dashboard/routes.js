@@ -87,7 +87,7 @@ export function chromeStateFor(page, tab = "", { exact = false } = {}) {
 // `boot` names the client module that owns the section's lifecycle:
 //   "activities"→ assets/activities.js  (Safe Activities)
 //   "credits"   → assets/credits.js     (Rewards)
-//   "people"    → assets/people.js      (People; delegates Members to credits.js)
+//   "people"    → assets/people.js      (Audience React island)
 //   "giveaways" → assets/giveaways.js   (Engagement)
 //   "account"   → assets/account.js     (Account settings)
 //
