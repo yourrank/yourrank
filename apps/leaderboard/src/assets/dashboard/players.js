@@ -28,9 +28,9 @@ const PLAYER_NUMBER_FIELDS = [
   { key: "wagered", selector: ".p-wager", label: "Amount", money: true },
   { key: "prize", selector: ".p-prize", label: "Prize", money: true },
   { key: "score", selector: ".p-score", label: "Score", max: SCORE_MAX },
-  { key: "hands", selector: ".p-hands", label: "Hands played", integer: true, max: INT32_MAX },
-  { key: "netProfit", selector: ".p-net-profit", label: "Net profit", signed: true, max: SCORE_MAX },
-  { key: "winRate", selector: ".p-win-rate", label: "Win rate", signed: true, max: WIN_RATE_MAX },
+  { key: "hands", selector: ".p-hands", label: "Rounds", integer: true, max: INT32_MAX },
+  { key: "netProfit", selector: ".p-net-profit", label: "Net amount", signed: true, max: SCORE_MAX },
+  { key: "winRate", selector: ".p-win-rate", label: "Success rate", signed: true, max: WIN_RATE_MAX },
   { key: "change", selector: ".p-change", label: "Change", signed: true, integer: true, max: INT32_MAX },
 ];
 
@@ -209,14 +209,14 @@ export function validateQuickAddValues({ name = "", wagered = "", prize = "", sc
       if (exists) errors.push({ field: "name", message: `“${name.trim()}” is already on the leaderboard. Use the existing row instead.` });
     }
   }
-  const wager = parsePlayerNumber(wagered);
-  if (!wager.ok) errors.push({ field: "wagered", message: wager.message });
+  const amount = parsePlayerNumber(wagered);
+  if (!amount.ok) errors.push({ field: "wagered", message: amount.message });
   const prizeValue = parsePlayerNumber(prize);
   if (!prizeValue.ok) errors.push({ field: "prize", message: prizeValue.message });
   // DEF-24: Allow negative scores — custom game formats can have deductions.
   const scoreValue = parsePlayerNumber(score, { signed: true });
   if (!scoreValue.ok) errors.push({ field: "score", message: scoreValue.message });
-  return { ok: errors.length === 0, errors, wagered: wager.value, prize: prizeValue.value, score: scoreValue.value };
+  return { ok: errors.length === 0, errors, wagered: amount.value, prize: prizeValue.value, score: scoreValue.value };
 }
 
 function playerDraftStorageKey() {
@@ -375,9 +375,9 @@ export function playerRow(p = { name: "", wagered: "", prize: "", score: "", han
     <td class="num col-legacy" data-label="Amount"><input class="p-wager" data-field="p-wager" aria-label="Amount for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.wagered)}" aria-describedby="${rowId}-wager-error"><span class="field-err" data-field-error="p-wager" id="${rowId}-wager-error" hidden role="alert" aria-live="polite"></span></td>
     <td class="num col-legacy" data-label="Prize"><input class="p-prize" data-field="p-prize" aria-label="Prize for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.prize)}" aria-describedby="${rowId}-prize-error"><span class="field-err" data-field-error="p-prize" id="${rowId}-prize-error" hidden role="alert" aria-live="polite"></span></td>
     <td class="num col-score" data-label="Score" hidden><input class="p-score" data-field="p-score" aria-label="Score for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.score ?? "")}" aria-describedby="${rowId}-score-error"><span class="field-err" data-field-error="p-score" id="${rowId}-score-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-hands" data-label="Hands played" hidden><input class="p-hands" data-field="p-hands" aria-label="Hands played for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.hands)}" aria-describedby="${rowId}-hands-error"><span class="field-err" data-field-error="p-hands" id="${rowId}-hands-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-net" data-label="Net profit" hidden><input class="p-net-profit" data-field="p-net-profit" aria-label="Net profit for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.netProfit)}" aria-describedby="${rowId}-net-error"><span class="field-err" data-field-error="p-net-profit" id="${rowId}-net-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-win" data-label="Win rate" hidden><input class="p-win-rate" data-field="p-win-rate" aria-label="Win rate for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.winRate)}" aria-describedby="${rowId}-win-error"><span class="field-err" data-field-error="p-win-rate" id="${rowId}-win-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-hands" data-label="Rounds" hidden><input class="p-hands" data-field="p-hands" aria-label="Rounds for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.hands)}" aria-describedby="${rowId}-hands-error"><span class="field-err" data-field-error="p-hands" id="${rowId}-hands-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-net" data-label="Net amount" hidden><input class="p-net-profit" data-field="p-net-profit" aria-label="Net amount for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.netProfit)}" aria-describedby="${rowId}-net-error"><span class="field-err" data-field-error="p-net-profit" id="${rowId}-net-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-win" data-label="Success rate" hidden><input class="p-win-rate" data-field="p-win-rate" aria-label="Success rate for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.winRate)}" aria-describedby="${rowId}-win-error"><span class="field-err" data-field-error="p-win-rate" id="${rowId}-win-error" hidden role="alert" aria-live="polite"></span></td>
     <td class="num col-change" data-label="Change" hidden><input class="p-change" data-field="p-change" aria-label="Rank change for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.change)}" aria-describedby="${rowId}-change-error"><span class="field-err" data-field-error="p-change" id="${rowId}-change-error" hidden role="alert" aria-live="polite"></span></td>
     <td class="act" data-label="Actions"><button class="row-edit" title="Edit player" aria-label="Edit player" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="row-x" title="Remove" aria-label="Remove ${esc(p.name || "player")}" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg></button></td>`;
   tr.querySelector(".row-edit").addEventListener("click", () => {
@@ -391,9 +391,9 @@ export function playerRow(p = { name: "", wagered: "", prize: "", score: "", han
     tr.querySelector(".p-wager")?.setAttribute("aria-label", `Amount for ${currentName}`);
     tr.querySelector(".p-prize")?.setAttribute("aria-label", `Prize for ${currentName}`);
     tr.querySelector(".p-score")?.setAttribute("aria-label", `Score for ${currentName}`);
-    tr.querySelector(".p-hands")?.setAttribute("aria-label", `Hands played for ${currentName}`);
-    tr.querySelector(".p-net-profit")?.setAttribute("aria-label", `Net profit for ${currentName}`);
-    tr.querySelector(".p-win-rate")?.setAttribute("aria-label", `Win rate for ${currentName}`);
+    tr.querySelector(".p-hands")?.setAttribute("aria-label", `Rounds for ${currentName}`);
+    tr.querySelector(".p-net-profit")?.setAttribute("aria-label", `Net amount for ${currentName}`);
+    tr.querySelector(".p-win-rate")?.setAttribute("aria-label", `Success rate for ${currentName}`);
     tr.querySelector(".p-change")?.setAttribute("aria-label", `Rank change for ${currentName}`);
     tr.querySelector(".row-x")?.setAttribute("aria-label", `Remove ${currentName}`);
     updateNameCounter(event.currentTarget);
@@ -808,7 +808,7 @@ function parseImportNumber(s) {
 // columns in ANY order (or extra columns) without silently corrupting data.
 const HEADER_ALIASES = {
   name: "name", player: "name", username: "name", user: "name", handle: "name",
-  wagered: "wagered", wager: "wagered", wagers: "wagered", "total wagered": "wagered", volume: "wagered", bet: "wagered", "bet amount": "wagered",
+  wagered: "wagered", volume: "wagered",
   prize: "prize", reward: "prize", payout: "prize", winnings: "prize",
   score: "score", points: "score", pts: "score",
   hands: "hands", rounds: "hands", games: "hands",
@@ -1162,7 +1162,7 @@ $("bulkClearWager")?.addEventListener("click", () => {
     }
   }
   if (cleared) {
-    commitDraftMutation(() => sortRows(), `${cleared} wager${cleared === 1 ? "" : "s"} cleared. Save to publish.`);
+    commitDraftMutation(() => sortRows(), `${cleared} amount${cleared === 1 ? "" : "s"} cleared. Save to publish.`);
   }
 });
 

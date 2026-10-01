@@ -37,11 +37,10 @@ function createNotifyQueue(env) {
   return createQueueProducer(env.EVENTS_QUEUE, directQueueFallback, env);
 }
 
-// NOTE: chips + whyStats intentionally start empty. They render casino perks
-// ("Deposit Bonus", "Instant Rakeback", …) that a brand-new owner never entered,
-// which published fabricated partner claims on every unconfigured page. Owners
-// add their own via the dashboard; the public renderer hides these sections when
-// they're empty. Socials start disabled so a fresh page doesn't advertise fake links.
+// NOTE: chips + whyStats intentionally start empty so new pages do not publish
+// unverified partner claims. Owners add their own via the dashboard; the public
+// renderer hides these sections when they're empty. Socials start disabled so a
+// fresh page doesn't advertise fake links.
 export const VALID_PERIODS = ["Weekly", "Monthly", "Season"];
 
 export const DEFAULT_EXTRA = {
@@ -87,7 +86,6 @@ export const DEFAULT_EXTRA = {
     // Streamers opt in by writing content and enabling each page individually.
     terms: "",        termsEnabled: false,
     privacy: "",      privacyEnabled: false,
-    responsible: "",  responsibleEnabled: false,
     cookies: "",      cookiesEnabled: false,
     refund: "",       refundEnabled: false,
     contact: "",      contactEnabled: false,
@@ -115,7 +113,7 @@ export function normalizeSections(raw) {
 // needed by the /logo/:slug endpoint and saveSite(), which fetch it separately.
 // PERF-004 / PERF-107: avoid SELECT * to prevent 180KB+ transfers on every page.
 // PERF-005: include has_logo as a computed column to avoid a separate re-query.
-const SITE_COLUMNS = "id, user_id, slug, name, tagline, casino, code, cta_url, prize_pool, period, starts_at, ends_at, rank_by, reset_note, blurb, extra_json, published, is_draft, theme_json, updated_at, published_at, custom_domain, domain_status, discord_webhook_url_enc, telegram_chat_id, telegram_notify, auto_reset_enabled, auto_reset_clear, auto_reset_last_run_at, password_hash, password_salt, viewer_kick_auth_enabled, viewer_discord_auth_enabled, viewer_public_redeem_enabled, games_enabled, shop_enabled, credits_enabled, (logo_data IS NOT NULL AND logo_data != '') AS has_logo, (banner_data IS NOT NULL AND banner_data != '') AS has_banner";
+const SITE_COLUMNS = "id, user_id, slug, name, tagline, casino, code, cta_url, prize_pool, period, starts_at, ends_at, rank_by, reset_note, blurb, extra_json, published, is_draft, theme_json, updated_at, published_at, custom_domain, domain_status, discord_webhook_url_enc, telegram_chat_id, telegram_notify, auto_reset_enabled, auto_reset_clear, auto_reset_last_run_at, password_hash, password_salt, viewer_kick_auth_enabled, viewer_discord_auth_enabled, viewer_public_redeem_enabled, shop_enabled, credits_enabled, (logo_data IS NOT NULL AND logo_data != '') AS has_logo, (banner_data IS NOT NULL AND banner_data != '') AS has_banner";
 
 // L1 in-memory cache (per-isolate). No L2 KV — sessions moved to Postgres.
 const siteCache = new Map();
@@ -347,10 +345,8 @@ const DEFAULT_PRIZES = {
   countdownLabel: "",
   currency: "$",
   hidePrizeAmounts: false,
-  payoutsLabel: "Payouts",
-  wagerLabel: "Wagered",
+  payoutsLabel: "Rewards",
   prizeLabel: "Prize",
-  wagerTotalLabel: "Wager total",
   payoutNote: "",
 };
 // C-01: Single source of truth for prize label sanitization.
@@ -367,9 +363,7 @@ function parsePrizes(rawPrizes) {
     currency:        String(raw.currency        || DEFAULT_PRIZES.currency).slice(0, CURRENCY_MAX),
     hidePrizeAmounts: raw.hidePrizeAmounts === true,
     payoutsLabel:    String(raw.payoutsLabel    || DEFAULT_PRIZES.payoutsLabel).slice(0, PRIZE_LABEL_MAX),
-    wagerLabel:      String(raw.wagerLabel      || DEFAULT_PRIZES.wagerLabel).slice(0, PRIZE_LABEL_MAX),
     prizeLabel:      String(raw.prizeLabel      || DEFAULT_PRIZES.prizeLabel).slice(0, PRIZE_LABEL_MAX),
-    wagerTotalLabel: String(raw.wagerTotalLabel || DEFAULT_PRIZES.wagerTotalLabel).slice(0, PRIZE_LABEL_MAX),
     payoutNote:      String(raw.payoutNote || "").trim().slice(0, PAYOUT_NOTE_MAX),
   };
 }
@@ -508,7 +502,6 @@ export function publicShape(site, players, archives = [], hasLogo = false, playe
       // leaderboard exists; there is no second leaderboard flag.
       leaderboard: sections.leaderboard,
       shop: !!site.shop_enabled,
-      games: !!site.games_enabled,
       me: !!site.credits_enabled,
     },
     legal: m.legal || DEFAULT_EXTRA.legal,
@@ -1225,7 +1218,6 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   const sectionPayload = payload.siteSections && typeof payload.siteSections === "object" ? payload.siteSections : {};
   const shopEnabled = typeof sectionPayload.shop === "boolean" ? sectionPayload.shop : !!site.shop_enabled;
   const creditsEnabled = typeof sectionPayload.credits === "boolean" ? sectionPayload.credits : !!site.credits_enabled;
-  const gamesEnabled = typeof sectionPayload.games === "boolean" ? sectionPayload.games : !!site.games_enabled;
 
   // Auto-reset scheduler controls
   const autoReset = payload.autoReset && typeof payload.autoReset === "object" ? payload.autoReset : {};
@@ -1392,14 +1384,14 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
       ? String(b.period || "Monthly").trim()
       : (site.period || "Monthly");
     await tx.unsafe(
-      `UPDATE sites SET slug=$1, name=$2, tagline=$3, casino=$4, code=$5, cta_url=$6, prize_pool=$7, period=$8, starts_at=$9, ends_at=$10, rank_by=$11, reset_note=$12, blurb=$13, extra_json=$14::jsonb, logo_data=$15, theme_json=$16::jsonb, published=$17, is_draft=$18, discord_webhook_url_enc=$19, telegram_chat_id=$20, telegram_notify=$21, auto_reset_enabled=$22, auto_reset_clear=$23, password_hash=$24, password_salt=$25, published_at=$26, shop_enabled=$27, credits_enabled=$28, games_enabled=$29, banner_data=$30, updated_at=now() WHERE id=$31`,
+      `UPDATE sites SET slug=$1, name=$2, tagline=$3, casino=$4, code=$5, cta_url=$6, prize_pool=$7, period=$8, starts_at=$9, ends_at=$10, rank_by=$11, reset_note=$12, blurb=$13, extra_json=$14::jsonb, logo_data=$15, theme_json=$16::jsonb, published=$17, is_draft=$18, discord_webhook_url_enc=$19, telegram_chat_id=$20, telegram_notify=$21, auto_reset_enabled=$22, auto_reset_clear=$23, password_hash=$24, password_salt=$25, published_at=$26, shop_enabled=$27, credits_enabled=$28, banner_data=$29, updated_at=now() WHERE id=$30`,
       [
         slugVal, siteName, b.tagline ?? site.tagline, b.casino ?? site.casino, b.code ?? site.code,
         b.ctaUrl ?? site.cta_url, b.prizePool ?? site.prize_pool, periodVal,
         startsAtVal, endsAtVal, nextRankBy, b.resetNote ?? site.reset_note, (payload.partner && payload.partner.blurb) ?? site.blurb,
         extra, logoData, themeJson, publishedVal, isDraftVal, discordWebhookUrlEnc, telegramChatId, telegramNotify,
         autoResetEnabled, autoResetClear, passwordHash, passwordSalt, publishedAtVal,
-        shopEnabled, creditsEnabled, gamesEnabled, bannerData, site.id,
+        shopEnabled, creditsEnabled, bannerData, site.id,
       ]
     );
 
@@ -1554,7 +1546,6 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   if (payload.customDomain !== undefined) changes.push("custom_domain");
   if (typeof sectionPayload.shop === "boolean" && sectionPayload.shop !== !!site.shop_enabled) changes.push("shop_enabled");
   if (typeof sectionPayload.credits === "boolean" && sectionPayload.credits !== !!site.credits_enabled) changes.push("credits_enabled");
-  if (typeof sectionPayload.games === "boolean" && sectionPayload.games !== !!site.games_enabled) changes.push("games_enabled");
 
   await logAuditImpl({
     actorId: uid,

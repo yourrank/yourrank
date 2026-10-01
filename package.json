@@ -46,7 +46,7 @@
     "lint:consumer": "eslint apps/consumer/src --ext .js --no-eslintrc -c apps/leaderboard/.eslintrc.json",
     "build:brand-assets": "bun run --cwd packages/shared build && node scripts/build-brand-assets.mjs",
     "check:test-mocks": "node scripts/check-test-mocks.mjs",
-    "typecheck": "(cd packages/shared && bun run build) && (cd apps/bot && bun run typecheck) && (cd apps/leaderboard && bun run typecheck:games) && (cd apps/leaderboard && bun run typecheck:react) && (cd apps/monitor && bun run typecheck) && (cd apps/web && bun run typecheck) && tsc -p apps/consumer/tsconfig.json",
+    "typecheck": "(cd packages/shared && bun run build) && (cd apps/bot && bun run typecheck) && (cd apps/leaderboard && bun run typecheck:react) && (cd apps/monitor && bun run typecheck) && (cd apps/web && bun run typecheck) && tsc -p apps/consumer/tsconfig.json",
     "test": "bun run scripts/test.mjs",
     "verify:n1-compatibility": "node scripts/verify-n1-compatibility.mjs",
     "verify:portability-postgres": "node scripts/verify-portability-postgres.mjs",

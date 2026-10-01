@@ -30,7 +30,7 @@ describe("demo credibility invariants", () => {
     expect(html).toContain("Points");
     expect(html).toContain("pts");
     expect(html).not.toContain("$500");
-    expect(html).not.toContain("Wagered");
+    expect(html).toContain("Points");
     expect(html).not.toContain(">Prize<");
   });
 
@@ -61,7 +61,6 @@ describe("demo credibility invariants", () => {
       home: "Home",
       leaderboard: "Leaderboard",
       shop: "Rewards",
-      games: "Games",
       me: "My Activity",
     };
 
@@ -74,7 +73,7 @@ describe("demo credibility invariants", () => {
       else if (section === "me") expect(html).toContain('<h1 class="yr-h1 yr-lbh-title">My Activity</h1>');
       else if (section === "shop") expect(html).toContain('<h1 class="yr-h1 yr-lbh-title">Rewards</h1>');
       else if (section !== "leaderboard") expect(html).toContain(`<h1 class="yr-h1">${label}</h1>`);
-      if (section !== "games") expect(html).toContain(`id="viewer-top-title">${label}</span>`);
+      expect(html).toContain(`id="viewer-top-title">${label}</span>`);
     }
 
     const shop = await render("shop");

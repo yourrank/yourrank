@@ -240,7 +240,6 @@ describe("account export artifacts", () => {
       "adminAudit", "supportMessages", "siteStatsHourly", "siteReferrers",
       "viewers", "siteViewers", "creditLedger", "redemptions", "shopItems",
       "creditRewardMappings", "kickRewardEvents", "viewerUsernameHistory",
-      "siteGameSettings", "gameSeeds", "gameSeedReveals", "gameRounds",
       "playerSubscriptions", "streamChannels", "siteVisitorStats",
       "siteScrollDepth", "siteClicks",
     ]);
@@ -368,13 +367,10 @@ describe("account export artifacts", () => {
       if (sql.includes("FROM sites")) return [{ id: "site-1", slug: "board" }];
       if (sql.includes("FROM viewers")) return [{ id: "viewer-1", kick_user_id: "kick-1", kick_access_token_enc: "OAUTH-ACCESS-SECRET", discord_refresh_token_enc: "OAUTH-REFRESH-SECRET", created_at: "2026-01-01", updated_at: "2026-01-02", has_kick_identity: true }];
       if (sql.includes("FROM site_viewers")) return [{ id: "sv-1", site_id: "site-1", viewer_id: "viewer-1", public_token: "PUBLIC-BEARER-SECRET", balance: 10, total_earned: 20, total_spent: 10, blocked: false, fraud_score: 0 }];
-      if (sql.includes("FROM credit_ledger")) return [{ id: "ledger-1", site_viewer_id: "sv-1", type: "earn", amount: 5, description: "earned", metadata: { game: "dice", secret: "must-drop" }, created_at: "2026-01-01" }];
+      if (sql.includes("FROM credit_ledger")) return [{ id: "ledger-1", site_viewer_id: "sv-1", type: "earn", amount: 5, description: "earned", metadata: { secret: "must-drop" }, created_at: "2026-01-01" }];
       if (sql.includes("FROM redemptions")) return [{ id: "redemption-1", site_viewer_id: "sv-1", shop_item_id: "item-1", cost: 5, status: "fulfilled", created_at: "2026-01-01", updated_at: "2026-01-01" }];
       if (sql.includes("FROM kick_reward_events")) return [{ event_id: "event-1", event_type: "reward", site_id: "site-1", reward_id: "reward-1", redeemer_kick_user_id: "kick-1", reward_cost: 100, status: "processed", viewer_id: "viewer-1", payload: { secret: "KICK-RAW-PAYLOAD-SECRET" } }];
       if (sql.includes("FROM viewer_username_history")) return [{ id: "history-1", viewer_id: "viewer-1", username: "viewer-name", seen_at: "2026-01-01" }];
-      if (sql.includes("FROM game_seeds")) return [{ id: "seed-1", site_viewer_id: "sv-1", viewer_id: "viewer-1", server_seed: "ACTIVE-SERVER-SEED", server_seed_hash: "hash", client_seed: "client", nonce: 1 }];
-      if (sql.includes("FROM game_seed_reveals")) return [{ id: "reveal-1", site_viewer_id: "sv-1", viewer_id: "viewer-1", server_seed: "REVEALED-SEED", server_seed_hash: "old-hash", client_seed: "old-client", final_nonce: 2 }];
-      if (sql.includes("FROM game_rounds")) return [{ id: "round-1", site_id: "site-1", site_viewer_id: "sv-1", viewer_id: "viewer-1", game: "dice", bet: 5, state: "settled", payout: 10, multiplier: 2, house_edge_bps: 100, server_seed_hash: "hash", client_seed: "client", nonce: 1, params: { target: 50, direction: "over", secret: "drop-me" }, outcome: { target: 50, roll: 75, win: true, secret: "drop-me" }, revealed: [1] }];
       if (sql.includes("FROM player_subscriptions")) return [{ id: "subscription-1", site_id: "site-1", bot_id: "bot-1", tg_user_id: 123, player_name: "Telegram Viewer", created_at: "2026-01-01" }];
       if (sql.includes("FROM site_visitors")) return [{ site_id: "site-1", visitor_hash: "RAW-VISITOR-HASH-SECRET", visitor_count: 1, first_seen: "2026-01-01", last_seen: "2026-01-02", sessions: 2 }];
       if (sql.includes("FROM sessions")) return [{ token: "SESSION-SECRET", created_at: "2026-01-01", expires_at: "2026-02-01", twofa_verified: false }];
@@ -389,7 +385,6 @@ describe("account export artifacts", () => {
     const parsed = lines.map((line) => JSON.parse(line));
     const row = (table) => parsed.find((line) => line.table === table)?.row;
     expect(row("viewers").viewer_ref).toBe(row("siteViewers").viewer_ref);
-    expect(row("siteViewers").viewer_ref).toBe(row("gameRounds").viewer_ref);
     expect(row("kickRewardEvents").viewer_ref).toBe(row("viewers").viewer_ref);
     const artifact = JSON.stringify(parsed);
     expect(artifact).not.toContain("ACTIVE-SERVER-SEED");
@@ -405,8 +400,5 @@ describe("account export artifacts", () => {
     expect(artifact).not.toContain("RAW-VISITOR-HASH-SECRET");
     expect(artifact).not.toContain("PROVIDER-RAW-PAYLOAD-SECRET");
     expect(row("siteVisitorStats")).toEqual(expect.objectContaining({ visitor_count: 1, sessions: 2 }));
-    expect(row("gameSeedReveals").server_seed).toBe("REVEALED-SEED");
-    expect(row("gameRounds").params).toEqual({ target: 50, direction: "over" });
-    expect(row("gameRounds").outcome).toEqual({ target: 50, roll: 75, win: true });
   });
 });

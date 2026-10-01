@@ -16,7 +16,7 @@ const baseData = {
     { name: "Alice", rank: 1, wagered: 5000, prize: "$100" },
     { name: "Bob", rank: 2, wagered: 3000, prize: "$60" },
   ],
-  prizes: { currency: "$", wagerLabel: "Wagered", prizeLabel: "Prize" },
+  prizes: { currency: "$", prizeLabel: "Prize" },
   shopItems: [
     { id: 1, name: "Song request", cost: 600, active: true },
     { id: 2, name: "VIP badge", cost: 250, active: true },
@@ -27,7 +27,7 @@ const baseData = {
     { name: "Kick", type: "kick", url: "https://kick.com/creator" },
     { name: "Discord", type: "discord", url: "https://discord.gg/creator" },
   ],
-  siteSections: { home: true, leaderboard: true, shop: true, games: false, me: true },
+  siteSections: { home: true, leaderboard: true, shop: true, me: true },
 };
 
 function render(section, { data = baseData, viewer = null, viewerData = null, custom = false, r = {}, viewerIntent = null } = {}) {
@@ -94,14 +94,6 @@ describe("public viewer shell", () => {
     expect(nav).toContain('href="/creator/shop" aria-current="page"');
     expect(html).not.toContain('role="tab"');
     expect(html).not.toContain('role="tablist"');
-  });
-
-  it("does not promote Games in primary viewer navigation when the legacy route is enabled", async () => {
-    const html = await render("home", {
-      data: { ...baseData, siteSections: { ...baseData.siteSections, games: true } },
-    });
-    expect(html).not.toContain('href="https://example.test/creator/games"><span>Games</span>');
-    expect(html).not.toContain(">Games</a>");
   });
 
   it("builds same-origin slug and custom-domain navigation from the same helper", async () => {
@@ -311,7 +303,7 @@ describe("public viewer shell", () => {
   });
 
   it("stays useful without linking disabled community destinations", async () => {
-    const bare = { ...baseData, brand: { name: 'Bare Board' }, players: [], shopItems: [], socials: [], siteSections: { home: true, leaderboard: true, shop: false, games: false, me: false } };
+    const bare = { ...baseData, brand: { name: 'Bare Board' }, players: [], shopItems: [], socials: [], siteSections: { home: true, leaderboard: true, shop: false, me: false } };
     const html = await render('home', { data: bare });
     expect(html).toContain('No standings yet.');
     expect(html).toContain('data-preview-field="f_name">Bare Board</h1>');

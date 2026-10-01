@@ -50,15 +50,6 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | packages/shared/src/env.ts |
 | packages/shared/src/errors.ts |
 | packages/shared/src/features.ts |
-| packages/shared/src/games/dice.ts |
-| packages/shared/src/games/fairness.ts |
-| packages/shared/src/games/index.ts |
-| packages/shared/src/games/limbo.ts |
-| packages/shared/src/games/mines.ts |
-| packages/shared/src/games/plinko.ts |
-| packages/shared/src/games/store.ts |
-| packages/shared/src/games/types.ts |
-| packages/shared/src/games-embed.ts |
 | packages/shared/src/index.ts |
 | packages/shared/src/kick-credits.ts |
 | packages/shared/src/kick-oauth.ts |
@@ -115,9 +106,7 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | GET | `/api/auth/telegram/status` | `handleTelegramStatus` | GET /api/auth/telegram/status Check if the current user has a linked Telegram account. |
 | GET | `/api/site` | `handleGetSite` | Site handlers: get, put, list, create, archive, stats, heatmap, notifications, custom domain |
 | PUT | `/api/site` | `handlePutSite` | Site handlers: get, put, list, create, archive, stats, heatmap, notifications, custom domain |
-| POST | `/api/site/sections` | `handlePostSiteSections` | POST /api/site/sections — toggle public viewer sections (shop, credits, games). |
-| GET | `/api/site/games/settings` | `handleGetSiteGameSettings` | GET /api/site/games/settings |
-| POST | `/api/site/games/settings` | `handlePostSiteGameSettings` | POST /api/site/games/settings |
+| POST | `/api/site/sections` | `handlePostSiteSections` | POST /api/site/sections — toggle public viewer sections (shop, credits). |
 | POST | `/api/site/finish` | `handleFinishSetup` | POST /api/site/finish — mark the wizard-created board as finished. |
 | POST | `/api/site/theme` | `handlePutTheme` | Site handlers: get, put, list, create, archive, stats, heatmap, notifications, custom domain |
 | DELETE | `/api/site` | `handleDeleteSite` | DELETE /api/site — { siteId } |
@@ -158,34 +147,18 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | GET | `/auth/kick/callback` | `handleKickAuthCallback` | Kick OAuth 2.1 flow for streamers linking their Kick channel. |
 | POST | `/api/kick/disconnect` | `handleKickAuthDisconnect` | Kick OAuth 2.1 flow for streamers linking their Kick channel. |
 | GET | `/api/giveaways/chatroom` | `handleGiveawayChatroom` | Handler for Kick Giveaway and Live Chatroom resolution |
-| GET | `/api/events/raffles` | `handleGetRaffles` | GET /api/events/raffles — List raffles for streamer dashboard |
-| POST | `/api/events/raffles` | `handleCreateRaffle` | POST /api/events/raffles — Create a new ticket raffle |
-| POST | `/api/events/raffles/draw` | `handleDrawRaffle` | POST /api/events/raffles/draw — Draw a random winning ticket for an active raffle |
 | GET | `/api/events/drops` | `handleGetCodeDrops` | GET /api/events/drops — List flash code drops |
 | POST | `/api/events/drops` | `handleCreateCodeDrop` | POST /api/events/drops — Create a new flash code drop |
 | POST | `/api/events/drops/claim` | `handleClaimCodeDrop` | POST /api/events/drops/claim — Viewer redeems a flash drop code |
-| GET | `/api/predictions` | `handleGetPredictions` | GET /api/predictions — List predictions for the site |
-| POST | `/api/predictions` | `handleCreatePrediction` | POST /api/predictions — Create a new prediction |
-| POST | `/api/predictions/:id/lock` | `handleLockPrediction` | POST /api/predictions/:id/lock — Lock betting on prediction |
-| POST | `/api/predictions/:id/settle` | `handleSettlePrediction` | POST /api/predictions/:id/settle — Settle prediction and distribute proportional payouts |
-| POST | `/api/predictions/:id/cancel` | `handleCancelPrediction` | POST /api/predictions/:id/cancel — Cancel prediction and refund all bets |
-| GET | `/api/games/wheel/config` | `handleGetWheelConfig` | GET /api/games/wheel/config — Get wheel config for site |
-| POST | `/api/games/wheel/config` | `handleUpdateWheelConfig` | POST /api/games/wheel/config — Streamer updates wheel config |
-| POST | `/api/games/wheel/spin` | `handleSpinWheel` | POST /api/games/wheel/spin — Viewer spins the wheel |
 | GET | `/api/battlepass/season` | `handleGetSeason` | GET /api/battlepass/season — Get active season and viewer progress |
 | POST | `/api/battlepass/season` | `handleCreateSeason` | POST /api/battlepass/season — Streamer creates or starts a new season |
 | POST | `/api/battlepass/claim` | `handleClaimTierReward` | POST /api/battlepass/claim — Viewer claims milestone tier reward |
 | POST | `/api/battlepass/award-xp` | `handleAwardXp` | POST /api/battlepass/award-xp — Award XP to a viewer and handle automatic level up |
-| GET | `/overlay/prediction` | `handleOverlayPredictionPage` | GET /overlay/prediction — Transparent OBS Browser Source for active Prediction HUD |
 | GET | `/overlay/alerts` | `handleOverlayAlertsPage` | GET /overlay/alerts — Transparent OBS Browser Source for Audio-Visual Alerts & Sound effects |
 | GET | `/api/overlays/active-events` | `handleGetActiveEvents` | GET /api/overlays/active-events — Live events endpoint for OBS overlays |
 | GET | `/api/quests/daily` | `handleGetDailyQuests` | GET /api/quests/daily — Get today's quests and viewer progress |
 | POST | `/api/quests/claim` | `handleClaimQuestReward` | POST /api/quests/claim — Viewer claims reward for completed quest |
 | POST | `/api/quests/progress` | `handleTrackQuestProgress` | POST /api/quests/progress — Track activity progress for viewer |
-| GET | `/api/duels/active` | `handleGetDuels` | GET /api/duels/active — List active and recent duels |
-| POST | `/api/duels/create` | `handleCreateDuel` | POST /api/duels/create — Create a 1v1 duel challenge |
-| POST | `/api/duels/:id/accept` | `handleAcceptDuel` | POST /api/duels/:id/accept — Target accepts duel; execute provably fair roll |
-| POST | `/api/duels/:id/decline` | `handleDeclineDuel` | POST /api/duels/:id/decline — Decline or cancel duel challenge |
 | GET | `/api/tournaments` | `handleGetTournaments` | GET /api/tournaments — List tournaments for site |
 | POST | `/api/tournaments` | `handleCreateTournament` | POST /api/tournaments — Streamer creates a single-elimination tournament bracket |
 | POST | `/api/tournaments/:id/score` | `handleUpdateMatchScore` | POST /api/tournaments/:id/score — Streamer updates match score & advances winner |
@@ -200,9 +173,7 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | POST | `/api/tournaments/:id/entries/:entryId/block` | `handleBlockTournamentEntry` | Tournament & Elimination Brackets Handlers. |
 | POST | `/api/tournaments/:id/entries/:entryId/restore` | `handleRestoreTournamentEntry` | Tournament & Elimination Brackets Handlers. |
 | POST | `/api/tournaments/:id/entries/random-pick` | `handleRandomPickTournamentEntries` | Tournament & Elimination Brackets Handlers. |
-| GET | `/api/export/raffle-winners.csv` | `handleExportRaffleWinnersCsv` | GET /api/export/raffle-winners.csv — Export raffle winners report |
 | GET | `/api/export/drop-claims.csv` | `handleExportDropClaimsCsv` | GET /api/export/drop-claims.csv — Export flash drop claims report |
-| GET | `/api/export/predictions.csv` | `handleExportPredictionsCsv` | GET /api/export/predictions.csv — Export predictions & payouts report |
 | GET | `/api/credits/status` | `handleCreditsStatus` | Dashboard API for the Kick credits / shop system. |
 | POST | `/api/credits/connect` | `handleCreditsConnect` | Dashboard API for the Kick credits / shop system. |
 | POST | `/api/credits/rewards/create` | `handleCreditsCreateReward` | Dashboard API for the Kick credits / shop system. |
@@ -232,13 +203,6 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | GET | `/api/viewer/export/:id/status` | `handleViewerExportStatus` |  |
 | GET | `/api/viewer/export/:id/download` | `handleViewerExportDownload` |  |
 | POST | `/api/credits/viewer-auth` | `handleCreditsViewerAuth` | Dashboard API for the Kick credits / shop system. |
-| GET | `/api/games/config` | `handleGamesConfig` | GET /api/games/config?slug= |
-| POST | `/api/games/bet` | `handleGamesBet` | POST /api/games/bet |
-| POST | `/api/games/mines/reveal` | `handleGamesMinesReveal` | POST /api/games/mines/reveal |
-| POST | `/api/games/mines/cashout` | `handleGamesMinesCashout` | POST /api/games/mines/cashout |
-| GET | `/api/games/history` | `handleGamesHistory` | GET /api/games/history?slug=&limit= |
-| GET | `/api/games/fairness` | `handleGamesFairness` | GET /api/games/fairness?slug= |
-| POST | `/api/games/fairness/rotate` | `handleGamesFairnessRotate` | POST /api/games/fairness/rotate |
 | GET | `/api/docs` | `handleApiDocs` | Public API documentation handlers Serves an OpenAPI 3.1 JSON spec for the public leaderboard API. |
 | GET | `/api/openapi.json` | `handleOpenApiJson` | Public API documentation handlers Serves an OpenAPI 3.1 JSON spec for the public leaderboard API. |
 | GET | `/api/public/:slug/standings` | `handlePublicStandings` | Handle GET /api/public/:slug/standings Returns full standings JSON for embedding / Telegram bot queries |
@@ -265,7 +229,7 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | GET | `/api/attribution/export` | `handleAttributionExport` | GET /api/attribution/export — CSV download of the same data. |
 | POST | `/api/attribution/rotate-key` | `handleRotatePostbackKey` | POST /api/attribution/rotate-key — create a new postback key and revoke active ones. |
 | DELETE | `/api/attribution/postback-key` | `handleRevokePostbackKey` | DELETE /api/attribution/postback-key — revoke all active postback keys. |
-| POST | `/api/postback` | `handlePostback` | POST /api/postback — receive casino conversion postbacks. |
+| POST | `/api/postback` | `handlePostback` | POST /api/postback — receive partner conversion postbacks. |
 | POST | `/api/csp-report` | `handleCspReport` | POST /api/csp-report Receives CSP violation reports from browsers. Logs structured JSON for monitoring/alerting. |
 | POST | `/api/log` | `handleLog` | Client-side error / log ingestion endpoint. Dashboard JS posts here so client errors are correlated with server logs, Sentry, and the original request ID. |
 | GET | `/api/health/backup` | `handleBackupHealth` | Backup health and verification recording. |
@@ -348,7 +312,6 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | `/profile` |
 | `/refund` |
 | `/reset` |
-| `/responsible` |
 | `/reviews` |
 | `/reviews.html` |
 | `/robots.txt` |
@@ -386,7 +349,7 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | Route category |
 | --- |
 | custom domain resolution |
-| branded site sections (custom domain): /, /leaderboard, /shop, /games, /me |
+| branded site sections (custom domain): /, /leaderboard, /shop, /me |
 | static assets |
 | SEO endpoints |
 | health check |
@@ -405,7 +368,7 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | streamer profile pages at /<slug>/profile |
 | legacy public credits URL: the new shell's Shop is the canonical page |
 | password unlock submission for public boards |
-| branded site sections: /<slug>, /<slug>/leaderboard, /shop, /games, /me |
+| branded site sections: /<slug>, /<slug>/leaderboard, /shop, /me |
 | public leaderboard at /<slug> |
 
 **Branded site sections (/<slug> and custom domains)**
@@ -415,7 +378,6 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | home |
 | leaderboard |
 | shop |
-| games |
 | me |
 
 
@@ -436,7 +398,6 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | `overlay` | `overlayPage` |
 | `terms` | `termsPage` |
 | `privacy` | `privacyPage` |
-| `responsible` | `responsiblePage` |
 | `refund` | `refundPage` |
 | `cookies` | `cookiesPage` |
 | `helpSupport` | `helpSupportPage` |
@@ -598,11 +559,11 @@ Forms=1, Buttons=1, IDs=6, data-attrs=0, Inputs=1, Selects=0, Links=2
 
 #### `apps/leaderboard/src/pages/giveaway-pages.js`
 
-Purpose: Markup for Giveaways & Community Events Hub (Chat Giveaways, Ticket Raffles, Flash Code Drops)
+Purpose: Markup for the Giveaways & Community Events Hub (Chat Giveaways and Flash Code Drops)
 
 Forms=5, Buttons=55, IDs=165, data-attrs=4, Inputs=7, Selects=1, Links=1
 
-- IDs: `btn-create-drop`, `btn-create-pred`, `btn-create-raffle`, `btn-open-event-drawer`, `cd-active-list`, `cd-btn-random`, `cd-cancel`, `cd-code`, `cd-drawer`, `cd-drawer-close`, `cd-drawer-title`, `cd-empty-active`, `cd-expire`, `cd-form`, `cd-max`, `cd-past-list`, `cd-points`, `cd-status`, `cd-submit`, `gw-btn-copy-winner`, `gw-btn-export`, `gw-btn-listen`, `gw-btn-reroll`, `gw-btn-reset`, `gw-btn-roll`, `gw-channel-input`, `gw-chat-feed`, `gw-claim-box`, `gw-claim-countdown`, `gw-claim-dot`, `gw-claim-fill`, `gw-claim-status`, `gw-count-header`, `gw-custom-rule-text`, `gw-entrants-card`, `gw-entrants-empty`, `gw-entrants-list`, `gw-feed-card`, `gw-feed-counter`, `gw-feed-empty` (+125)
+- IDs: `btn-create-drop`, `btn-open-event-drawer`, `cd-active-list`, `cd-btn-random`, `cd-cancel`, `cd-code`, `cd-drawer`, `cd-drawer-close`, `cd-drawer-title`, `cd-empty-active`, `cd-expire`, `cd-form`, `cd-max`, `cd-past-list`, `cd-points`, `cd-status`, `cd-submit`, `gw-btn-copy-winner`, `gw-btn-export`, `gw-btn-listen`, `gw-btn-reroll`, `gw-btn-reset`, `gw-btn-roll`, `gw-channel-input`, `gw-chat-feed`, `gw-claim-box`, `gw-claim-countdown`, `gw-claim-dot`, `gw-claim-fill`, `gw-claim-status`, `gw-count-header`, `gw-custom-rule-text`, `gw-entrants-card`, `gw-entrants-empty`, `gw-entrants-list`, `gw-feed-card`, `gw-feed-counter`, `gw-feed-empty` (+125)
 
 - data-attrs: `data-data-field-error`, `data-data-tab`, `data-data-target`, `data-data-val`
 
@@ -648,7 +609,7 @@ Forms=0, Buttons=0, IDs=1, data-attrs=0, Inputs=0, Selects=0, Links=14
 
 - IDs: `main-content`
 
-- Links: `#main-content`, `/`, `/#how`, `/cookies`, `/docs`, `/help/support`, `/login`, `/pricing`, `/privacy`, `/refund`, `/responsible`, `/signup`, `/terms`, `mailto:{{SUPPORT_EMAIL}}`
+- Links: `#main-content`, `/`, `/#how`, `/cookies`, `/docs`, `/help/support`, `/login`, `/pricing`, `/privacy`, `/refund`, `/signup`, `/terms`, `mailto:{{SUPPORT_EMAIL}}`
 
 
 #### `apps/leaderboard/src/pages/login.jsx`
@@ -702,13 +663,6 @@ Forms=1, Buttons=2, IDs=8, data-attrs=2, Inputs=1, Selects=0, Links=2
 - Inputs: `password`
 
 - Links: `#main-content`, `/login`
-
-
-#### `apps/leaderboard/src/pages/responsible.js`
-
-Forms=0, Buttons=0, IDs=0, data-attrs=0, Inputs=0, Selects=0, Links=6
-
-- Links: `https://www.begambleaware.org`, `https://www.connexontario.ca`, `https://www.gamblersanonymous.org`, `https://www.gamblingtherapy.org`, `https://www.gamcare.org.uk`, `https://www.loketkansspel.nl`
 
 
 #### `apps/leaderboard/src/pages/reviews.js`
@@ -768,7 +722,7 @@ Forms=0, Buttons=1, IDs=5, data-attrs=0, Inputs=0, Selects=0, Links=2
 
 Forms=0, Buttons=4, IDs=36, data-attrs=0, Inputs=0, Selects=0, Links=3
 
-- IDs: `main-content`, `vd-avatar`, `vd-back`, `vd-boards`, `vd-boards-card`, `vd-boards-empty`, `vd-drop-claim`, `vd-drop-claim-btn`, `vd-drop-code`, `vd-drop-status`, `vd-earn-hint`, `vd-events-empty`, `vd-events-status`, `vd-identity`, `vd-loading`, `vd-login-card`, `vd-login-discord`, `vd-login-kick`, `vd-login-status`, `vd-logout`, `vd-nav`, `vd-predictions`, `vd-profile`, `vd-raffles`, `vd-redemptions-empty`, `vd-redemptions-list`, `vd-shop-empty`, `vd-shop-list`, `vd-site-balance`, `vd-site-card`, `vd-site-name`, `vd-site-streamer`, `vd-switch`, `vd-title`, `vd-username`, `vd-wrong-account`
+- IDs: `main-content`, `vd-avatar`, `vd-back`, `vd-boards`, `vd-boards-card`, `vd-boards-empty`, `vd-drop-claim`, `vd-drop-claim-btn`, `vd-drop-code`, `vd-drop-status`, `vd-earn-hint`, `vd-events-empty`, `vd-events-status`, `vd-identity`, `vd-loading`, `vd-login-card`, `vd-login-discord`, `vd-login-kick`, `vd-login-status`, `vd-logout`, `vd-nav`, `vd-profile`, `vd-redemptions-empty`, `vd-redemptions-list`, `vd-shop-empty`, `vd-shop-list`, `vd-site-balance`, `vd-site-card`, `vd-site-name`, `vd-site-streamer`, `vd-switch`, `vd-title`, `vd-username`, `vd-wrong-account`
 
 - Links: `/`, `/api/viewer/auth/discord`, `/api/viewer/auth/kick`
 
@@ -780,7 +734,7 @@ Forms=0, Buttons=4, IDs=36, data-attrs=0, Inputs=0, Selects=0, Links=3
 | GET | `/bot/health` | Health check — reachable at /bot/health (Cloudflare routes /bot/* to this Worker) |
 | POST | `/hook/:secret` | ================================================================= 1) TELEGRAM WEBHOOK — one endpoint for ALL bots ================================================================= |
 | GET | `/r/:slug` | ================================================================= 2) TRACKED REDIRECT ================================================================= |
-| POST | `/pb` | ================================================================= 2b) CASINO POSTBACKS Two equivalent paths to the same recordConversion(): - SIGNED (preferred): POST /pb X-Postback-Key: <postback_key> X-Postback-Signature: <hex HMAC-SHA256 of the raw query string, keyed by the postback_key> ?event=deposit&amount=50&click_ref=x The key never rides the URL (no access-log/Referer leakage) and the HMAC means a logged/intercepted request can't be forged or replayed with new params. Use this once your affiliate networks support it. - LEGACY (still works, for casinos already configured): GET\|POST /pb/:key?event=deposit&amount=50&click_ref=x — key in the URL path. Rate-limited per key + amount clamped; no signature. Safe to keep until every integration migrates, then deprecate. ================================================================= |
+| POST | `/pb` | ================================================================= 2b) PARTNER CONVERSION POSTBACKS Two equivalent paths to the same recordConversion(): - SIGNED (preferred): POST /pb X-Postback-Key: <postback_key> X-Postback-Signature: <hex HMAC-SHA256 of the raw query string, keyed by the postback_key> ?event=conversion&amount=50&click_ref=x The key never rides the URL (no access-log/Referer leakage) and the HMAC means a logged/intercepted request can't be forged or replayed with new params. Use this once your partner networks support it. - LEGACY (still works, for existing partner integrations): GET\|POST /pb/:key?event=conversion&amount=50&click_ref=x — key in the URL path. Rate-limited per key + amount clamped; no signature. Safe to keep until every integration migrates, then deprecate. ================================================================= |
 | GET|POST | `/pb/:key` | LEGACY path — key in the URL, unsigned. Kept for integrations already calling GET /pb/:key. See the signed POST /pb above for the upgrade path. DEPRECATED: migrate to POST /pb with X-Postback-Key + X-Postback-Signature. |
 | POST | `/users` |  |
 | POST | `/bots` |  |
@@ -850,7 +804,6 @@ Forms=0, Buttons=4, IDs=36, data-attrs=0, Inputs=0, Selects=0, Links=3
 | `/credits` | credits/page.tsx |
 | `/docs` | docs/page.tsx |
 | `/faq` | faq/page.tsx |
-| `/games` | games/page.tsx |
 | `/overlays` | overlays/page.tsx |
 | `/` | page.tsx |
 | `/pricing` | pricing/page.tsx |
@@ -870,7 +823,6 @@ Forms=0, Buttons=4, IDs=36, data-attrs=0, Inputs=0, Selects=0, Links=3
 | `home` | `/dashboard` | Home |  |
 | `board` | `/dashboard/leaderboard` | Leaderboard |  |
 | `boards` | `/dashboard/leaderboards` | Sites |  |
-| `games` | `/dashboard/games` | Games |  |
 | `performance` | `/dashboard/analytics` | Analytics |  |
 | `site` | `/dashboard/site` | Site settings |  |
 
@@ -881,7 +833,7 @@ Forms=0, Buttons=4, IDs=36, data-attrs=0, Inputs=0, Selects=0, Links=3
 | --- | --- | --- | --- | --- |
 | `rewards` | `credits` | redemptions | selector | overview,shop,rules,redemptions,history |
 | `siteConnections` | `credits` | site | selector | channel |
-| `giveaways` | `giveaways` | engage | selector | chat,raffles,drops,preds,tournaments |
+| `giveaways` | `giveaways` | engage | selector | chat,drops,tournaments |
 | `audience` | `credits` | audience | selector | viewers |
 | `settings` | `account` | settings | none | account,team,plan,connections,data |
 
@@ -894,7 +846,6 @@ Forms=0, Buttons=4, IDs=36, data-attrs=0, Inputs=0, Selects=0, Links=3
 | sites | Sites | /dashboard/leaderboards |
 | site-scope | Current site | /dashboard/leaderboard |
 | engage | Engagement | /dashboard/giveaways |
-| games | Games | /dashboard/games |
 | redemptions | Rewards | /dashboard/rewards |
 | audience | Audience | /dashboard/audience/members |
 | performance | Analytics | /dashboard/analytics |
@@ -933,7 +884,6 @@ Forms=0, Buttons=4, IDs=36, data-attrs=0, Inputs=0, Selects=0, Links=3
 | REFERRALS_STATUS |
 | USAGE_STATUS |
 | SESSIONS_STATUS |
-| GAMES_STATUS |
 | THEME_SAVING |
 | LOGO |
 | _dirty |
@@ -1178,7 +1128,7 @@ Store API: `createDashboardState()` returns `getState`, `setState`, `subscribe`,
 
 - getElementById: `topbarCmdTrigger`
 
-- $ selector: `gamesResetDemo`, `openHelpDrawerBtn`, `publishAction`, `save`, `yrPaletteInput`, `yrPaletteResults`
+- $ selector: `openHelpDrawerBtn`, `publishAction`, `save`, `yrPaletteInput`, `yrPaletteResults`
 
 - data-* refs: `data-index`
 
@@ -1214,27 +1164,6 @@ Store API: `createDashboardState()` returns `getState`, `setState`, `subscribe`,
 - aria-* refs: `aria-busy`, `aria-hidden`, `aria-live`
 
 - Event listeners: click=0, submit=0, change=0
-
-
-#### `apps/leaderboard/src/assets/dashboard/games.js`
-
-- Exports / purpose:
-
-  - `setGamesPreviewState`
-
-  - `initGames` — Called on every visit to the Games section, so the rendering and data load re-run to keep the section fresh. The one-time wiring (simulator
-
-- $ selector: `gameSettingRows`, `gamesPopoutLink`, `gamesPreviewBtn`, `gamesResetDemo`, `gamesSimulatorIframe`
-
-- data-* refs: `data-game`, `data-game-max`, `data-game-status`, `data-game-toggle`, `data-preview-game`, `data-test-game`
-
-- dataset refs: `currentSrc`, `gameMax`, `gameToggle`, `previewGame`, `previous`, `saveError`, `state`
-
-- aria-* refs: `aria-disabled`, `aria-label`, `aria-live`, `aria-selected`
-
-- fetch endpoints: `/api/site/games/settings`
-
-- Event listeners: click=4, submit=0, change=1
 
 
 #### `apps/leaderboard/src/assets/dashboard/help-drawer.js`
@@ -1506,7 +1435,7 @@ Store API: `createDashboardState()` returns `getState`, `setState`, `subscribe`,
 
 - Exports / purpose:
 
-  - `siteSections` — Current public-section flags for the active site (shop/credits/games).
+  - `siteSections` — Current public-section flags for the active site (shop/credits).
 
   - `initSiteSections` — Render the Sections tab of Site settings. Runs at shell boot (the sections read shell state that is already loaded) and re-renders cheaply o
 
@@ -1709,28 +1638,6 @@ Store API: `createDashboardState()` returns `getState`, `setState`, `subscribe`,
 - Event listeners: click=3, submit=0, change=0
 
 
-#### `apps/leaderboard/src/assets/games/chunk-PLEH5LTW.js`
-
-- data-* refs: `data-invalid`
-
-- aria-* refs: `aria-busy`, `aria-describedby`, `aria-hidden`, `aria-invalid`, `aria-label`, `aria-live`
-
-- Event listeners: click=0, submit=0, change=0
-
-
-#### `apps/leaderboard/src/assets/games/games.js`
-
-- getElementById: `gx-root`
-
-- data-* refs: `data-gx-boot`, `data-gx-demo-allowed`, `data-tier`, `data-win`
-
-- aria-* refs: `aria-atomic`, `aria-busy`, `aria-current`, `aria-hidden`, `aria-label`, `aria-live`, `aria-pressed`
-
-- fetch endpoints: `/api/viewer/me`
-
-- Event listeners: click=0, submit=0, change=1
-
-
 #### `apps/leaderboard/src/assets/giveaways.js`
 
 - Exports / purpose:
@@ -1739,9 +1646,9 @@ Store API: `createDashboardState()` returns `getState`, `setState`, `subscribe`,
 
   - `leave`
 
-- $ selector: `btn-create-drop`, `btn-create-pred`, `btn-create-raffle`, `btn-open-event-drawer`, `cd-active-list`, `cd-btn-random`, `cd-cancel`, `cd-code`, `cd-drawer-close`, `cd-expire`, `cd-form`, `cd-max`, `cd-past-list`, `cd-points`, `cd-submit`, `gw-btn-copy-winner`, `gw-btn-export`, `gw-btn-listen`, `gw-btn-reroll`, `gw-btn-reset`, `gw-btn-roll`, `gw-channel-input`, `gw-chat-feed`, `gw-claim-box`, `gw-count-header` (+74)
+- $ selector: `btn-create-drop`, `btn-open-event-drawer`, `cd-active-list`, `cd-btn-random`, `cd-cancel`, `cd-code`, `cd-drawer-close`, `cd-expire`, `cd-form`, `cd-max`, `cd-past-list`, `cd-points`, `cd-submit`, `gw-btn-copy-winner`, `gw-btn-export`, `gw-btn-listen`, `gw-btn-reroll`, `gw-btn-reset`, `gw-btn-roll`, `gw-channel-input`, `gw-chat-feed`, `gw-claim-box`, `gw-count-header` (+74)
 
-- data-* refs: `data-code`, `data-field-error`, `data-id`, `data-keep-interactive`, `data-pred-id`, `data-raffle-id`
+- data-* refs: `data-code`, `data-field-error`, `data-id`, `data-keep-interactive`,
 
 - dataset refs: `code`, `id`, `removeId`, `tab`, `target`, `username`, `val`
 
@@ -1970,11 +1877,6 @@ Purpose: Shared HTML escaping helper
 - Links: `/help/support`, `/pricing`, `/signup`
 
 
-#### `apps/web/src/app/games/page.tsx`
-
-- Exports: `metadata`
-
-
 #### `apps/web/src/app/layout.tsx`
 
 - Exports: `metadata`
@@ -2091,7 +1993,7 @@ Purpose: Shared HTML escaping helper
 
 - IDs: `main-content`, `mobile-navigation`
 
-- Links: `#main-content`, `/`, `/about`, `/brand`, `/changelog`, `/contact`, `/credits`, `/docs`, `/faq`, `/games`, `/login`, `/overlays`, `/pricing`, `/signup`, `/sites`, `/status`, `/switch`, `/telegram`
+- Links: `#main-content`, `/`, `/about`, `/brand`, `/changelog`, `/contact`, `/credits`, `/docs`, `/faq`, `/login`, `/overlays`, `/pricing`, `/signup`, `/sites`, `/status`, `/switch`, `/telegram`
 
 
 #### `apps/web/src/lib/session.ts`
@@ -2126,22 +2028,13 @@ Purpose: Shared HTML escaping helper
 - Links: `${esc(c.href)}`, `${esc(item.href)}`, `/dashboard`
 
 
-#### `packages/shared/src/games-embed.ts`
-
-- IDs: `gx-root`
-
-- data-attrs: `data-gx-boot`, `data-gx-demo-allowed`
-
-- Links: `${esc(boot.earnHref)}`, `/assets/games.css`
-
-
 #### `packages/shared/src/page-shell.ts`
 
 - IDs: `main-content`
 
 - data-attrs: `data-page`, `data-wide`
 
-- Links: `#main-content`, `${esc(href)}`, `${esc(opts.canonical)}`, `${footerBrandHref}`, `/assets/app.css`, `/assets/dashboard-v4.css`, `/assets/devin-system.css`, `/assets/shell-nav.css`, `/assets/ui.css`, `/contact`, `/privacy`, `/responsible`, `/terms`, `https://fonts.googleapis.com`, `https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700;800&family=Fira+Code:wght@500;700&display=swap`, `https://fonts.gstatic.com`
+- Links: `#main-content`, `${esc(href)}`, `${esc(opts.canonical)}`, `${footerBrandHref}`, `/assets/app.css`, `/assets/dashboard-v4.css`, `/assets/devin-system.css`, `/assets/shell-nav.css`, `/assets/ui.css`, `/contact`, `/privacy`, `/terms`, `https://fonts.googleapis.com`, `https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700;800&family=Fira+Code:wght@500;700&display=swap`, `https://fonts.gstatic.com`
 
 
 #### `packages/shared/src/shell-nav.ts`
@@ -2183,7 +2076,7 @@ Overview: Account-level API: postback keys, conversion log, profile data.
 
 ### `apps/leaderboard/src/handlers/attribution.js`
 
-Overview: Attribution analytics and casino postback endpoint.
+Overview: Attribution analytics and partner conversion postback endpoint.
 
 | Handler | Purpose |
 | --- | --- |
@@ -2191,7 +2084,7 @@ Overview: Attribution analytics and casino postback endpoint.
 | `handleAttributionExport` | GET /api/attribution/export — CSV download of the same data. |
 | `handleRotatePostbackKey` | POST /api/attribution/rotate-key — create a new postback key and revoke active ones. |
 | `handleRevokePostbackKey` | DELETE /api/attribution/postback-key — revoke all active postback keys. |
-| `handlePostback` | POST /api/postback — receive casino conversion postbacks. |
+| `handlePostback` | POST /api/postback — receive partner conversion postbacks. |
 
 
 ### `apps/leaderboard/src/handlers/auth.js`
@@ -2314,27 +2207,12 @@ Overview: Domain purchase, automated DNS setup, and transfer management API hand
 | `handleDomainTransferAuthCode` | POST /api/domains/transfer-auth-code — Retrieve EPP Authorization code to transfer domain out |
 
 
-### `apps/leaderboard/src/handlers/duels.js`
-
-Overview: Viewer 1v1 Duels & Wager Challenges Handlers.
-
-| Handler | Purpose |
-| --- | --- |
-| `handleGetDuels` | GET /api/duels/active — List active and recent duels |
-| `handleCreateDuel` | POST /api/duels/create — Create a 1v1 duel challenge |
-| `handleAcceptDuel` | POST /api/duels/:id/accept — Target accepts duel; execute provably fair roll |
-| `handleDeclineDuel` | POST /api/duels/:id/decline — Decline or cancel duel challenge |
-
-
 ### `apps/leaderboard/src/handlers/events.js`
 
-Overview: Community Events Handlers: Raffles (Ticket Draws) & Flash Code Drops.
+Overview: Community Events Handlers: Chat Giveaways & Flash Code Drops.
 
 | Handler | Purpose |
 | --- | --- |
-| `handleGetRaffles` | GET /api/events/raffles — List raffles for streamer dashboard |
-| `handleCreateRaffle` | POST /api/events/raffles — Create a new ticket raffle |
-| `handleDrawRaffle` | POST /api/events/raffles/draw — Draw a random winning ticket for an active raffle |
 | `handleGetCodeDrops` | GET /api/events/drops — List flash code drops |
 | `handleCreateCodeDrop` | POST /api/events/drops — Create a new flash code drop |
 | `handleClaimCodeDrop` | POST /api/events/drops/claim — Viewer redeems a flash drop code |
@@ -2346,9 +2224,7 @@ Overview: One-Click CSV Data Exports for Streamers.
 
 | Handler | Purpose |
 | --- | --- |
-| `handleExportRaffleWinnersCsv` | GET /api/export/raffle-winners.csv — Export raffle winners report |
 | `handleExportDropClaimsCsv` | GET /api/export/drop-claims.csv — Export flash drop claims report |
-| `handleExportPredictionsCsv` | GET /api/export/predictions.csv — Export predictions & payouts report |
 
 
 ### `apps/leaderboard/src/handlers/feedback.js`
@@ -2358,21 +2234,6 @@ Overview: Public viewer feedback handler. Submits feedback tied to the current s
 | Handler | Purpose |
 | --- | --- |
 | `handleFeedback` |  |
-
-
-### `apps/leaderboard/src/handlers/games.js`
-
-Overview: YourRank Originals — viewer-facing games API. Credits are non-cashable, site-specific loyalty points earned from Kick channel-point redemptions. These endpoints let a viewer wager them on provably-fair games. There is no
-
-| Handler | Purpose |
-| --- | --- |
-| `handleGamesConfig` | GET /api/games/config?slug= |
-| `handleGamesBet` | POST /api/games/bet |
-| `handleGamesMinesReveal` | POST /api/games/mines/reveal |
-| `handleGamesMinesCashout` | POST /api/games/mines/cashout |
-| `handleGamesHistory` | GET /api/games/history?slug=&limit= |
-| `handleGamesFairness` | GET /api/games/fairness?slug= |
-| `handleGamesFairnessRotate` | POST /api/games/fairness/rotate |
 
 
 ### `apps/leaderboard/src/handlers/giveaway.js`
@@ -2428,22 +2289,8 @@ Overview: OBS Live Overlays & Audio-Visual Alerts Suite.
 
 | Handler | Purpose |
 | --- | --- |
-| `handleOverlayPredictionPage` | GET /overlay/prediction — Transparent OBS Browser Source for active Prediction HUD |
 | `handleOverlayAlertsPage` | GET /overlay/alerts — Transparent OBS Browser Source for Audio-Visual Alerts & Sound effects |
 | `handleGetActiveEvents` | GET /api/overlays/active-events — Live events endpoint for OBS overlays |
-
-
-### `apps/leaderboard/src/handlers/predictions.js`
-
-Overview: Live Predictions & Voting Handlers.
-
-| Handler | Purpose |
-| --- | --- |
-| `handleGetPredictions` | GET /api/predictions — List predictions for the site |
-| `handleCreatePrediction` | POST /api/predictions — Create a new prediction |
-| `handleLockPrediction` | POST /api/predictions/:id/lock — Lock betting on prediction |
-| `handleSettlePrediction` | POST /api/predictions/:id/settle — Settle prediction and distribute proportional payouts |
-| `handleCancelPrediction` | POST /api/predictions/:id/cancel — Cancel prediction and refund all bets |
 
 
 ### `apps/leaderboard/src/handlers/preview.js`
@@ -2535,9 +2382,7 @@ Overview: Site handlers: get, put, list, create, archive, stats, heatmap, notifi
 | `handleDuplicateBoard` | POST /api/site/duplicate — { siteId } |
 | `handleNotifyTest` | POST /api/site/notify/test — send a test Discord or Telegram notification. |
 | `handleDomainVerify` | POST /api/site/domain/verify — verify custom domain CNAME and provision TLS via Cloudflare for SaaS custom hostnames. Pro/Agency only. |
-| `handlePostSiteSections` | POST /api/site/sections — toggle public viewer sections (shop, credits, games). |
-| `handleGetSiteGameSettings` | GET /api/site/games/settings |
-| `handlePostSiteGameSettings` | POST /api/site/games/settings |
+| `handlePostSiteSections` | POST /api/site/sections — toggle public viewer sections (shop, credits). |
 
 
 ### `apps/leaderboard/src/handlers/team.js`
@@ -2620,17 +2465,6 @@ Overview: Viewer-facing dashboard API: cross-board credits, per-board shop, and 
 | `handleCreateViewerExportJob` |  |
 | `handleViewerExportStatus` |  |
 | `handleViewerExportDownload` |  |
-
-
-### `apps/leaderboard/src/handlers/wheel.js`
-
-Overview: Lucky Wheel Interactive Game Handlers.
-
-| Handler | Purpose |
-| --- | --- |
-| `handleGetWheelConfig` | GET /api/games/wheel/config — Get wheel config for site |
-| `handleUpdateWheelConfig` | POST /api/games/wheel/config — Streamer updates wheel config |
-| `handleSpinWheel` | POST /api/games/wheel/spin — Viewer spins the wheel |
 
 
 ## 7. Navigation structure

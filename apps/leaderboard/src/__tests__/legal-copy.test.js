@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { applyLegalIdentity } from "../pages/legal-helper.js";
 import { termsPage } from "../pages/terms.js";
-import { responsiblePage } from "../pages/responsible.js";
 import { privacyPage } from "../pages/privacy.js";
 import { cookiesPage } from "../pages/cookies.js";
 import { refundPage } from "../pages/refund.js";
@@ -10,12 +9,10 @@ import { reviewsPage } from "../pages/reviews.js";
 describe("platform legal copy truth", () => {
   it("keeps default legal pages aligned with the free-credit launch boundary", () => {
     const terms = applyLegalIdentity(termsPage, {});
-    const responsible = applyLegalIdentity(responsiblePage, {});
-    const copy = `${terms}\n${responsible}`;
 
-    expect(copy).toContain("Starter and Pro subscriptions are processed by Polar; Team is archived and not currently sold");
-    expect(copy).toContain("Community credits have no cash value.");
-    expect(copy).not.toMatch(/sign up or deposit|cryptocurrency|blockchain/i);
+    expect(terms).toContain("Starter and Pro subscriptions are processed by Polar; Team is archived and not currently sold");
+    expect(terms).toContain("Community credits have no cash value.");
+    expect(terms).not.toMatch(/cryptocurrency|blockchain/i);
   });
 
   it("keeps legal navigation pointed at the marketing workflow fragment", () => {
@@ -28,7 +25,7 @@ describe("platform legal copy truth", () => {
 });
 
 describe("global legal pages share the responsive public shell (YR-038)", () => {
-  const pages = { terms: termsPage, privacy: privacyPage, cookies: cookiesPage, refund: refundPage, responsible: responsiblePage };
+  const pages = { terms: termsPage, privacy: privacyPage, cookies: cookiesPage, refund: refundPage };
 
   for (const [key, source] of Object.entries(pages)) {
     it(`renders /${key} inside the public header/footer as one article`, () => {

@@ -74,8 +74,8 @@ never needs navigation.
 ## Verified
 `bun run lint`, `bun run typecheck`, and the full `bun run test` suite all pass.
 
-## Not done (bigger, separate bets)
-- **Inline edit from the preview** (click a wager in the rendered board to edit
+## Not done (larger, separate initiatives)
+- **Inline edit from the preview** (click a value in the rendered board to edit
   it) — needs postMessage plumbing between the iframe and the dashboard.
 - **True live preview of *unsaved* edits** — the preview reads saved state; a
   debounced draft-render endpoint would make it update as you type, pre-save.

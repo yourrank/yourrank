@@ -1,4 +1,4 @@
-// YR-038: the global Terms, Privacy, Cookies, Refund and Responsible Play pages
+// YR-038: the global Terms, Privacy, Cookies and Refund pages
 // use the responsive public header/footer. Checks 320/390/768/1440 for no
 // horizontal overflow, reachable header actions (drawer open/close via click,
 // Escape with focus restoration, link dismissal), Cookie preferences, one H1,
@@ -13,7 +13,6 @@ import { termsPage } from '../apps/leaderboard/src/pages/terms.js';
 import { privacyPage } from '../apps/leaderboard/src/pages/privacy.js';
 import { cookiesPage } from '../apps/leaderboard/src/pages/cookies.js';
 import { refundPage } from '../apps/leaderboard/src/pages/refund.js';
-import { responsiblePage } from '../apps/leaderboard/src/pages/responsible.js';
 import { reviewsPage } from '../apps/leaderboard/src/pages/reviews.js';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH ? pathToFileURL(process.env.PLAYWRIGHT_MODULE_PATH).href : 'playwright');
@@ -22,8 +21,8 @@ await mkdir(output, { recursive: true });
 
 // Mirrors addCookieConsent() in apps/leaderboard/src/index.js.
 const addCookieConsent = (html) => html.replace(/<\/body>\s*<\/html>\s*$/i, '<script src="/assets/cookie-consent.js" defer></script></body></html>');
-const PAGES = { terms: termsPage, privacy: privacyPage, cookies: cookiesPage, refund: refundPage, responsible: responsiblePage, reviews: reviewsPage };
-const LEGAL = ['terms', 'privacy', 'cookies', 'refund', 'responsible'];
+const PAGES = { terms: termsPage, privacy: privacyPage, cookies: cookiesPage, refund: refundPage, reviews: reviewsPage };
+const LEGAL = ['terms', 'privacy', 'cookies', 'refund'];
 const WIDTHS = [320, 390, 768, 1440];
 
 let origin;

@@ -5,7 +5,7 @@ import { limitDenial } from "./entitlements.js";
 import { logAudit } from "./audit.js";
 
 /**
- * Parsed query type for casino postbacks.
+ * Parsed query type for partner conversion postbacks.
  */
 export type PostbackQuery = Record<string, string | string[]>;
 
@@ -36,7 +36,7 @@ function extractPlayerName(q: PostbackQuery): string | null {
 }
 
 /**
- * Insert a conversion row from a casino postback and project it onto the
+ * Insert a conversion row from a partner conversion postback and project it onto the
  * matching player row(s). Shared by the legacy GET|POST /pb/:key path, the
  * signed POST /pb path, and the leaderboard POST /api/postback endpoint.
  * `ownerId` is resolved by the caller; `q` is the parsed query object.

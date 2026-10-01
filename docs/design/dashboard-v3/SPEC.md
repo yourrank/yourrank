@@ -15,7 +15,6 @@ same spacing. When code and reference disagree, the reference wins.
 | `06-page-setup.png` | Page editor, Setup tab + live preview rail | `/dashboard/editor/design` |
 | `07-rewards-shop-items.png` | Shop items grid + create-item drawer | `/dashboard/rewards/shop` |
 | `08-rewards-channel.png` | Kick channel integration | `/dashboard/settings/integrations` |
-| `09-sections-and-games.png` | Site sections, page blocks, game settings | `/dashboard/games` |
 | `10-analytics.png` | Analytics KPIs, views chart, activity table | `/dashboard/analytics/activity` |
 | `11-settings-plan.png` | Settings → Plan & Usage | `/dashboard/settings` |
 | `12-settings-security.png` | Settings → Security + danger zone | `/dashboard/settings` |
@@ -26,7 +25,7 @@ Measured off the renders; they are already declared in
 `apps/leaderboard/src/assets/dashboard-v3.css` and must not be re-invented per
 page.
 
-- Operator surfaces (dashboard, bot dashboard, account, marketing, and emails) use the dark theme `#0F0F23` with `#7C3AED` as the primary accent. Public streamer-facing surfaces (the `.yr-site` shell: home, leaderboard, shop, games, and `/me`, plus the OBS overlay) deliberately default to Kick lime `#53FC18`; streamers override it per site through `theme_json.accentA`.
+- Operator surfaces (dashboard, bot dashboard, account, marketing, and emails) use the dark theme `#0F0F23` with `#7C3AED` as the primary accent. Public streamer-facing surfaces (the `.yr-site` shell: home, leaderboard, shop, and `/me`, plus the OBS overlay) deliberately default to Kick lime `#53FC18`; streamers override it per site through `theme_json.accentA`.
 - Chrome (topbar, sidebar) `#0A0A0A`; sidebar card `#131313`; hairlines `rgba(255,255,255,0.08)`.
 - Content background `#0F0F23`; cards `rgba(255,255,255,0.03)`; hairline `rgba(255,255,255,0.08)`.
 - Danger `#F43F5E`, warning `#F59E0B`.
@@ -43,7 +42,7 @@ page.
 - Sidebar: fixed, 260px, black, full height under the topbar. Top: `ACTIVE BOARD`
   mono label card with the board name, a stepper chevron and a full-width
   `+ New board` outline button. Then the nav: Overview, Leaderboard, Page,
-  Credits (Redemptions, Shop, Credit rules, Viewers, Credit activity), Games, Analytics, Past periods, Settings — 24px icons, active item
+  Credits (Redemptions, Shop, Credit rules, Viewers, Credit activity), Analytics, Past periods, Settings — 24px icons, active item
   has a 3px accent left bar, `#1A1A1A` fill and accent icon. Bottom: accent
   `View live page ↗` link and the `VIP PRO / Active` usage card with the API
   usage meter.

@@ -10,7 +10,6 @@ import { admin2faPage } from "./pages/admin-2fa.js";
 import { overlayPage } from "./pages/overlay.js";
 import { termsPage } from "./pages/terms.js";
 import { privacyPage } from "./pages/privacy.js";
-import { responsiblePage } from "./pages/responsible.js";
 import { refundPage } from "./pages/refund.js";
 import { cookiesPage } from "./pages/cookies.js";
 import { helpHubPage, helpSupportPage, helpFeedbackPage } from "./pages/help.js";
@@ -42,7 +41,6 @@ export const PAGES = {
   overlay: overlayPage,
   terms: termsPage,
   privacy: privacyPage,
-  responsible: responsiblePage,
   refund: refundPage,
   cookies: cookiesPage,
   helpSupport: helpSupportPage,

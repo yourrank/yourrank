@@ -289,7 +289,7 @@ export function newLinkSlug(): string {
   return Buffer.from(crypto.getRandomValues(new Uint8Array(8))).toString("base64url");
 }
 
-/** Public click reference id — echoed back by casinos in postbacks. */
+/** Public click reference id — echoed back by partners in conversion postbacks. */
 export function newClickRef(): string {
   return Buffer.from(crypto.getRandomValues(new Uint8Array(9))).toString("base64url");
 }
@@ -305,9 +305,9 @@ export function newPostbackKey(): string {
 
 /**
  * Constant-time verify of a hex HMAC-SHA256 over `payload` keyed by `secret`.
- * Used by the signed postback endpoint (POST /pb). Casinos that support signing
+ * Used by the signed postback endpoint (POST /pb). Partners that support signing
  * send `X-Postback-Signature: <hex hmac>` where the hmac is of the exact query
- * string they sent (e.g. `event=deposit&amount=50&click_ref=x`). Verified
+ * string they sent (e.g. `event=conversion&amount=50&click_ref=x`). Verified
  * against the streamer's own postback_key as the HMAC secret — same value the
  * legacy path uses, so no schema change.
  */

@@ -42,7 +42,7 @@ async function createFixture(linkCount = 2): Promise<Fixture> {
     RETURNING id`;
   const [casino] = await sql`
     INSERT INTO casinos (slug, name, created_by)
-    VALUES (${`rollup-${suffix}`}, 'Rollup Test Casino', ${user.id})
+    VALUES (${`rollup-${suffix}`}, 'Rollup Test Sponsor', ${user.id})
     RETURNING id`;
   const [offer] = await sql`
     INSERT INTO offers (owner_id, casino_id, label, referral_url)

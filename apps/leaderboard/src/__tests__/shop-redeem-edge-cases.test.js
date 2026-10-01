@@ -25,7 +25,7 @@ const realAuth = await import(authUrl);
 const siteFixture = {
   id: "site-1",
   slug: "test",
-  name: "Test Casino",
+  name: "Test Community",
   user_id: "user-1",
   plan: "pro",
   suspended: false,

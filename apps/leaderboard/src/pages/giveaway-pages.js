@@ -2,14 +2,10 @@ import { routeById } from "@yourrank/shared/dashboard-routes";
 
 export const GIVEAWAY_TABS = [
   ["chat", "Chat Giveaway"],
-  ["raffles", "Raffle"],
-  ["preds", "Prediction"],
 ];
 
 const SUBNAV_ROUTES = {
   chat: "giveaways.chat",
-  raffles: "giveaways.raffles",
-  preds: "giveaways.preds",
 };
 
 export const ENGAGE_FEATURES = [
@@ -24,8 +20,8 @@ export const ENGAGE_FEATURES = [
     feature: "giveaways",
     title: "Giveaways",
     href: routeById(SUBNAV_ROUTES.chat).canonicalPath,
-    desc: "Chat giveaways, raffles, and predictions.",
-    idle: { meta: "Start a chat giveaway, raffle, or prediction." },
+    desc: "Run a giveaway for your community.",
+    idle: { meta: "Start a chat giveaway." },
   },
   {
     feature: "tournaments",

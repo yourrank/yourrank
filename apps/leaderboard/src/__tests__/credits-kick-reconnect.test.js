@@ -15,7 +15,7 @@ import { handleCreditsCreateReward } from "../handlers/credits.js";
 const siteFixture = {
   id: "site-1",
   slug: "test",
-  name: "Test Casino",
+  name: "Test Community",
   user_id: "user-1",
   plan: "pro",
 };

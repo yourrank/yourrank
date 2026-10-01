@@ -114,8 +114,8 @@ describe("authenticated page chrome", () => {
           .toEqual({ route, current: 1 });
       }
     }
-    const engage = renderGiveawaysContentHtml("raffles");
-    expect(engage).toContain('data-tab="raffles"');
+    const engage = renderGiveawaysContentHtml("chat");
+    expect(engage).toContain('data-tab="chat"');
     expect(engage).not.toMatch(/<h1\b/);
     expect((giveawaysPageSource.match(/<h1\b/g) || []).length).toBe(1);
     expect(giveawaysPageSource).toContain('<header className="v3-head v3-head--row">');

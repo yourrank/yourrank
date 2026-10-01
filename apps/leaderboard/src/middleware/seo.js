@@ -36,7 +36,6 @@ export async function serveSitemapXml(origin, _env) {
     `<url><loc>${origin}/reviews</loc><priority>0.6</priority></url>`,
     `<url><loc>${origin}/terms</loc><priority>0.3</priority></url>`,
     `<url><loc>${origin}/privacy</loc><priority>0.3</priority></url>`,
-    `<url><loc>${origin}/responsible</loc><priority>0.3</priority></url>`,
   ];
   try {
     // PERF-001: LIMIT 5000 prevents unbounded result sets (more than enough for any

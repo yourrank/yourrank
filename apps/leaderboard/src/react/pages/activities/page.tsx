@@ -1021,7 +1021,7 @@ export function ActivitiesPage({ deps: injectedDeps = activitiesTestDependencies
         <SheetContent id="act-create-drawer" side="right" className="min-[561px]:max-w-[560px]" onOpenAutoFocus={preventSheetAutoFocus} onCloseAutoFocus={preventSheetAutoFocus}>
           <SheetHeader>
             <SheetTitle>Launch a code drop</SheetTitle>
-            <SheetDescription>Members claim the code once each while supplies last. No purchase or stake is required.</SheetDescription>
+            <SheetDescription>Members claim the code once each while supplies last. No purchase is required.</SheetDescription>
           </SheetHeader>
           <form className="flex min-h-0 flex-1 flex-col" id="act-drop-form" onSubmit={submitDrop}>
             <div className="grid gap-5 overflow-y-auto px-6 py-5">

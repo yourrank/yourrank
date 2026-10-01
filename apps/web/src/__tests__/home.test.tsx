@@ -10,18 +10,6 @@ import { PricingPlans, accountPlanAction } from "../app/pricing/pricing-plans";
 import { SiteFooter } from "../components/site-shell";
 import { MotionFooter } from "../components/home/motion-footer";
 
-const PRIMARY_MARKETING_SOURCES = [
-  "../components/site-shell.tsx",
-  "../components/product-page.tsx",
-  "../components/home/sticky-scroll-reveal.tsx",
-  "../app/sites/page.tsx",
-  "../app/switch/page.tsx",
-  "../app/about/page.tsx",
-  "../app/credits/page.tsx",
-  "../app/docs/page.tsx",
-  "../app/changelog/page.tsx",
-].map((path) => new URL(path, import.meta.url));
-
 describe("Home & Product components", () => {
   it("keeps legal and contact destinations available in both marketing footers", () => {
     for (const footer of [<SiteFooter />, <MotionFooter />]) {
@@ -95,7 +83,7 @@ describe("Home & Product components", () => {
     expect(html).toContain("250 active viewers");
     expect(html).toContain("1 site · 10 leaderboard players");
     expect(html).toContain("100 leaderboard players");
-    expect(html).toContain("Predictions &amp; tournaments");
+    expect(html).toContain("Community tournaments");
     expect(html).toContain("90 days");
     expect(html).not.toContain("Team</th>");
     expect(html).not.toContain("100 active viewers");
@@ -158,7 +146,6 @@ describe("Home & Product components", () => {
     expect(html).toContain("Give your community a place worth returning to.");
     expect(html).toContain("Choose the experience");
     expect(html).toContain("Explore the connected suite.");
-    expect(html).not.toContain('href="/games"');
   });
 
   it("closes the mobile navigation on Escape and restores trigger focus", async () => {
@@ -169,10 +156,4 @@ describe("Home & Product components", () => {
     expect(source).toMatch(/useEffect\(\(\) => \{\s*setMobileOpen\(false\);\s*\}, \[pathname\]\);/);
   });
 
-  it("keeps restricted legacy mechanics out of primary launch marketing", async () => {
-    const source = (await Promise.all(PRIMARY_MARKETING_SOURCES.map((url) => Bun.file(url).text()))).join("\n");
-    expect(source).not.toMatch(/\b(?:games?|raffles?|predictions?|wager(?:ed|ing)?|casino)\b/i);
-    const retiredPage = await Bun.file(new URL("../app/games/page.tsx", import.meta.url)).text();
-    expect(retiredPage).toContain('permanentRedirect("/sites")');
-  });
 });

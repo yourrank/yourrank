@@ -16,10 +16,8 @@ export function demoLeaderboardData() {
     prizes: {
       prizePoolLabel: "Prize pool",
       currency: "$",
-      payoutsLabel: "Payouts",
-      wagerLabel: "Score",
+      payoutsLabel: "Rewards",
       prizeLabel: "Prize",
-      wagerTotalLabel: "Total Score",
     },
     branding: { hasLogo: false },
     rankBy: "score",

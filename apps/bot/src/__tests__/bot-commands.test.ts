@@ -155,7 +155,7 @@ describe("bot commands", () => {
     expect(payloads[0].text).toBe("Hello there");
     const rows = payloads[0].reply_markup?.inline_keyboard ?? [];
     const labels = rows.flat().map((b: any) => b.text);
-    expect(labels).toContain("🎁 Bonus codes");
+    expect(labels).toContain("🎁 Promo codes");
     expect(labels).toContain("🏆 Leaderboard");
   });
 

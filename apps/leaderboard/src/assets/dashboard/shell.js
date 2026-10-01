@@ -14,7 +14,7 @@ import { DYNAMIC_SECTIONS, dynamicPath, dynamicTitle, isDynamicSection, parseDyn
 import { loadDynamicSection, leaveDynamicSection } from "./dynamic-section.js";
 
 // Sections are all in one document now, so nothing below reinitializes the
-// workspace. Section-specific data (games, analytics) loads on first visit
+// workspace. Section-specific data (analytics) loads on first visit
 // through this hook, registered by the entry point to avoid a circular import.
 let sectionMounter = null;
 export function registerSectionMounter(fn) { sectionMounter = fn; }
@@ -423,7 +423,6 @@ export function setupEditorTabs() {
     // Each step is its own URL, so a step can be linked to and Back returns to
     // the previous one instead of leaving the editor entirely.
     buttons.forEach((b) => b.addEventListener("click", (e) => {
-      if (b.dataset.egroup === "games") return;
       e.preventDefault();
       requestDashboardRoute("board", b.dataset.egroup);
     }));

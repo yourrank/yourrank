@@ -4,10 +4,10 @@
   "cases": [
     {
       "id": "testing-rewards-engagement-positive-1",
-      "task": "Verify the raffle draw refuses to draw with zero tickets and the tournament signup precondition holds.",
+      "task": "Verify giveaway winner selection and the tournament signup precondition.",
       "should_trigger": true,
       "required_outcomes": [
-        "exercise the rewards, raffle and tournament flows at runtime",
+        "exercise the rewards, giveaway and tournament flows at runtime",
         "record PASSED/FAILED/SKIPPED per scenario"
       ],
       "forbidden_outcomes": [

@@ -6,7 +6,7 @@ export const PLATFORM_HOST = "yourrank.site";
 export const NON_SITE_PATHS = new Set([
   "api", "auth", "dashboard", "login", "logout", "signup", "verify-email", "invite", "me",
   "account", "contact", "faq", "reviews", "cookies", "privacy", "terms",
-  "responsible", "refund", "setup", "demo", "sites", "telegram", "credits", "pricing",
-  "overlays", "games", "switch", "docs", "about", "go", "logo", "favicon.ico",
+  "refund", "setup", "demo", "sites", "telegram", "credits", "pricing",
+  "overlays", "switch", "docs", "about", "go", "logo", "favicon.ico",
   "changelog", "brand", "status", "giveaways",
 ]);

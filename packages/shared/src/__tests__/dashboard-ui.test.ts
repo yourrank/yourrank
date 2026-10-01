@@ -82,15 +82,14 @@ describe("dashboard ui primitives", () => {
   it("marks exactly one subnav item current and keeps route links plain anchors", () => {
     const items = [
       { key: "chat", label: "Chat Giveaway", href: "/dashboard/giveaways/chat" },
-      { key: "raffles", label: "Raffle", href: "/dashboard/giveaways/raffles" },
-      { key: "preds", label: "Prediction", href: "/dashboard/giveaways/predictions" },
+      { key: "drops", label: "Flash Code Drops", href: "/dashboard/giveaways/drops" },
     ];
-    const html = subnavHtml({ items, active: "raffles", label: "Giveaways", className: "gw-subnav" });
+    const html = subnavHtml({ items, active: "chat", label: "Giveaways", className: "gw-subnav" });
     expect(html.startsWith('<nav class="v3-tabs gw-subnav" aria-label="Giveaways" data-subnav-strip>')).toBe(true);
     expect(html).not.toContain('role="tablist"');
     expect(html.match(/aria-current="page"/g)?.length).toBe(1);
-    expect(html).toContain('<a class="v3-tab is-on" href="/dashboard/giveaways/raffles" aria-current="page" data-subnav="raffles">Raffle</a>');
-    expect(html).toContain('<a class="v3-tab" href="/dashboard/giveaways/chat" data-subnav="chat">Chat Giveaway</a>');
+    expect(html).toContain('<a class="v3-tab is-on" href="/dashboard/giveaways/chat" aria-current="page" data-subnav="chat">Chat Giveaway</a>');
+    expect(html).toContain('<a class="v3-tab" href="/dashboard/giveaways/drops" data-subnav="drops">Flash Code Drops</a>');
     expect(subnavHtml({ items, active: "nope", label: "Giveaways" })).not.toContain("is-on");
   });
 

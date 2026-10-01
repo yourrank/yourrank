@@ -72,7 +72,6 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
   it("top-level pages ship no breadcrumb trail", () => {
     expect(dashboardChromeState("home").crumbs).toEqual([]);
     // Single-entry trails render nothing (crumbsHtml contract).
-    expect(dashboardChromeState("games").crumbs).toEqual([{ label: "Games" }]);
     expect(dashboardChromeState("boards").crumbs).toEqual([{ label: "All sites" }]);
     expect(dashboardChromeState("site").crumbs).toEqual([{ label: "Site pages" }]);
     expect(dashboardChromeState("activities.overview").crumbs).toEqual([{ label: "Engage" }]);
@@ -126,14 +125,6 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     ]);
     expect(channel.documentTitle).toBe("Kick connection · Settings · YourRank");
 
-    const preds = dashboardChromeState("giveaways.preds");
-    expect(preds.navKey).toBe("engage");
-    expect(preds.crumbs).toEqual([
-      { label: "Engage", href: "/dashboard/giveaways" },
-      { label: "Predictions" },
-    ]);
-    expect(preds.documentTitle).toBe("Engage · YourRank");
-
     // The Members tab inside the Audience section collapses to a single
     // crumb entry (which renders no trail) and a section-level title.
     const viewers = dashboardChromeState("audience.viewers");
@@ -176,12 +167,10 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
 
   it("pins section-level document titles", () => {
     expect(dashboardChromeState("home").documentTitle).toBe("Home · YourRank");
-    expect(dashboardChromeState("games").documentTitle).toBe("Games · YourRank");
     expect(dashboardChromeState("boards").documentTitle).toBe("All sites · YourRank");
     expect(dashboardChromeState("site").documentTitle).toBe("Site pages · YourRank");
     expect(dashboardChromeState("activities.overview").documentTitle).toBe("Engage · YourRank");
     expect(dashboardChromeState("settings.team").documentTitle).toBe("Settings · YourRank");
-    expect(dashboardChromeState("giveaways.raffles").documentTitle).toBe("Engage · YourRank");
     expect(dashboardChromeState("telegram.broadcasts").documentTitle).toBe("Telegram · YourRank");
     expect(DEFAULT_DASHBOARD_TITLE).toBe("Dashboard · YourRank");
   });
@@ -191,7 +180,6 @@ describe("dashboard chrome state — location resolution", () => {
   it("resolves full locations through the canonical resolver", () => {
     expect(dashboardChromeStateForLocation("/dashboard/settings", "?tab=team")?.routeId).toBe("settings.team");
     expect(dashboardChromeStateForLocation("/dashboard/settings", "?plan")?.routeId).toBe("settings.plan");
-    expect(dashboardChromeStateForLocation("/dashboard", "?nav=games")?.routeId).toBe("games");
     expect(dashboardChromeStateForLocation("/dashboard/leaderboard/players/")?.routeId).toBe("board.players");
     expect(dashboardChromeStateForLocation("/dashboard/rewards/activity")?.routeId).toBe("audience.activity");
     expect(dashboardChromeStateForLocation("/pricing")).toBeUndefined();

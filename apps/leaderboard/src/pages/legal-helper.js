@@ -9,7 +9,7 @@ export function applyLegalIdentity(html, identity) {
   const country = i.company_country?.trim() || "";
   const number = i.company_number?.trim() || "";
   const supportEmail = i.support_email?.trim() || "contact@yourrank.site";
-  const affiliate = i.affiliate_disclosure?.trim() || "Some creator links may be affiliate links. The creator is responsible for identifying their promotions and applicable terms.";
+  const affiliate = i.affiliate_disclosure?.trim() || "Some creator links may be affiliate links. Creators must identify their promotions and applicable terms.";
 
   const parts = [companyName, country ? `registered in ${country}` : "", number].filter(Boolean);
   const companyLine = parts.length ? `<p class="legal-company">${parts.join(" · ")}</p>` : "";
@@ -46,14 +46,13 @@ function platformFooter(pagePath) {
       <a href="/cookies"${active("cookies")}>Cookie Policy</a>
       <button type="button" class="ftr-link-btn" data-cookie-preferences>Cookie preferences</button>
       <a href="/refund"${active("refund")}>Refund Policy</a>
-      <a href="/responsible"${active("responsible")}>Responsible Play</a>
     </div>
   </div>
 </div>
 {{COMPANY_LINE}}
 <p class="ftr-affiliate">{{AFFILIATE_DISCLOSURE}}</p>
 <p class="ftr-copy">© {{YEAR}} {{COMPANY_NAME}} · <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a></p>
-<p class="ftr-fine">18+ · Community credits have no cash value. Participate responsibly.</p>
+<p class="ftr-fine">Community credits have no cash value.</p>
 </div></footer>`;
 }
 

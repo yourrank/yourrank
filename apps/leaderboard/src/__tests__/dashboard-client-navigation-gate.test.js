@@ -43,7 +43,7 @@ const BANNED = [
 // file -> substring of the offending line -> reason the exception is genuine.
 // Session/auth redirects leave the dashboard because the session is gone;
 // post-deletion resets leave a destroyed context; checkout/verify are
-// off-dashboard destinations; the Games iframe never navigates this document.
+// off-dashboard destinations.
 const EXCEPTIONS = {
   "dashboard.js": [
     { match: "location.href = loginRedirectPath(location); }", reason: "cross-tab logout: session gone, leave the dashboard" },
@@ -76,9 +76,6 @@ const EXCEPTIONS = {
   ],
   "dashboard/site.js": [
     { match: 'location.href = "/verify-email")', reason: "publish blocked on unverified email: off-dashboard verification flow" },
-  ],
-  "dashboard/games.js": [
-    { match: "frameWindow.location.replace(url);", reason: "Games iframe internal src swap: never navigates this document" },
   ],
 };
 

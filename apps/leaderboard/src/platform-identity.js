@@ -20,7 +20,7 @@ export async function loadPlatformIdentity(_env) {
       company_country: "",
       company_number: "",
       support_email: "contact@yourrank.site",
-      affiliate_disclosure: "Some links and offers on this site are affiliate links. We may earn a commission if you sign up or deposit through them, at no extra cost to you.",
+      affiliate_disclosure: "Some links and offers on this site are affiliate links. We may earn a commission if you sign up or make a purchase through them, at no extra cost to you.",
       updated_at: new Date().toISOString(),
     };
     cachedAt = now;
@@ -32,7 +32,7 @@ export async function loadPlatformIdentity(_env) {
       company_country: "",
       company_number: "",
       support_email: "contact@yourrank.site",
-      affiliate_disclosure: "Some links and offers on this site are affiliate links. We may earn a commission if you sign up or deposit through them, at no extra cost to you.",
+      affiliate_disclosure: "Some links and offers on this site are affiliate links. We may earn a commission if you sign up or make a purchase through them, at no extra cost to you.",
       updated_at: new Date().toISOString(),
     };
     cachedAt = now;

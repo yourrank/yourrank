@@ -1,7 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
 import { requireSiteOwner } from "../site-authorization.js";
-import { handleGetRaffles, handleCreateRaffle } from "../handlers/events.js";
-import { handleGetPredictions, handleCreatePrediction } from "../handlers/predictions.js";
 import { handleGetTournaments, handleCreateTournament } from "../handlers/tournaments.js";
 
 const OWNER = { id: "owner-1", email: "owner@example.test" };
@@ -22,7 +20,7 @@ function authorizationDeps(user, role) {
   const one = mock(async () => ({ id: "created-1" }));
   const exec = mock(async () => []);
   const withTransaction = mock(async () => {
-    throw new Error("restricted mutation must not start");
+    throw new Error("unauthorized mutation must not start");
   });
   const ownerGuard = (actor, site) => requireSiteOwner(actor, site, {
     getSiteRole: async () => role,
@@ -43,25 +41,12 @@ function authorizationDeps(user, role) {
   };
 }
 
-const restrictedFamilies = [
-  {
-    name: "raffles",
-    get: (deps) => handleGetRaffles(request("/api/events/raffles?siteId=site-1"), {}, deps),
-    post: (deps) => handleCreateRaffle(request("/api/events/raffles", "POST", { title: "Private draw" }), {}, deps),
-  },
-  {
-    name: "predictions",
-    get: (deps) => handleGetPredictions(request("/api/predictions?siteId=site-1"), {}, deps),
-    post: (deps) => handleCreatePrediction(request("/api/predictions", "POST", {
-      title: "Restricted prediction",
-      options: [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }],
-    }), {}, deps),
-  },
+const tournamentHandlers = [
   {
     name: "tournaments",
     get: (deps) => handleGetTournaments(request("/api/tournaments?siteId=site-1"), {}, deps),
     post: (deps) => handleCreateTournament(request("/api/tournaments", "POST", {
-      title: "Restricted tournament",
+      title: "Community tournament",
       gameName: "Game",
       bracketSize: 4,
       participants: ["A", "B", "C", "D"],
@@ -69,7 +54,7 @@ const restrictedFamilies = [
   },
 ];
 
-describe("restricted legacy owner boundary", () => {
+describe("tournament owner authorization", () => {
   it("recognizes only the real site owner and fails closed for delegated, unrelated, and forged roles", async () => {
     expect((await requireSiteOwner(OWNER, SITE)).res).toBeNull();
     for (const [actor, role] of [
@@ -82,14 +67,14 @@ describe("restricted legacy owner boundary", () => {
     }
   });
 
-  for (const family of restrictedFamilies) {
+  for (const family of tournamentHandlers) {
     it(`${family.name}: owner retains GET access`, async () => {
       const deps = authorizationDeps(OWNER, "owner");
       const response = await family.get(deps);
       expect(response.status).toBe(200);
     });
 
-    it(`${family.name}: Moderator direct GET and POST fail before restricted data access or mutation`, async () => {
+    it(`${family.name}: Moderator direct GET and POST fail before data access or mutation`, async () => {
       for (const invoke of [family.get, family.post]) {
         const deps = authorizationDeps(MODERATOR, "moderator");
         const response = await invoke(deps);

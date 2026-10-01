@@ -47,7 +47,7 @@ export function validateAndNormalizePlayers(players) {
     const prize = numberField(player.prize, { field: `${name}'s prize`, min: 0, max: SCORE_MAX, fallback: 0 });
     const score = numberField(player.score, { field: `${name}'s score`, min: 0, max: SCORE_MAX, fallback: 0 });
     const hands = numberField(player.hands, { field: `${name}'s hands`, min: 0, max: INT32_MAX, integer: true, fallback: 0 });
-    const netProfit = numberField(player.netProfit ?? player.net_profit, { field: `${name}'s net profit`, min: -SCORE_MAX, max: SCORE_MAX, fallback: (prize.value ?? 0) - (wagered.value ?? 0) });
+    const netProfit = numberField(player.netProfit ?? player.net_profit, { field: `${name}'s net amount`, min: -SCORE_MAX, max: SCORE_MAX, fallback: (prize.value ?? 0) - (wagered.value ?? 0) });
     const winRate = numberField(player.winRate ?? player.win_rate, { field: `${name}'s win rate`, min: -WIN_RATE_MAX, max: WIN_RATE_MAX, fallback: 0 });
     const change = numberField(player.change, { field: `${name}'s change`, min: INT32_MIN, max: INT32_MAX, integer: true, fallback: 0 });
     const invalid = [wagered, prize, score, hands, netProfit, winRate, change].find((result) => result.error);

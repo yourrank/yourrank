@@ -65,12 +65,9 @@ const NAV_OWNER_ROUTES = {
   activities: "activities.overview",
   engage: "giveaways.hub",
   giveaways: "giveaways.hub",
-  raffles: "giveaways.raffles",
-  predictions: "giveaways.preds",
   // Legacy spelling: Code Drops live on Activities, not Giveaways.
   drops: "activities.overview",
   tournaments: "giveaways.tournaments",
-  games: "games",
   activity: "performance.activity",
   referrals: "performance.referrals",
   performance: "performance",

@@ -82,8 +82,6 @@ describe("routes.js source gate", () => {
     expect(DYNAMIC_SECTIONS.giveaways.tabPaths).toEqual({
       hub: "/dashboard/giveaways",
       chat: "/dashboard/giveaways/chat",
-      raffles: "/dashboard/giveaways/raffles",
-      preds: "/dashboard/giveaways/predictions",
       tournaments: "/dashboard/giveaways/tournaments",
     });
     expect(DYNAMIC_SECTIONS.audience.tabPaths).toEqual({
@@ -134,7 +132,6 @@ describe("routes.js source gate", () => {
     expect(parseDynamicPath("/dashboard/rewards/history")).toBeNull();
     expect(parseDynamicPath("/dashboard/rewards/maps")).toBeNull();
     expect(parseDynamicPath("/dashboard/giveaways")).toEqual({ page: "giveaways", tab: "hub", dynamic: true });
-    expect(parseDynamicPath("/dashboard/giveaways/preds")).toEqual({ page: "giveaways", tab: "preds", dynamic: true });
     expect(parseDynamicPath("/dashboard/audience/members")).toEqual({ page: "audience", tab: "viewers", dynamic: true });
     expect(parseDynamicPath("/dashboard/settings")).toEqual({ page: "settings", tab: "account", dynamic: true });
     expect(parseDynamicPath("/dashboard/settings/billing")).toEqual({ page: "settings", tab: "plan", dynamic: true });

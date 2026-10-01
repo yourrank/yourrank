@@ -66,7 +66,6 @@ export const DASHBOARD_SECTION_TITLES = {
   home: "Home",
   board: "Community",
   boards: "All sites",
-  games: "Games",
   performance: "Insights",
   site: "Site pages",
   activities: "Engage",
@@ -99,8 +98,6 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "siteConnections.channel": "Kick connection",
   "giveaways.hub": "Engage",
   "giveaways.chat": "Giveaways",
-  "giveaways.raffles": "Raffles",
-  "giveaways.preds": "Predictions",
   "giveaways.tournaments": "Tournaments",
   "audience.viewers": "Members",
   "audience.activity": "Activity",
@@ -172,7 +169,6 @@ function crumbsFor(route: DashboardRouteDef): readonly DashboardCrumb[] {
     case "home":
       return [];
     case "boards":
-    case "games":
     case "site":
       // Top-level pages: a single-entry trail renders no breadcrumb.
       return [{ label: sectionTitle }];

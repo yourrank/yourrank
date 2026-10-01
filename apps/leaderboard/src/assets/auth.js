@@ -40,7 +40,7 @@ function safeNextPath(value) {
     ]);
     const viewerPrefixes = ["/me", "/help/"];
     if (viewerPrefixes.some(prefix => path.startsWith(prefix))
-      || /^\/[^/]+\/(?:me|shop|leaderboard|games)(?:\/|$)/.test(path)
+      || /^\/[^/]+\/(?:me|shop|leaderboard)(?:\/|$)/.test(path)
       || /^\/[^/]+$/.test(path)) return path + u.search;
     const allowedPrefixes = ["/dashboard/"];
     if (allowedExact.has(path) || allowedPrefixes.some(prefix => path.startsWith(prefix))) return path + u.search;

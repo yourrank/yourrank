@@ -4,13 +4,11 @@ import { PAGES } from "../pages.jsx";
 import { effectivePlan } from "@yourrank/shared/plans";
 import { buildHomeViewModel } from "../assets/dashboard/overview.js";
 import { SETUP_STEPS, setupStepHref } from "../assets/dashboard/overview-state.js";
-import { SECTIONS } from "../assets/dashboard/routes.js";
 
 const siteJs = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
 const utilsJs = readFileSync(new URL("../assets/dashboard/utils.js", import.meta.url), "utf8");
 const overviewJs = readFileSync(new URL("../assets/dashboard/overview.js", import.meta.url), "utf8");
 const overviewPage = readFileSync(new URL("../react/pages/overview/page.tsx", import.meta.url), "utf8");
-const gamesJs = readFileSync(new URL("../assets/dashboard/games.js", import.meta.url), "utf8");
 const dashboardJs = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", import.meta.url), "utf8");
 const performanceJs = readFileSync(new URL("../assets/dashboard/performance.js", import.meta.url), "utf8");
@@ -86,8 +84,6 @@ describe("dashboard overview quick actions", () => {
     expect(overviewPage).toContain('role="region" aria-live="polite" aria-atomic="false" hidden={vm.attention.hidden}');
     expect(overviewPage).toContain('data-setup-state={step.stateKey}');
     expect(overviewJs).toContain('"owner-action"');
-    expect(overviewJs).not.toContain("/api/events/raffles");
-    expect(overviewJs).not.toContain("/api/predictions");
     expect(overviewJs).not.toContain("GIVEAWAYS_STATUS");
     expect(overviewPage).toContain('className="v3-empty v3-empty--compact-heading"');
     expect(overviewJs).not.toContain("ov_topEmpty");
@@ -194,14 +190,6 @@ describe("dashboard overview quick actions", () => {
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-alert--warning");
     expect(dashboardCss).not.toContain(".v3-dash[data-auth-workspace] .v3-block-status");
     expect(dashboardHtml()).toContain('class="v3-alert v3-alert--warning"');
-    // The contained Games page may remain directly routable for the owner, but
-    // Site settings no longer promotes it as a public navigation pillar.
-    const games = dashboardHtml("/dashboard/games");
-    expect(games).toContain("Public page visibility");
-    expect(games).toContain("Manage public sections in Site settings →");
-    expect(games).toContain("/dashboard/site?tab=customize");
-    expect(games).not.toContain("Page block visibility");
-    expect(games).not.toContain("Choose which blocks appear on your leaderboard page");
     const site = dashboardHtml("/dashboard/site");
     // Public destinations are presented as the site's navigation, next to the
     // preview that shows them, rather than as a separate "sections" concept.
@@ -236,12 +224,6 @@ describe("dashboard overview quick actions", () => {
     expect(html).not.toContain("data-identity-edit");
     expect(html).not.toContain('href="/dashboard/site">Edit site identity</a>');
     expect(html).toContain("Your current edits, rendered by the same renderer visitors see. Publish to put them live.");
-  });
-
-  it("keeps Games terminology and status copy singular", () => {
-    expect(SECTIONS.games).toEqual({ path: "/dashboard/games", title: "Games" });
-    expect(gamesJs).toContain('{ key: "limbo", label: "Limbo", description: "", disabled: true }');
-    expect(gamesJs).toContain('<span class="v3-game-coming">Coming soon</span>');
   });
 
   it("announces the active audience insight tab", () => {
@@ -288,7 +270,7 @@ describe("dashboard overview quick actions", () => {
     for (const label of [
       "Community", "Audience", "Engage", "Tournaments", "Giveaways", "Rewards", "Insights", "Telegram", "Settings",
     ]) expect(sidebar).toContain(`<span class="lb-nav-label">${label}</span>`);
-    for (const label of ["Sites", "Site", "Leaderboard", "People", "Stats", "Members", "Engagement", "Games", "Raffles", "Predictions", "Drops"]) {
+    for (const label of ["Sites", "Site", "Leaderboard", "People", "Stats", "Members", "Engagement", "Drops"]) {
       expect(sidebar).not.toContain(`<span class="lb-nav-label">${label}</span>`);
     }
     expect(html).not.toContain(">Integrations</a>");
@@ -311,10 +293,6 @@ describe("dashboard overview quick actions", () => {
     expect(overview).toContain('data-page="board"');
     expect(activePages(overview)).toEqual(["home"]);
 
-    const games = dashboardHtml("/dashboard/games");
-    expect(games).toContain('data-page="games"');
-    expect(games).toContain('data-page="home"');
-    expect(activePages(games)).toEqual(["games"]);
   });
 
   it("keeps every site editor section directly available", () => {

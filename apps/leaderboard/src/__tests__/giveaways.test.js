@@ -3,26 +3,22 @@ import { readFileSync } from "node:fs";
 import { handleGiveawayChatroom } from "../handlers/giveaway.js";
 import { giveawaysConfig } from "../pages/giveaways.jsx";
 import { GIVEAWAY_TABS, giveawaysHtml, renderGiveawaysContentHtml, renderGiveawaysHtml } from "../pages/giveaway-pages.js";
-import { apiPath } from "../react/lib/api.ts";
 import {
   actGiveaways,
   clickGiveaways,
   document,
   mountGiveawaysPage,
   restoreGiveawaysDomGlobals,
-  setGiveawaysInputValue,
   unmountGiveawaysPage,
   window,
 } from "./giveaways-react-utils.js";
 
-const gamesSource = readFileSync(new URL("../assets/dashboard/games.js", import.meta.url), "utf8");
 const siteSource = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
 const dashboardSource = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 const previewTabsSource = readFileSync(new URL("../assets/dashboard/preview-tabs.js", import.meta.url), "utf8");
 const giveawaysPageSource = readFileSync(new URL("../react/pages/giveaways/page.tsx", import.meta.url), "utf8");
 const giveawayPagesSource = readFileSync(new URL("../pages/giveaway-pages.js", import.meta.url), "utf8");
 const apiSource = readFileSync(new URL("../react/lib/api.ts", import.meta.url), "utf8");
-const sheetSource = readFileSync(new URL("../react/components/ui/sheet.tsx", import.meta.url), "utf8");
 const shellSource = readFileSync(new URL("../assets/dashboard/shell.js", import.meta.url), "utf8");
 
 const $id = (id) => document.getElementById(id);
@@ -93,19 +89,6 @@ function verificationChat({ status = "active", entryMode = "verified", vpnDetect
   };
 }
 
-async function withSiteQuery(siteId, run) {
-  const originalUrl = window.location.href;
-  const originalState = window.history.state;
-  const url = new URL(originalUrl);
-  url.searchParams.set("siteId", siteId);
-  window.history.replaceState({}, "", url.href);
-  try {
-    await run();
-  } finally {
-    window.history.replaceState(originalState, "", originalUrl);
-  }
-}
-
 afterEach(async () => {
   await unmountGiveawaysPage();
 });
@@ -152,10 +135,10 @@ describe("Giveaway Chatroom Handler", () => {
 describe("Giveaways React migration", () => {
   it("renders the route mount points and keeps Tournaments on its separate roots", () => {
     expect(giveawaysHtml).toBe('<div id="giveaway-root" class="yr-react" data-tab="chat"></div>');
-    expect(GIVEAWAY_TABS.map(([tab]) => tab)).toEqual(["chat", "raffles", "preds"]);
+    expect(GIVEAWAY_TABS.map(([tab]) => tab)).toEqual(["chat"]);
     expect(giveawayPagesSource).not.toContain("chat-entry.js");
     expect(giveawayPagesSource).toContain('id="tournament-dialogs"');
-    for (const tab of ["chat", "raffles", "preds", "hub"]) {
+    for (const tab of ["chat", "hub"]) {
       expect(renderGiveawaysHtml(tab)).toContain(`data-tab="${tab}"`);
     }
     expect(renderGiveawaysHtml("drops")).toContain('data-tab="chat"');
@@ -465,333 +448,26 @@ describe("Giveaways React migration", () => {
     expect(historyItems.join(" ")).not.toContain("current-winner");
   });
 
-  it("keeps winner rules server-backed and scopes predictions to the selected site", async () => {
+  it("keeps winner rules server-backed", async () => {
     expect(giveawaysPageSource).toContain('id="gw-opt-claim-req"');
     expect(giveawaysPageSource).toContain('id="gw-opt-claim-duration"');
     expect(giveawaysPageSource).toContain('id="gw-opt-winner-repeat"');
     expect(giveawaysPageSource).toContain('onChange={(value) => setRule("winnerRepeat", value ? "again" : "once")}');
-    expect(giveawaysPageSource).toContain('apiClient<PredictionsPayload>("/api/predictions", {}, siteId)');
-    expect(giveawaysPageSource).toContain('apiClient<PredictionsPayload>("/api/predictions", post({');
-    expect(apiPath("/api/predictions", "site 1")).toBe("/api/predictions?siteId=site%201");
-    expect(apiPath("/api/events/raffles?state=open", "site-1")).toBe("/api/events/raffles?state=open&siteId=site-1");
     await mountChat();
     expect($id("gw-opt-winner-repeat")).toBeTruthy();
   });
 
-  it("sends CSRF with API mutations and uses accessible Radix sheets for drawers", () => {
+  it("sends CSRF with API mutations", () => {
     expect(apiSource).toContain('"x-csrf-token"');
     expect(apiSource).toContain("response.status");
     expect(apiSource).toContain('credentials: "same-origin"');
-    expect(giveawaysPageSource).toContain('<SheetContent id="pred-drawer"');
-    expect(giveawaysPageSource).toContain('<SheetTitle id="pred-drawer-title">');
-    expect(giveawaysPageSource).toContain('className="max-h-dvh overflow-hidden"');
-    expect(giveawaysPageSource).toContain("min-h-0 flex-1 space-y-5 overflow-y-auto");
-    expect(giveawaysPageSource).toContain('<SheetFooter className="shrink-0">');
-    expect(sheetSource).toContain("DialogPrimitive.Content");
-    expect(sheetSource).toContain("DialogPrimitive.Portal");
-    expect(sheetSource).toContain("DialogPrimitive.Title");
-  });
-
-  it("restores, saves, and discards raffle drawer drafts for the selected site", async () => {
-    await withSiteQuery("site-1", async () => {
-      const key = "yr-engage-draft:site-1:rf-drawer";
-      window.sessionStorage.setItem(key, JSON.stringify({
-        "rf-title": "Community headset",
-        "rf-desc": "For the winner",
-        "rf-cost": "25",
-        "rf-max": "5",
-      }));
-      await mountGiveawaysPage({
-        tab: "raffles",
-        site: { id: "site-1", name: "Kick Cup" },
-        deps: { api: async () => ({ raffles: [] }) },
-      });
-
-      clickGiveaways($id("btn-create-raffle"));
-      await actGiveaways();
-      expect($id("rf-title").value).toBe("Community headset");
-      expect($id("rf-desc").value).toBe("For the winner");
-      expect($id("rf-cost").value).toBe("25");
-      expect($id("rf-max").value).toBe("5");
-
-      setGiveawaysInputValue($id("rf-title"), "Updated headset");
-      await actGiveaways();
-      expect(JSON.parse(window.sessionStorage.getItem(key))).toMatchObject({ "rf-title": "Updated headset" });
-      await actGiveaways(() => $id("rf-title").dispatchEvent(new window.KeyboardEvent("keydown", {
-        key: "Escape",
-        bubbles: true,
-        cancelable: true,
-      })));
-      expect(JSON.parse(window.sessionStorage.getItem(key))).toMatchObject({ "rf-title": "Updated headset" });
-      clickGiveaways($id("btn-create-raffle"));
-      await actGiveaways();
-      expect($id("rf-title").value).toBe("Updated headset");
-      clickGiveaways($id("rf-cancel"));
-      await actGiveaways();
-      expect(window.sessionStorage.getItem(key)).toBeNull();
-    });
-  });
-
-  it("keeps the raffle drawer defaults and field guidance", async () => {
-    await withSiteQuery("site-1", async () => {
-      window.sessionStorage.removeItem("yr-engage-draft:site-1:rf-drawer");
-      await mountGiveawaysPage({
-        tab: "raffles",
-        site: { id: "site-1", name: "Kick Cup" },
-        deps: { api: async () => ({ raffles: [] }) },
-      });
-
-      clickGiveaways($id("btn-create-raffle"));
-      await actGiveaways();
-
-      expect($id("rf-cost").value).toBe("30");
-      expect($id("rf-title").placeholder).toBe("e.g. $100 Amazon Gift Card or VIP Role");
-      expect($id("rf-desc").placeholder).toBe("Rules or details for claiming this prize…");
-      expect($id("rf-cost").placeholder).toBe("e.g. 30");
-      expect($id("rf-max").placeholder).toBe("e.g. 5");
-      expect(document.querySelector('label[for="rf-title"]').textContent).toBe("Prize Title *");
-      expect(document.querySelector('label[for="rf-cost"]').textContent).toBe("Ticket Cost (in Credits)");
-      expect(document.querySelector('label[for="rf-title"]').parentElement.textContent).toContain("What will the winner receive?");
-    });
-  });
-
-  it("creates raffles with the existing endpoint, request body, and site scope", async () => {
-    await withSiteQuery("site-1", async () => {
-      const requests = [];
-      await mountGiveawaysPage({
-        tab: "raffles",
-        site: { id: "site-1", name: "Kick Cup" },
-        deps: {
-          api: async (path, init, siteId) => {
-            requests.push({ path, init, siteId });
-            return { raffles: [] };
-          },
-        },
-      });
-
-      clickGiveaways($id("btn-create-raffle"));
-      await actGiveaways();
-      setGiveawaysInputValue($id("rf-title"), "Community headset");
-      setGiveawaysInputValue($id("rf-desc"), "For the winner");
-      setGiveawaysInputValue($id("rf-cost"), "25");
-      setGiveawaysInputValue($id("rf-max"), "5");
-      await actGiveaways();
-      clickGiveaways($id("rf-submit"));
-      await actGiveaways();
-
-      const createRequest = requests.find((request) => request.init?.method === "POST");
-      expect(createRequest.path).toBe("/api/events/raffles");
-      expect(createRequest.siteId).toBe("site-1");
-      expect(JSON.parse(createRequest.init.body)).toEqual({
-        title: "Community headset",
-        description: "For the winner",
-        ticketCost: 25,
-        maxTickets: 5,
-      });
-      expect(window.sessionStorage.getItem("yr-engage-draft:site-1:rf-drawer")).toBeNull();
-    });
-  });
-
-  it("restores prediction drawer fields from the selected site's saved draft", async () => {
-    await withSiteQuery("site-1", async () => {
-      const key = "yr-engage-draft:site-1:pred-drawer";
-      window.sessionStorage.setItem(key, JSON.stringify({
-        "pred-title": "Who scores next?",
-        "pred-opt-1": "Blue",
-        "pred-opt-2": "Red",
-        "pred-min-bet": "20",
-        "pred-max-bet": "800",
-        "pred-lock-min": "12",
-      }));
-      await mountGiveawaysPage({
-        tab: "preds",
-        site: { id: "site-1", name: "Kick Cup" },
-        deps: { api: async () => ({ predictions: [], entitlement: { enabled: true } }) },
-      });
-
-      clickGiveaways($id("btn-open-event-drawer"));
-      await actGiveaways();
-      expect($id("pred-title").value).toBe("Who scores next?");
-      expect($id("pred-opt-1").value).toBe("Blue");
-      expect($id("pred-opt-2").value).toBe("Red");
-      expect($id("pred-min-bet").value).toBe("20");
-      expect($id("pred-max-bet").value).toBe("800");
-      expect($id("pred-lock-min").value).toBe("12");
-
-      clickGiveaways($id("pred-cancel"));
-      await actGiveaways();
-      expect(window.sessionStorage.getItem(key)).toBeNull();
-    });
-  });
-
-  it("creates predictions with the existing endpoint, request body, and site scope", async () => {
-    await withSiteQuery("site-1", async () => {
-      const requests = [];
-      await mountGiveawaysPage({
-        tab: "preds",
-        site: { id: "site-1", name: "Kick Cup" },
-        deps: {
-          api: async (path, init, siteId) => {
-            requests.push({ path, init, siteId });
-            return { predictions: [], entitlement: { enabled: true } };
-          },
-        },
-      });
-
-      clickGiveaways($id("btn-open-event-drawer"));
-      await actGiveaways();
-      setGiveawaysInputValue($id("pred-title"), "Will blue win?");
-      setGiveawaysInputValue($id("pred-opt-1"), "Blue");
-      setGiveawaysInputValue($id("pred-opt-2"), "Red");
-      setGiveawaysInputValue($id("pred-min-bet"), "20");
-      setGiveawaysInputValue($id("pred-max-bet"), "400");
-      setGiveawaysInputValue($id("pred-lock-min"), "12");
-      await actGiveaways();
-      clickGiveaways($id("pred-submit"));
-      await actGiveaways();
-
-      const createRequest = requests.find((request) => request.init?.method === "POST");
-      expect(createRequest.path).toBe("/api/predictions");
-      expect(createRequest.siteId).toBe("site-1");
-      expect(JSON.parse(createRequest.init.body)).toEqual({
-        title: "Will blue win?",
-        options: [{ id: "yes", label: "Blue" }, { id: "no", label: "Red" }],
-        minBet: 20,
-        maxBet: 400,
-        lockMinutes: 12,
-      });
-      expect(window.sessionStorage.getItem("yr-engage-draft:site-1:pred-drawer")).toBeNull();
-    });
-  });
-
-  it("renders active and historical raffle rows as a responsive table", async () => {
-    const active = {
-      id: "raffle-live",
-      title: "Live prize",
-      ticket_cost: 25,
-      max_tickets_per_viewer: 5,
-      status: "active",
-      total_tickets: 8,
-      participant_count: 4,
-      created_at: "2026-09-28T00:00:00Z",
-    };
-    const past = {
-      ...active,
-      id: "raffle-past",
-      title: "Past prize",
-      status: "completed",
-      winner_name: "Casey",
-      winner_ticket_number: 4,
-      drawn_at: "2026-09-29T00:00:00Z",
-    };
-    const cancelled = {
-      ...active,
-      id: "raffle-cancelled",
-      title: "Cancelled prize",
-      status: "cancelled",
-      total_tickets: 3,
-    };
-    await mountGiveawaysPage({
-      tab: "raffles",
-      site: { id: "site-1", name: "Kick Cup" },
-      deps: { api: async () => ({ raffles: [active, past, cancelled] }) },
-    });
-
-    expect($id("rf-active-list").querySelector('[data-raffle-id="raffle-live"] h3').textContent).toBe("Live prize");
-    const activeCard = $id("rf-active-list").querySelector('[data-raffle-id="raffle-live"]');
-    expect([...activeCard.querySelectorAll("button")].map((button) => button.textContent.trim())).toEqual(["Draw winner", "Cancel raffle"]);
-    expect(activeCard.querySelectorAll("button")[1].className).toContain("border-input");
-    expect($id("rf-past-list").querySelector("table")).toBeTruthy();
-    expect($id("rf-past-list").textContent).toContain("Casey");
-    expect($id("rf-past-list").textContent).toContain("Ticket #4");
-    expect($id("rf-past-list").textContent).toContain("Cancelled · Credits refunded");
-    expect($id("rf-past-list").querySelector(".gw-table")).toBeNull();
-  });
-
-  it("confirms raffle cancellation, posts to the cancel endpoint, reloads, and reports refunds", async () => {
-    const active = {
-      id: "raffle-live",
-      title: "Live prize",
-      ticket_cost: 25,
-      max_tickets_per_viewer: 5,
-      status: "active",
-      total_tickets: 8,
-      participant_count: 4,
-      created_at: "2026-09-28T00:00:00Z",
-    };
-    const cancelled = { ...active, status: "cancelled" };
-    const requests = [];
-    let listLoads = 0;
-    await mountGiveawaysPage({
-      tab: "raffles",
-      site: { id: "site-1", name: "Kick Cup" },
-      deps: {
-        api: async (path, init, siteId) => {
-          requests.push({ path, init, siteId });
-          if (path === "/api/events/raffles") {
-            listLoads += 1;
-            return { raffles: listLoads === 1 ? [active] : [cancelled] };
-          }
-          if (path === "/api/events/raffles/cancel") {
-            return { refundedViewers: 2, refundedCredits: 50, message: "Raffle cancelled. Refunded 50 Credits to 2 viewers." };
-          }
-          return {};
-        },
-      },
-    });
-
-    const card = $id("rf-active-list").querySelector('[data-raffle-id="raffle-live"]');
-    clickGiveaways([...card.querySelectorAll("button")].find((button) => button.textContent.includes("Cancel raffle")));
-    await actGiveaways();
-    const dialog = document.querySelector('[role="alertdialog"]');
-    expect(dialog.textContent).toContain("Cancel this raffle?");
-    expect(dialog.textContent).toContain("Everyone who bought tickets gets their Credits back.");
-    expect([...dialog.querySelectorAll("button")].map((button) => button.textContent.trim())).toEqual(["Keep raffle", "Cancel raffle"]);
-    clickGiveaways([...dialog.querySelectorAll("button")].find((button) => button.textContent.trim() === "Cancel raffle"));
-    await actGiveaways();
-
-    const cancelRequest = requests.find((request) => request.path === "/api/events/raffles/cancel");
-    expect(cancelRequest.siteId).toBe("site-1");
-    expect(cancelRequest.init.method).toBe("POST");
-    expect(JSON.parse(cancelRequest.init.body)).toEqual({ raffleId: "raffle-live" });
-    expect(listLoads).toBe(2);
-    expect($id("gw-page-alert").textContent).toContain("Refunded 50 Credits to 2 viewers");
-    expect($id("rf-past-list").textContent).toContain("Cancelled · Credits refunded");
-  });
-
-  it("renders settled prediction history using the React table", async () => {
-    await mountGiveawaysPage({
-      tab: "preds",
-      site: { id: "site-1", name: "Kick Cup" },
-      deps: {
-        api: async () => ({
-          predictions: [{
-            id: "prediction-past",
-            title: "Who scored?",
-            options: [{ id: "yes", label: "Blue" }, { id: "no", label: "Red" }],
-            status: "settled",
-            winning_option_id: "yes",
-            total_pool: 120,
-            min_bet: 10,
-            max_bet: 50,
-            created_at: "2026-09-28T00:00:00Z",
-          }],
-          entitlement: { enabled: true },
-        }),
-      },
-    });
-
-    expect($id("pred-past-list").querySelector("table")).toBeTruthy();
-    expect($id("pred-past-list").textContent).toContain("Who scored?");
-    expect($id("pred-past-list").textContent).toContain("settled");
-    expect($id("pred-past-list").querySelector(".gw-table")).toBeNull();
   });
 
   it("keeps Engage refusals in an accessible page-level alert", () => {
-    const alertIndex = giveawaysPageSource.indexOf('id="gw-page-alert"');
-    const tabContentIndex = giveawaysPageSource.indexOf('{tab === "chat" &&');
+    const alertIndex = giveawaysPageSource.lastIndexOf('id="gw-page-alert"');
+    const chatContentIndex = giveawaysPageSource.indexOf("<ChatGiveaway apiClient=");
     expect(alertIndex).toBeGreaterThan(-1);
-    expect(alertIndex).toBeLessThan(tabContentIndex);
+    expect(alertIndex).toBeLessThan(chatContentIndex);
     expect(giveawaysPageSource).toContain('role="alert">{pageAlert}</StatusMessage>');
     expect(giveawaysPageSource).toContain('onAlert(errorMessage(error, "Network error starting the giveaway."))');
     expect(giveawaysPageSource).not.toContain("fallbackId");
@@ -928,16 +604,7 @@ describe("Giveaways React migration", () => {
     });
   });
 
-  it("keeps the prediction entitlement lock and upgrade recovery controls", () => {
-    expect(giveawaysPageSource).toContain('id="pred-plan-lock"');
-    expect(giveawaysPageSource).toContain('aria-describedby={!enabled ? "pred-plan-lock" : undefined}');
-    expect(giveawaysPageSource).toContain('href="/dashboard/settings/billing?from=predictions"');
-    expect(giveawaysPageSource).toContain("if (!enabled) return;");
-  });
-
-  it("keeps preview frame navigations out of browser history", () => {
-    expect(gamesSource).toContain("loadSimulatorFrame(iframe, embedUrl);");
-    expect(gamesSource).toContain('loadSimulatorFrame(iframe, iframe.dataset.currentSrc + "&_t=" + Date.now());');
+  it("resets the public-site preview before form submission", () => {
     const resetIndex = siteSource.indexOf("if (!resetPreviewFrame(mount)) return;");
     const submitIndex = siteSource.indexOf("local.form.submit()");
     expect(resetIndex).toBeGreaterThanOrEqual(0);

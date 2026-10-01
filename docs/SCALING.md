@@ -137,7 +137,7 @@ requires it.
 
 1. In Supabase, create a second project named clearly as staging.
 2. Apply the migrations and seed realistic data: a small board, an active
-   board, a large board, a games/credits board, and thousands of viewers.
+   board, a large board, a credits-enabled board, and thousands of viewers.
 3. In Cloudflare **Workers & Pages → Hyperdrive**, create a staging
    configuration pointing only to that staging database.
 4. Set the staging Worker environments to use that Hyperdrive configuration.
@@ -242,8 +242,8 @@ This is a different operating model, not just a larger pool.
 2. Move analytics off the transactional database.
 3. Add per-tenant quotas and isolation so one board cannot consume the shared
    database.
-4. Partition and retain high-growth tables such as game rounds, credit ledger,
-   and visitor history.
+4. Partition and retain high-growth tables such as credit ledger and visitor
+   history.
 5. Shard hot rate-limit keys across Durable Objects and regions.
 6. Separate the leaderboard database from bot and background workloads.
 7. Use multiple regions or databases where the audience and data model require

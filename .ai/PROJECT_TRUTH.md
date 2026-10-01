@@ -73,7 +73,7 @@ Current public/site ownership:
 
 - `packages/shared/src/site-render.ts` is the one public viewer renderer.
 - `apps/leaderboard/src/assets/site-shell.css` is the public viewer stylesheet owner.
-- The current public viewer exposes Home, Leaderboard, Rewards, Games, creator-scoped **My Community**, and global `/me` as the Viewer Account's **My communities** index. My communities links into each creator-owned surface without duplicating its Rewards or Claims detail. Future Activities, participation, Recognition, and expanded Claims labels must follow real capability.
+- The current public viewer exposes Home, Leaderboard, Rewards, creator-scoped **My Community**, and global `/me` as the Viewer Account's **My communities** index. My communities links into each creator-owned surface without duplicating its Rewards or Claims detail. Future Activities, participation, Recognition, and expanded Claims labels must follow real capability.
 - Current Site Settings is owned by the canonical dashboard Site surface and previews through the real public renderer. Do not build a second creator-site editor.
 
 Current identity boundaries:
@@ -100,20 +100,11 @@ Current runtime foundation:
 - Every visible control works or does not exist.
 - State is truthful, responsive layouts adapt, and public streamer branding remains separate from YourRank product-action styling.
 
-## Restricted Legacy Boundary
+## Excluded mechanics
 
-The target architecture must not redesign, optimize, debug, extend, consolidate, or use as architectural examples:
-
-- Games;
-- wagering or stake mechanics;
-- race/wager mechanics;
-- predictions;
-- paid-chance mechanics;
-- raffle mechanics involving credit-ticket purchases and random-value outcomes;
-- odds, payout, or settlement behavior;
-- gambling-specific Telegram behavior.
-
-Restricted routes may remain operational current implementation. Generic shared shell/documentation work may acknowledge their existence, but they are not target product strategy.
+YourRank has no games of chance, wagering/stakes, predictions, paid or
+credit-ticket raffles, spin wheels, or odds/payout logic, and these must not be
+added.
 
 ## Migration Invariants
 

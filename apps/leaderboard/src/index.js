@@ -51,8 +51,7 @@ import { demoLeaderboardData } from "./demo-data.js";
 import { resolveAliasRedirect, resolveNavRedirect } from "@yourrank/shared/dashboard-routes";
 import { logLegacyDashboardRedirect } from "@yourrank/shared/dashboard-legacy-telemetry";
 
-// Sections the virtual /demo board renders. `games` is off in the demo data,
-// so its shell never links there.
+// Sections the virtual /demo board renders.
 const DEMO_SECTIONS = new Map([["leaderboard", "leaderboard"], ["shop", "shop"], ["activity", "me"], ["me", "me"]]);
 import { renderPasswordGate } from "./password-gate.js";
 import {
@@ -88,10 +87,10 @@ async function withViewerCommunity(env, viewerHelp) {
   return community ? { ...viewerHelp, community } : viewerHelp;
 }
 
-const LEGAL_PAGES = new Set(["terms", "privacy", "responsible", "cookies", "refund", "contact"]);
-const MARKETING_PAGES = new Set(["/", "/index.html", "/sites", "/telegram", "/credits", "/pricing", "/overlays", "/games", "/switch", "/docs", "/faq", "/about", "/changelog", "/brand", "/status"]);
+const LEGAL_PAGES = new Set(["terms", "privacy", "cookies", "refund", "contact"]);
+const MARKETING_PAGES = new Set(["/", "/index.html", "/sites", "/telegram", "/credits", "/pricing", "/overlays", "/switch", "/docs", "/faq", "/about", "/changelog", "/brand", "/status"]);
 const PUBLIC_API_OPERATIONS = new Set(["standings", "players", "stream", "rank", "data", "stats"]);
-const SITE_SECTIONS = new Set(["home", "leaderboard", "shop", "games", "activity", "me"]);
+const SITE_SECTIONS = new Set(["home", "leaderboard", "shop", "activity", "me"]);
 const CUSTOM_VIEWER_AUTH_PATHS = new Set([
   "/api/viewer/auth/kick",
   "/api/viewer/auth/kick/callback",
@@ -112,7 +111,6 @@ export function isCustomViewerApiPath(method, path, customSlug = '') {
       path === "/api/viewer/membership/join"
       || path === "/api/events/drops/claim"
       || path === "/api/viewer/checkin"
-      || path === "/api/viewer/raffles/buy"
     ));
 }
 
@@ -194,8 +192,7 @@ export function resolveFragment(targetPath) {
   if (clean === "/dashboard/giveaways") return { pageKey: "giveaways", tab: "hub" };
   if (clean.startsWith("/dashboard/giveaways/")) {
     const tab = clean.slice("/dashboard/giveaways/".length);
-    if (["chat", "raffles", "tournaments"].includes(tab)) return { pageKey: "giveaways", tab };
-    if (tab === "predictions") return { pageKey: "giveaways", tab: "preds" };
+    if (["chat", "tournaments"].includes(tab)) return { pageKey: "giveaways", tab };
     return null;
   }
   // Rewards
@@ -591,7 +588,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
               headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400" },
             });
           }
-          // --- branded site sections (custom domain): /, /leaderboard, /shop, /games, /activity ---
+          // --- branded site sections (custom domain): /, /leaderboard, /shop, /activity ---
           const customSiteRoute = parseSitePath(path, true, customSlug);
           if (customSiteRoute) {
             if (customSiteRoute.redirectTo) return legacySectionRedirect(customSiteRoute.redirectTo, url);
@@ -1114,8 +1111,8 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       if (path.startsWith("/dashboard/giveaways/")) {
         const tab = path.slice("/dashboard/giveaways/".length);
-        if (["chat", "raffles", "predictions", "tournaments"].includes(tab)) {
-          return renderDashboardPage("giveaways", "giveaways_render_failed", tab === "predictions" ? "preds" : tab);
+        if (["chat", "tournaments"].includes(tab)) {
+          return renderDashboardPage("giveaways", "giveaways_render_failed", tab);
         }
         return redirectKeepingSearch("/dashboard/giveaways/chat", url);
       }
@@ -1219,7 +1216,6 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       if (path === "/terms") return new Response(addCookieConsent(await renderHtmlPage(PAGES.terms)), { headers: { ...HTML_N, ...csrfHeader } });
       if (path === "/privacy") return new Response(addCookieConsent(await renderHtmlPage(PAGES.privacy)), { headers: { ...HTML_N, ...csrfHeader } });
-      if (path === "/responsible") return new Response(addCookieConsent(await renderHtmlPage(PAGES.responsible)), { headers: { ...HTML_N, ...csrfHeader } });
       if (path === "/refund") return new Response(addCookieConsent(await renderHtmlPage(PAGES.refund)), { headers: { ...HTML_N, ...csrfHeader } });
       if (path === "/contact" || path === "/contact.html") {
         const redirectUrl = new URL("/help/support", url);
@@ -1434,7 +1430,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         return new Response(renderNewEmbed(r.data, { nonce, slug, plan: r.plan, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
       }
       // --- per-site legal pages at /<slug>/<legal> ---
-      if (method === "GET" && /^\/[^/]+\/(terms|privacy|responsible|cookies|refund|contact)$/.test(path)) {
+      if (method === "GET" && /^\/[^/]+\/(terms|privacy|cookies|refund|contact)$/.test(path)) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
         if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
@@ -1532,7 +1528,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         const cookie = boardPasswordSetCookieHeader(site, token, { isCustomDomain: false });
         return new Response(null, { status: 302, headers: { "location": `/${slug}`, "set-cookie": cookie } });
       }
-      // --- branded site sections: /<slug>, /<slug>/leaderboard, /shop, /games, /activity ---
+      // --- branded site sections: /<slug>, /<slug>/leaderboard, /shop, /activity ---
       const siteRoute = parseSitePath(path, false);
       if (siteRoute) {
         if (siteRoute.redirectTo) return legacySectionRedirect(siteRoute.redirectTo, url);

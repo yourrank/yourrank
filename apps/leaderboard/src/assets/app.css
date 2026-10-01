@@ -457,15 +457,11 @@ table.admin-table td.note{max-width:260px;color:var(--ink-soft)}
 .banner-preview{width:100%;max-width:520px;aspect-ratio:3/1;object-fit:cover;border-radius:10px;border:1px solid var(--line-2);background:var(--panel-2);display:block}
 .banner-row{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
 .banner-row .banner-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-/* ===== Casino Template Gallery ===== */
-
 /* Category tab bar */
 .template-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .template-tab-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;border:1px solid var(--line-2);background:var(--panel-2);color:var(--ink-soft);font:600 13px var(--sans);cursor:pointer;transition:all .15s}
 .template-tab-btn:hover{border-color:var(--ink-mute);color:var(--ink)}
 .template-tab-btn.is-active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.template-tab-btn[data-tab="casino"]{border-color:var(--yr-color-prize-line-2)}
-.template-tab-btn[data-tab="casino"].is-active{background:linear-gradient(115deg,var(--yr-color-prize-3),var(--yr-color-prize-4));border-color:var(--yr-color-prize-5);color:#0a0700;box-shadow:0 0 16px var(--yr-color-prize-line-3)}
 
 /* Vibe sub-filter pills */
 .template-vibe-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
@@ -494,7 +490,6 @@ table.admin-table td.note{max-width:260px;color:var(--ink-soft)}
 .template-card{overflow:hidden;border:1px solid var(--line-2);border-radius:14px;background:var(--panel-2);transition:border-color .16s,box-shadow .16s,transform .15s;cursor:pointer}
 .template-card:hover{border-color:var(--ink-mute);transform:translateY(-1px)}
 .template-card.is-selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
-.template-card.is-casino.is-selected{border-color:var(--yr-color-prize-5);box-shadow:0 0 0 2px var(--yr-color-prize-5),0 8px 32px var(--yr-color-prize-line-4)}
 
 /* Preview iframe */
 .template-preview{height:180px;overflow:hidden;background:#050507;cursor:pointer;border-bottom:1px solid var(--line)}
@@ -506,7 +501,6 @@ table.admin-table td.note{max-width:260px;color:var(--ink-soft)}
 /* Badge row */
 .template-badge-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
 .template-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font:700 10px var(--mono);letter-spacing:.04em;text-transform:uppercase;border:1px solid transparent}
-.template-badge--casino{background:var(--yr-color-prize-soft-2);color:var(--yr-color-prize-5);border-color:var(--yr-color-prize-line)}
 .template-badge--featured{background:linear-gradient(115deg,var(--yr-color-prize-soft-3),var(--yr-color-prize-soft-5));color:var(--yr-color-prize-3);border-color:var(--yr-color-prize-line-5)}
 .template-badge--vibe{font-size:9px}
 
@@ -519,7 +513,7 @@ table.admin-table td.note{max-width:260px;color:var(--ink-soft)}
 .template-card .template-apply-btn{background:transparent;border-color:var(--accent);color:var(--accent)}
 .template-card .template-apply-btn:hover{background:var(--yr-color-action-soft)}
 .template-card.is-selected .template-apply-btn{background:var(--accent);color:var(--accent-ink)}
-.template-card.is-casino.is-selected .template-apply-btn,.template-featured-card.is-selected .template-apply-btn{background:linear-gradient(115deg,var(--yr-color-prize-3),var(--yr-color-prize-4));color:#0a0700;border-color:var(--yr-color-prize-5)}
+.template-featured-card.is-selected .template-apply-btn{background:linear-gradient(115deg,var(--yr-color-prize-3),var(--yr-color-prize-4));color:#0a0700;border-color:var(--yr-color-prize-5)}
 .template-featured-card .template-apply-btn{background:transparent;border-color:var(--yr-color-prize-5);color:var(--yr-color-prize-5)}
 .template-featured-card .template-apply-btn:hover{background:var(--yr-color-prize-soft-4)}
 

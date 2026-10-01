@@ -101,7 +101,7 @@ const strongestFeatures: Record<PlanTier, string[]> = {
     `${number(limit("starter","active_viewers_30d"))} active viewers`,
     `${limit("starter","sites")} site · ${number(limit("starter","players_per_site"))} leaderboard players`,
     `${limit("starter","reward_mappings")} reward mappings · ${limit("starter","shop_items")} shop items`,
-    "Predictions and tournaments",
+    "Community tournaments",
     `Branded OBS overlay · ${history("starter")} of history`,
   ],
   pro: [
@@ -130,7 +130,7 @@ const comparison = [
   ["Reward mappings per site", ...PUBLIC_PLAN_TIERS.map((tier) => number(limit(tier,"reward_mappings")))],
   ["Shop items per site", ...PUBLIC_PLAN_TIERS.map((tier) => number(limit(tier,"shop_items")))],
   ["Connected Telegram bots", ...PUBLIC_PLAN_TIERS.map((tier) => number(limit(tier,"telegram_bots")))],
-  ["Predictions & tournaments", ...PUBLIC_PLAN_TIERS.map((tier) => canUseFeature(tier, "predictions") && canUseFeature(tier, "tournaments") ? "Included" : "Not included")],
+  ["Tournaments", ...PUBLIC_PLAN_TIERS.map((tier) => canUseFeature(tier, "tournaments") ? "Included" : "Not included")],
   ["Custom domain", ...PUBLIC_PLAN_TIERS.map((tier) => canUseFeature(tier, "custom_domain") ? "Included" : "Not included")],
   ["Automatic scores", ...PUBLIC_PLAN_TIERS.map((tier) => canUseFeature(tier, "signed_api") ? "Included" : "Not included")],
   ["Operator seats", ...PUBLIC_PLAN_TIERS.map((tier) => String(limit(tier,"operator_seats")))],

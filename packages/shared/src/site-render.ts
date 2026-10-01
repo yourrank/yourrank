@@ -10,7 +10,6 @@ import {
   safeUrl,
   formatWaitSeconds,
 } from "./public-render-helpers.js";
-import { gamesIslandHead, gamesIslandMount } from "./games-embed.js";
 import { canUseFeature } from "./plans.js";
 import { viewerNavigation, viewerIcon, viewerHelpHref, viewerAccountHref, VIEWER_DESIGN_CONTRACT } from "./viewer-shell.js";
 import { resolveViewerTemplate } from "./viewer-templates.js";
@@ -24,7 +23,6 @@ const SECTION_LABELS = {
   home: "Home",
   leaderboard: "Leaderboard",
   shop: "Rewards",
-  games: "Games",
   me: "My Activity",
 };
 
@@ -35,7 +33,7 @@ const PUBLIC_ACCENT_DEFAULT = {
   ink: "#000000",
 };
 const CREDITS_DISCLAIMER = "Credits are community reward points earned through participation. They stay within each community and can be used to claim available rewards.";
-const REWARD_CLAIM_FINE = "Credits cannot be bought, transferred between communities, or cashed out. The creator fulfills each reward.";
+const REWARD_CLAIM_FINE = "Credits have no cash value. The creator fulfills each reward.";
 export const PUBLIC_BOARD_PAGE_SIZE = 25;
 
 // B-01: Build font URL dynamically from the board's active font choice so that
@@ -77,7 +75,6 @@ const ICONS = {
   home: `<svg ${S}><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>`,
   leaderboard: `<svg ${S}><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3"/><path d="M7 5H4v2a3 3 0 0 0 3 3"/></svg>`,
   shop: `<svg ${S}><path d="M3 9h18l-1.5 11H4.5z"/><path d="M8 9V6a4 4 0 0 1 8 0v3"/></svg>`,
-  games: `<svg ${S}><rect x="2" y="7" width="20" height="11" rx="4"/><path d="M7 12h3M8.5 10.5v3M15.5 11h.01M17.5 13.5h.01"/></svg>`,
   me: `<svg ${S}><ellipse cx="12" cy="6.5" rx="7" ry="3"/><path d="M5 6.5v11c0 1.7 3.1 3 7 3s7-1.3 7-3v-11"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg>`,
   book: `<svg ${S}><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 18.5V5.5"/></svg>`,
   kick: `<svg ${S}><path d="M6 4v16"/><path d="M18 4l-7 8 7 8"/></svg>`,
@@ -189,7 +186,7 @@ function formatDate(d) {
  * normalized with default-on semantics): that toggle is the single source of
  * truth for whether the public leaderboard exists, so a legacy or stale
  * `data.siteSections.leaderboard` value is deliberately not consulted.
- * `shop`, `games` and `me` keep their own toggles in `data.siteSections`.
+ * `shop` and `me` keep their own toggles in `data.siteSections`.
  *
  * Every public navigation surface (top bar, drawer, footer, viewer rail) and
  * the public route guard must read sections through this helper rather than
@@ -202,7 +199,6 @@ export function effectivePublicSections(data) {
     home: true,
     leaderboard: sections.leaderboard !== false,
     shop: raw.shop !== false,
-    games: raw.games === true,
     me: raw.me !== false,
   };
 }
@@ -525,8 +521,6 @@ const LEDGER_KIND = {
   refund: "Credits reversed",
   revoke: "Claim refund",
   adjust: "Adjustment by the streamer",
-  game_bet: "Game round",
-  game_win: "Game round",
 };
 
 function ledgerDelta(row) {
@@ -603,59 +597,6 @@ ${action}
 </li>`;
 }
 
-function raffleAction({ raffle, viewer, member, balance, blocked, unavailable, membershipHref }) {
-  const cost = Number(raffle.ticket_cost) || 0;
-  const maximum = Math.max(0, Number(raffle.max_tickets_per_viewer) || 0);
-  const owned = Math.max(0, Number(raffle.my_tickets) || 0);
-  const remaining = Math.max(0, maximum - owned);
-  let action;
-
-  if (!viewer) {
-    action = `<a class="yr-act" href="${guestGateHref(membershipHref, "reward")}">Sign in to enter</a>`;
-  } else if (unavailable) {
-    action = `<span class="yr-act yr-act--off" role="note">Unavailable</span>`;
-  } else if (!member) {
-    action = `<a class="yr-act" href="${membershipHref}">Join to enter</a>`;
-  } else if (blocked) {
-    action = `<span class="yr-act yr-act--off" role="note">Unavailable</span>`;
-  } else if (remaining === 0) {
-    action = `<span class="yr-act yr-act--off" role="note">Max tickets reached</span>`;
-  } else if (balance < cost) {
-    action = `<span class="yr-act yr-act--off" role="note">Not enough credits</span>`;
-  } else {
-    const quantityId = `raffle-quantity-${String(raffle.id)}`;
-    const quantityMaximum = Math.min(remaining, 100);
-    action = `<div class="yr-raffle-controls"><div class="yr-raffle-stepper">
-<button class="yr-btn yr-btn--ghost yr-btn--sm yr-raffle-step" type="button" data-raffle-step="-1" aria-label="Remove one ticket from ${esc(raffle.title)}" disabled>−</button>
-<label class="yr-sr" for="${esc(quantityId)}">Tickets to buy for ${esc(raffle.title)}</label>
-<input class="yr-raffle-qty" id="${esc(quantityId)}" type="number" min="1" max="${quantityMaximum}" value="1" inputmode="numeric" data-raffle-quantity />
-<button class="yr-btn yr-btn--ghost yr-btn--sm yr-raffle-step" type="button" data-raffle-step="1" aria-label="Add one ticket for ${esc(raffle.title)}">+</button>
-</div>
-<button class="yr-act" type="button" data-raffle-buy="${esc(raffle.id)}" data-raffle-title="${esc(raffle.title)}" data-raffle-cost="${cost}" data-raffle-remaining="${remaining}">Buy tickets</button></div>`;
-  }
-
-  return { action, cost, maximum, owned, remaining };
-}
-
-function raffleRow({ raffle, viewer, member, balance, blocked, unavailable, membershipHref }) {
-  const { action, cost, maximum, owned } = raffleAction({
-    raffle, viewer, member, balance, blocked, unavailable, membershipHref,
-  });
-  const sold = Math.max(0, Number(raffle.total_tickets) || 0);
-  return `<li class="yr-rwd yr-raffle" id="raffle-${esc(raffle.id)}" data-raffle-card data-raffle-id="${esc(raffle.id)}" data-raffle-max="${maximum}" data-raffle-owned="${owned}" data-raffle-sold="${sold}">
-<div class="yr-rwd-main">
-<h3 class="yr-rwd-n">${esc(raffle.title)}</h3>
-${raffle.description ? `<p class="yr-rwd-p">${esc(raffle.description)}</p>` : ""}
-</div>
-<div class="yr-rwd-side">
-<p class="yr-rwd-c">${viewerIcon('coins')}${cost === 0 ? "Free tickets" : `${formatNumber(cost)} credits per ticket`}</p>
-<p class="yr-rwd-state" data-raffle-sold>${formatNumber(sold)} ${sold === 1 ? "ticket" : "tickets"} sold</p>
-${viewer && member ? `<p class="yr-rwd-state" data-raffle-owned>You have ${formatNumber(owned)} of ${formatNumber(maximum)}</p>` : ""}
-${action}
-</div>
-</li>`;
-}
-
 /** The viewer's own confirmation step for a claim. Native <dialog> so the
  *  focus trap, Escape and background inertness are the platform's, not ours. */
 function orderConfirmDialog() {
@@ -667,20 +608,6 @@ function orderConfirmDialog() {
 <div class="yr-modal-acts">
 <button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" data-order-cancel>Cancel</button>
 <button class="yr-btn yr-btn--sm" type="button" data-order-confirm>Claim</button>
-</div>
-</div>
-</dialog>`;
-}
-
-function raffleConfirmDialog() {
-  return `<dialog class="yr-modal" id="yr-raffle-confirm" aria-labelledby="yr-raffle-confirm-t" aria-describedby="yr-raffle-confirm-d">
-<div class="yr-modal-in">
-<h2 id="yr-raffle-confirm-t">Confirm tickets</h2>
-<p class="yr-fine" id="yr-raffle-confirm-d" data-raffle-detail></p>
-<p class="yr-note">Credits have no cash value.</p>
-<div class="yr-modal-acts">
-<button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" data-raffle-cancel>Cancel</button>
-<button class="yr-btn yr-btn--sm" type="button" data-raffle-confirm>Buy tickets</button>
 </div>
 </div>
 </dialog>`;
@@ -703,9 +630,8 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   // the explicit sections.poweredBy flag only controls entitlement-bearing plans.
   const canRemoveBranding = canUseFeature(r.plan, "remove_branding");
   const watermark = !canRemoveBranding || data.sections?.poweredBy === true;
-  // Only the restricted legacy surface retains its old chrome. All supported
-  // viewer destinations share one navigation and material owner.
-  const viewerShell = section !== "games";
+  // Every public destination shares one navigation and material owner.
+  const viewerShell = true;
   // Article pages (policies, contact) are read, not operated: they keep the
   // shared navigation but drop the personal overview rail, the credits
   // footer strip and the share controls.
@@ -773,7 +699,6 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const mainInner = section == null && typeof opts.contentHtml === "string" ? opts.contentHtml : (section === "home" ? homeMain(ctx)
     : section === "leaderboard" ? (ctx.board === "loyalty" ? loyaltyMain(ctx) : boardMain(ctx))
     : section === "shop" ? (ctx.rewardId ? rewardDetailMain(ctx) : shopMain(ctx))
-    : section === "games" ? gamesMain(ctx)
     : section === "me" ? meMain(ctx)
     : `<div class="yr-empty">Section not found</div>`);
 
@@ -800,8 +725,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 <noscript><link href="${fontsHref}" rel="stylesheet" /></noscript>
 <link rel="stylesheet" href="/assets/site-shell.css" />
 <link rel="stylesheet" href="/assets/${viewerShell ? "viewer-shell" : "devin-system"}.css" />
-${section === "games" ? gamesIslandHead() : ""}
-${viewerShell ? `<meta name="viewer-accent" content="${esc(accent)}" /><meta name="viewer-accent-ink" content="${esc(accentInkValue)}" /><style nonce="${nonce}" data-viewer-theme-tokens>.yr-site.viewer-shell{--yr-accent:${accent};--yr-accent-ink:${accentInkValue}}</style>${font ? `<meta name="viewer-display-font" content="${esc(`"${font}", "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif`)}" />` : ""}` : `<style nonce="${nonce}" data-theme-tokens>.yr-site{--yr-accent:${accent};--yr-accent-ink:${accentInkValue}${font ? `;--yr-display-font:"${font}", "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif` : ""}}${section === "games" ? `#gx-root{--gx-accent:${accent};--gx-accent-ink:${accentInkValue}}` : ""}</style>`}
+<meta name="viewer-accent" content="${esc(accent)}" /><meta name="viewer-accent-ink" content="${esc(accentInkValue)}" /><style nonce="${nonce}" data-viewer-theme-tokens>.yr-site.viewer-shell{--yr-accent:${accent};--yr-accent-ink:${accentInkValue}}</style>${font ? `<meta name="viewer-display-font" content="${esc(`"${font}", "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif`)}" />` : ""}
 ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />` : ""}
 </head>`;
 
@@ -1096,7 +1020,7 @@ function boardMain(ctx) {
   const totalPages = Math.max(1, Math.ceil(playerCount / pageSize));
   const page = Number.isInteger(ctx.page) && ctx.page > 0 ? Math.min(ctx.page, totalPages) : 1;
   const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
-  const wagerLabel = esc(rankBy === "score" ? "Points" : (data.prizes?.wagerLabel || "Amount"));
+  const amountLabel = esc(rankBy === "score" ? "Points" : "Amount");
   const rankValue = (player) => rankBy === "score" ? `${formatNumber(player.score || 0)} pts` : formatMoney(currency, player.wagered);
   const prizeLabel = esc(data.prizes?.prizeLabel || "Prize");
   const poolLabel = esc(data.prizes?.prizePoolLabel || b.prizePoolLabel || "Prize pool");
@@ -1123,7 +1047,7 @@ function boardMain(ctx) {
 <div class="viewer-board-hero-copy">
 <p class="viewer-hero-kicker">${esc(b.name || slug)} · Creator community</p>
 <h1 class="yr-h1 yr-lbh-title">${data.eventName ? esc(data.eventName) : ended ? "Final leaderboard" : scheduled ? "Leaderboard opens soon" : "Leaderboard"}</h1>
-<p class="yr-lbh-note">${scheduled ? `Pre-start standings are visible; scores update once the round begins. Ranked by ${wagerLabel.toLowerCase()}, and tied players share a rank.` : `Ranked by ${wagerLabel.toLowerCase()}. Tied players share a rank.`}</p>
+<p class="yr-lbh-note">${scheduled ? `Pre-start standings are visible; scores update once the round begins. Ranked by ${amountLabel.toLowerCase()}, and tied players share a rank.` : `Ranked by ${amountLabel.toLowerCase()}. Tied players share a rank.`}</p>
 <p class="yr-lbh-meta">${metaItems}</p>
 </div>
 ${ctx.bannerUrl
@@ -1141,23 +1065,23 @@ ${ctx.bannerUrl
     return `<li class="yr-srow${rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : ""}" data-player-name="${esc(String(p.name || "").toLowerCase())}" data-position="${rank}"${podiumSlot}>
 <span class="yr-srow-rank"><span class="yr-sr">Rank </span>${rank}</span>
 <${nameTag} class="yr-srow-name"${data.eventId ? '' : ` href="${playerHref(p.name)}"`}>${mark}<span class="yr-player-name">${esc(p.name)}</span></${nameTag}>
-<span class="yr-srow-val"><span class="yr-sr">${wagerLabel}: </span>${esc(rankValue(p))}</span>
+<span class="yr-srow-val"><span class="yr-sr">${amountLabel}: </span>${esc(rankValue(p))}</span>
 ${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span>${prize}</span>` : ""}
 </li>`;
   }).join("");
 
   // Column labels are a wide-viewport reading aid only: every cell already
   // carries its own screen-reader label, so announcing them twice is noise.
-  const columns = `<div class="yr-stand-head" aria-hidden="true" data-hide-prizes="${showPrizes ? "false" : "true"}"><span>#</span><span>Player</span><span class="yr-r">${wagerLabel}</span>${showPrizes ? `<span class="yr-r">${prizeLabel}</span>` : ""}</div>`;
+  const columns = `<div class="yr-stand-head" aria-hidden="true" data-hide-prizes="${showPrizes ? "false" : "true"}"><span>#</span><span>Player</span><span class="yr-r">${amountLabel}</span>${showPrizes ? `<span class="yr-r">${prizeLabel}</span>` : ""}</div>`;
 
   const pagination = playerCount > pageSize ? publicBoardPagination(ctx, page, totalPages) : "";
   const standings = players.length
     ? `${columns}
-<ol class="yr-stand" data-rows aria-label="Standings for ${esc(b.name || slug)}" data-value-label="${wagerLabel}" data-prize-label="${prizeLabel}" data-hide-prizes="${showPrizes ? "false" : "true"}">${rows}</ol>
+<ol class="yr-stand" data-rows aria-label="Standings for ${esc(b.name || slug)}" data-value-label="${amountLabel}" data-prize-label="${prizeLabel}" data-hide-prizes="${showPrizes ? "false" : "true"}">${rows}</ol>
 <p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>
 <p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite"></p>
 ${pagination}`
-    : emptyState(ICONS.trophy, "No leaderboard entries yet.", scheduled ? "Standings fill in once the round starts. Ask the creator how to participate." : `Ask ${esc(b.name || slug)} how ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} counted on this leaderboard. Your first published ${rankBy === "score" ? "score" : "entry"} puts you on the board. Leaderboard ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} separate from Credits.`);
+    : emptyState(ICONS.trophy, "No leaderboard entries yet.", scheduled ? "Standings fill in once the round starts. Ask the creator how to participate." : `Ask ${esc(b.name || slug)} how ${amountLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} counted on this leaderboard. Your first published ${rankBy === "score" ? "score" : "entry"} puts you on the board. Leaderboard ${amountLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} separate from Credits.`);
 
   const customPayoutNote = String(data.prizes?.payoutNote || "").trim();
   const payoutNote = !showPool ? ""
@@ -1283,9 +1207,8 @@ ${scene}${aside}
 }
 
 function shopMain(ctx) {
-  const { r, b, data, viewer, viewerData, viewerOnSite, isMember, balance, returnTo, slug, homeUrl, isCustomDomain } = ctx;
+  const { b, data, viewer, viewerData, viewerOnSite, isMember, balance, slug, homeUrl, isCustomDomain } = ctx;
   const items = (viewerData?.shopItems || data.shopItems || []).filter((i) => i.active !== false).slice().sort((x, z) => Number(x.cost) - Number(z.cost));
-  const raffles = viewerData?.raffles || data.raffles || [];
   const blocked = !!viewerOnSite?.blocked;
   const creditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
 
@@ -1309,22 +1232,11 @@ function shopMain(ctx) {
     : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const canOrder = viewer && isMember && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
-  const canBuyRaffle = viewer && isMember && !blocked && !unavailable && raffles.some((raffle) =>
-    Math.max(0, Number(raffle.max_tickets_per_viewer) - Number(raffle.my_tickets || 0)) > 0
-      && Number(raffle.ticket_cost || 0) <= balance);
-  const raffleSection = raffles.length
-    ? `<section class="viewer-shop-raffles" aria-labelledby="viewer-raffles-title"><div class="viewer-shop-tools"><h2 id="viewer-raffles-title">Raffles</h2></div><ul class="yr-rwds" id="viewer-raffles" role="list">${raffles.map((raffle) => raffleRow({
-      raffle, viewer, member: isMember, balance, blocked, unavailable, membershipHref: creditsHref,
-    })).join("")}</ul><p class="yr-raffle-status" id="yr-raffle-status" role="status" aria-live="polite"></p></section>`
-    : "";
-
   return `${head}
 ${blockedNote}
 <p class="yr-redeem-status" id="yr-redeem-status" role="status" aria-live="polite" tabindex="-1"></p>
-${raffleSection}
 ${list}
-${canOrder ? orderConfirmDialog() : ""}
-${canBuyRaffle ? raffleConfirmDialog() : ""}`;
+${canOrder ? orderConfirmDialog() : ""}`;
 }
 
 /* ── Reward detail (/shop/<rewardId>) ─────────────────────────────────── */
@@ -1458,39 +1370,6 @@ function claimSupportDialog(creator) {
 </div>
 </div>
 </dialog>`;
-}
-
-/* ── Games ────────────────────────────────────────────────────────────── */
-
-function gamesMain(ctx) {
-  const { r, b, slug, viewer, balance, returnTo, nonce, logoUrl, homeUrl, isCustomDomain } = ctx;
-  const heroHtml = hero({
-    eyebrow: "PLAY WITH CREDITS",
-    title: "Games",
-    lede: "Credits only. Nothing here can be bought with money and nothing pays out money — every round is decided on the server.",
-    right: viewer
-      ? `<div class="yr-hero-r yr-hero-r--stack">${heroStat("Playable balance", formatNumber(balance))}</div>`
-      : `<div class="yr-hero-r">${signInButton(r, returnTo)}</div>`,
-  });
-
-  const mount = gamesIslandMount({
-    slug,
-    nonce,
-    siteName: b.name || slug,
-    logoUrl: logoUrl || null,
-    creditsUrl: `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`,
-    signInUrl: viewerSignInHref(r, returnTo),
-    header: false,
-  });
-
-  if (!viewer && !ctx.isDemo) {
-    return `${heroHtml}
-<div class="yr-gate"><h2>Sign in to play originals</h2><p>Rounds are tied to your account and settled on the server. They cost credits only — no money in, no money out.</p>${signInButton(r, returnTo)}</div>`;
-  }
-
-  return `${heroHtml}
-${sectionHead("Available games", `<span class="yr-panel-meta">Server decided · provably fair</span>`)}
-${mount}`;
 }
 
 /* ── My activity ───────────────────────────────────────────────── */

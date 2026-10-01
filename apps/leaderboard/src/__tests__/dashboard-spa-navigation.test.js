@@ -15,7 +15,7 @@ const shellJs = readFileSync(new URL("../assets/dashboard/shell.js", import.meta
 const bootJs = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 const dashboardCss = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
 
-const SPA_SECTIONS = ["home", "board", "site", "games", "performance", "boards"];
+const SPA_SECTIONS = ["home", "board", "site", "performance", "boards"];
 
 function dashboardHtml(activePath) {
   return PAGES.dashboard.Component({ activePath, user }).toString();
@@ -35,7 +35,6 @@ const ROUTES = [
   ["/dashboard/leaderboard/share", "board"],
   ["/dashboard/leaderboard/history", "board"],
   ["/dashboard/site", "site"],
-  ["/dashboard/games", "games"],
   ["/dashboard/analytics", "performance"],
   ["/dashboard/analytics/activity", "performance"],
   ["/dashboard/analytics/referrals", "performance"],

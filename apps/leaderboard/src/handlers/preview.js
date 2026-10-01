@@ -3,7 +3,6 @@ import { canUseFeature, effectivePlan } from "@yourrank/shared/plans";
 import { getUserSiteById, FONT_KEYS } from "../site.js";
 import { renderSite } from "@yourrank/shared/site-render";
 import { SECURE_HTML, withNonce } from "../middleware/headers.js";
-import { gamesIslandHead, gamesIslandMount } from "@yourrank/shared/games-embed";
 import { redirectResponse } from "../login-redirect.js";
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -62,7 +61,6 @@ export async function handleDashboardPreview(request, env, nonce, {
   if (!site) return new Response("not found", { status: 404 });
 
   const section = url.searchParams.get("section") || "home";
-  const isEmbed = url.searchParams.get("embed") === "1" || url.searchParams.get("isolated") === "1";
   const accentA = url.searchParams.get("accentA");
   const accentB = url.searchParams.get("accentB");
   const font = url.searchParams.get("font");
@@ -94,30 +92,6 @@ export async function handleDashboardPreview(request, env, nonce, {
   }
   if (canRemoveBranding && FONT_KEYS.includes(font || "")) {
     branding.font = font;
-  }
-
-  if (section === "games" && isEmbed) {
-    const b = mergedData.brand || site.data?.brand || {};
-    const mount = gamesIslandMount({
-      slug: site.slug,
-      nonce,
-      siteName: b.name || site.slug,
-      logoUrl: null,
-      creditsUrl: `/${site.slug}/credits`,
-      signInUrl: "/me",
-      header: false,
-    });
-    const embedHtml = `<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Mini-games preview</title>
-${gamesIslandHead()}
-<style nonce="${nonce}">
-  html, body { margin: 0; padding: 0; background: #0c1017; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; }
-  .gx-embed-wrap { max-width: 100%; margin: 0 auto; padding: 12px; }
-</style>
-</head><body><div class="gx-embed-wrap">${mount}</div></body></html>`;
-    return new Response(embedHtml, { headers: { ...withNonce(SECURE_HTML, nonce), "cache-control": "no-store" } });
   }
 
   const watermark = !canRemoveBranding || mergedData.sections?.poweredBy === true;

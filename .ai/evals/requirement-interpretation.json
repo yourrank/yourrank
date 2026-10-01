@@ -4,7 +4,7 @@
   "cases": [
     {
       "id": "requirement-interpretation-positive-1",
-      "task": "Implement 'Inside Engage: Giveaways, Raffles, Predictions, Drops' in an app where Engage already has feature tabs.",
+      "task": "Implement an Activities section for giveaways and code drops in an app where the dashboard already has section tabs.",
       "should_trigger": true,
       "required_outcomes": [
         "identify multiple possible interpretations",

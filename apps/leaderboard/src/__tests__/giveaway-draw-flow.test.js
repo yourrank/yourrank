@@ -10,7 +10,6 @@ import {
   actGiveaways,
   clickGiveaways,
   document,
-  dispatchGiveaways,
   mountGiveawaysPage,
   restoreGiveawaysDomGlobals,
   setGiveawaysInputValue,
@@ -115,7 +114,7 @@ const ENTRANTS = [
   { id: "e3", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "u3", username: "charlie", avatar_url: null, message: "!win", badges: [], entered_at: "2026-09-28T00:00:02Z", eligibility_status: "eligible" },
 ];
 
-const server = { session: null, entries: [], draws: [], drawRows: [], requests: [], predictions: null, predictionCreateResponse: null, responseRulesResponse: null, connection };
+const server = { session: null, entries: [], draws: [], drawRows: [], requests: [], responseRulesResponse: null, connection };
 function resetServer({ session, entries } = {}) {
   server.connection = connection;
   server.session = session || { id: "gs-1", site_id: "site-1", provider: "kick", keyword: "!win", status: "stopped", started_at: new Date(now).toISOString(), rules: {}, winner_entry_id: null, drawn_at: null, winner_confirmed_at: null, winner_confirmation_message: null, winner_finalized_at: null, winner_finalized_by: null, winner_response_required: null, winner_response_timeout_seconds: null, winner_response_deadline: null, created_at: "2026-09-28T00:00:00Z" };
@@ -123,8 +122,6 @@ function resetServer({ session, entries } = {}) {
   server.draws.length = 0;
   server.drawRows.length = 0;
   server.requests.length = 0;
-  server.predictions = { ok: true, predictions: [], entitlement: { enabled: true } };
-  server.predictionCreateResponse = null;
   server.responseRulesResponse = null;
 }
 const winnerEntry = () => server.entries.find((e) => e.id === server.session?.winner_entry_id) || null;
@@ -281,13 +278,7 @@ globalThis.fetch = async (input, init = {}) => {
     if (latestDraw) latestDraw.confirmed_at = server.session.winner_finalized_at;
     return json(statePayload());
   }
-  if (path === "/api/predictions") {
-    if ((init.method || "GET").toUpperCase() === "POST" && server.predictionCreateResponse) {
-      return json(server.predictionCreateResponse.body, server.predictionCreateResponse.status);
-    }
-    return json(server.predictions);
-  }
-  return json({ ok: true, raffles: [], predictions: [] });
+  return json({ ok: true });
 };
 const requestsTo = (path) => server.requests.filter((r) => r.path === path);
 
@@ -446,50 +437,6 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-btn-roll").disabled).toBe(false);
   });
 
-  it("locks prediction entry points for a free owner while preserving the page", async () => {
-    server.predictions = { ok: true, predictions: [], entitlement: { enabled: false } };
-    document.body.innerHTML = renderGiveawaysHtml("preds");
-    await enter();
-    await clock.tick(50);
-
-    expect($id("btn-open-event-drawer").disabled).toBe(true);
-    expect($id("btn-open-event-drawer").disabled).toBe(true);
-    expect($id("btn-open-event-drawer").getAttribute("aria-describedby")).toBe("pred-plan-lock");
-    expect($id("btn-open-event-drawer").getAttribute("aria-describedby")).toBe("pred-plan-lock");
-    expect($id("pred-plan-lock").hidden).toBe(false);
-    expect($id("pred-plan-lock").querySelector('[data-plan-lock="predictions"]')).toBeTruthy();
-    expect($id("pred-drawer")).toBeNull();
-    $id("btn-open-event-drawer").disabled = false;
-    await new Promise((resolve) => {
-      dispatchGiveaways($id("btn-open-event-drawer"), new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-      resolve();
-    });
-    expect($id("pred-drawer")).toBeNull();
-  });
-
-  it("adds a safe upgrade link to a stale prediction entitlement error", async () => {
-    server.predictionCreateResponse = {
-      status: 403,
-      body: { ok: false, code: "entitlement_required", error: "Predictions is available on Starter and higher plans." },
-    };
-    document.body.innerHTML = renderGiveawaysHtml("preds");
-    await enter();
-    await clock.tick(50);
-    click("btn-open-event-drawer");
-    setInput("pred-title", "Who wins?");
-    setInput("pred-opt-1", "Yes");
-    setInput("pred-opt-2", "No");
-    setInput("pred-min-bet", "1");
-    setInput("pred-max-bet", "10");
-    await dispatchAndFlush($id("pred-form"), new window.Event("submit", { bubbles: true, cancelable: true }));
-
-    const status = $id("pred-status");
-    expect(status.getAttribute("role")).toBe("alert");
-    expect(status.textContent).toContain("Predictions is available on Starter and higher plans.");
-    expect(status.querySelector("a").textContent).toBe("Upgrade your plan");
-    expect(status.querySelector("a").getAttribute("href")).toBe("/dashboard/settings/billing?from=predictions");
-  });
-
   it("with a required response the confirm action waits on chat", async () => {
     // Rules are locked at /start; the draw reads them from the session row.
     server.session.rules = { winnerMustRespond: true, responseTimeout: 30 };
@@ -497,7 +444,7 @@ describe("Giveaway draw flow", () => {
     await drawWinner();
     expect($id("gw-claim-box")).toBeTruthy();
     expect($id("gw-claim-status").textContent).toBe("Waiting for winner response…");
-    // The roulette consumed part of the 30s window: the countdown derives
+    // The winner reveal consumed part of the 30s window: the countdown derives
     // from drawn_at, not the checkbox duration.
     const shown = parseInt($id("gw-claim-countdown").textContent, 10);
     expect(shown).toBeLessThanOrEqual(27);
@@ -590,8 +537,8 @@ describe("Giveaway draw flow", () => {
 
     await clickAndFlush("gw-btn-roll");
     await clock.tick(1_000);
-    const rouletteNames = [...document.querySelectorAll(".gw-roulette-item")].map((item) => item.textContent.trim());
-    expect(rouletteNames).not.toContain(`@${server.entries.find((entry) => entry.id === firstWinner).username}`);
+    const revealNames = [...document.querySelectorAll(".gw-winner-reveal-item")].map((item) => item.textContent.trim());
+    expect(revealNames).not.toContain(`@${server.entries.find((entry) => entry.id === firstWinner).username}`);
     await tickUntilReveal();
     const draws = requestsTo("/api/giveaways/chat/draw");
     expect(draws).toHaveLength(2);
@@ -694,11 +641,11 @@ describe("Giveaway draw flow", () => {
     expect(server.draws).toContain(server.session.winner_entry_id);
   });
 
-  it("the roulette lands on the server's pick, not a client guess", async () => {
+  it("the winner reveal lands on the server's pick, not a client guess", async () => {
     await boot();
     click("gw-btn-roll");
     await clock.tick(2_000);
-    const items = [...$id("gw-roller-track").querySelectorAll(".gw-roulette-item")];
+    const items = [...$id("gw-roller-track").querySelectorAll(".gw-winner-reveal-item")];
     expect(items.at(-1).textContent).toBe("@charlie");
     expect(items.at(-2).textContent).not.toBe("@charlie");
     expect($id("gw-winner-stage")).toBeNull();
@@ -840,7 +787,7 @@ describe("Giveaway draw flow", () => {
     expect(draws[1].body).not.toHaveProperty("entryIds");
     expect(server.session.winner_response_required).toBe(true);
     expect(server.session.winner_response_timeout_seconds).toBe(90);
-    // The persisted rules drive the UI; the roulette consumed a few seconds.
+    // The persisted rules drive the UI; the winner reveal consumed a few seconds.
     expect($id("gw-claim-box")).toBeTruthy();
     const shown = parseInt($id("gw-claim-countdown").textContent, 10);
     expect(shown).toBeLessThanOrEqual(88);

@@ -10,11 +10,6 @@
 7. `apps/leaderboard/src/assets/auth.js`
 8. `apps/leaderboard/src/assets/billing.js`
 9. `apps/leaderboard/src/assets/bot-setup.js`
-10. `apps/leaderboard/src/assets/casino/arcade.js`
-11. `apps/leaderboard/src/assets/casino/candy.js`
-12. `apps/leaderboard/src/assets/casino/fun.js`
-13. `apps/leaderboard/src/assets/casino/highRollers.js`
-14. `apps/leaderboard/src/assets/casino/space.js`
 15. `apps/leaderboard/src/assets/contact.js`
 16. `apps/leaderboard/src/assets/cookie-consent.js`
 17. `apps/leaderboard/src/assets/dashboard.js`

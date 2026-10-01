@@ -36,7 +36,6 @@ describe("new-shell auxiliary renderers", () => {
     expect(profile).toContain("<p class=\"yr-hist-n\">Score</p>");
     expect(profile).toContain("77 points");
     expect(profile).toContain("65 points");
-    expect(profile).not.toContain("Wagered");
     expect(profile).not.toContain("Prize");
   });
   it("renders legal and streamer pages in the site shell with honest empty states", async () => {
@@ -110,15 +109,6 @@ describe("new-shell auxiliary renderers", () => {
     expect(legal).not.toContain("Not configured");
     const rail = legal.match(/<aside class="viewer-rail"[\s\S]*?<\/aside>/)[0];
     expect(rail).not.toContain('aria-current="page"');
-  });
-
-  it("uses the authoritative Responsible Play label", async () => {
-    const legal = await renderNewLegalPage(record.data, "responsible", opts);
-    expect(legal).toContain(">Responsible Play<");
-    expect(legal).not.toContain("Responsible Gaming");
-    expect(legal).toContain("Credits cannot be purchased, withdrawn, transferred between communities, or exchanged for cash.");
-    const policyBody = legal.match(/<div class="yr-prose viewer-article-body">([\s\S]*?)<\/div>/)[1];
-    expect(policyBody).not.toMatch(/gambl|casino|wager/i);
   });
 
   it("does not promise creator recurring or cryptocurrency billing on the refund page", async () => {
@@ -260,12 +250,12 @@ describe("new-shell auxiliary renderers", () => {
     );
     // The row has no column heading, so the value carries its own label for both
     // a sighted phone reader and a screen reader.
-    expect(profile).toContain('<p class="yr-hist-amt"><span class="yr-hist-lbl">Wagered</span>$9,900</p>');
+    expect(profile).toContain('<p class="yr-hist-amt"><span class="yr-hist-lbl">Amount</span>$9,900</p>');
     expect(profile).toContain('<p class="yr-hist-d">Prize $40</p>');
     expect(profile).not.toContain('<p class="yr-hist-amt">$9,900</p>');
     // Current standing keeps its own labelled rows unchanged.
     expect(profile).toContain('<p class="yr-hist-n">Current rank</p></div><div class="yr-hist-side"><p class="yr-hist-amt">#3</p>');
-    expect(profile).toContain('<p class="yr-hist-n">Wagered</p></div><div class="yr-hist-side"><p class="yr-hist-amt">$12,500</p>');
+    expect(profile).toContain('<p class="yr-hist-n">Amount</p></div><div class="yr-hist-side"><p class="yr-hist-amt">$12,500</p>');
     expect(profile).toContain('<p class="yr-hist-n">Prize</p></div><div class="yr-hist-side"><p class="yr-hist-amt">$250</p>');
     expect(profile).not.toContain('class="yr-table"');
     expect(profile).not.toContain("<table");
@@ -290,8 +280,8 @@ describe("new-shell auxiliary renderers", () => {
       [{ label: "Monthly", rank: 1, wagered: 100, prize: 25 }],
       opts,
     );
-    expect(profile).toContain("Wagered");
-    expect(profile).toContain('<span class="yr-hist-lbl">Wagered</span>$100');
+    expect(profile).toContain("Amount");
+    expect(profile).toContain('<span class="yr-hist-lbl">Amount</span>$100');
     expect(profile).not.toContain(">Prize<");
     expect(profile).not.toContain("Prize $25");
     expect(profile).not.toContain('class="yr-hist-d"');

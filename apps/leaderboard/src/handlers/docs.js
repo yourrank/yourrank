@@ -78,11 +78,11 @@ const playerWriteSchema = {
   required: ["name"],
   properties: {
     name: { type: "string", minLength: 1, maxLength: 80, description: "Display name. Names are matched case-insensitively with whitespace collapsed; two players in one request may not normalise to the same name." },
-    wagered: { type: ["number", "string"], minimum: 0, maximum: SCORE_MAX, description: "Amount wagered. Numeric strings are accepted." },
+    wagered: { type: ["number", "string"], minimum: 0, maximum: SCORE_MAX, description: "Amount. Numeric strings are accepted." },
     prize: { type: ["number", "string"], minimum: 0, maximum: SCORE_MAX, description: "Prize amount." },
     score: { type: ["number", "string"], minimum: 0, maximum: SCORE_MAX, description: "Points. Used for ranking when the board ranks by score." },
     hands: { type: ["integer", "string"], minimum: 0, maximum: INT32_MAX, description: "Rounds / hands played." },
-    netProfit: { type: ["number", "string"], minimum: -SCORE_MAX, maximum: SCORE_MAX, description: "Net profit. Defaults to `prize - wagered` for players created without it." },
+    netProfit: { type: ["number", "string"], minimum: -SCORE_MAX, maximum: SCORE_MAX, description: "Net amount. Defaults to `prize - wagered` for players created without it." },
     winRate: { type: ["number", "string"], minimum: -WIN_RATE_MAX, maximum: WIN_RATE_MAX, description: "Win rate percentage." },
     change: { type: ["integer", "string"], minimum: INT32_MIN, maximum: INT32_MAX, description: "Rank movement indicator (positive = moved up)." },
   },
@@ -220,7 +220,7 @@ Signatures are compared in constant time. Keys expire after one year and can be 
 Keys come in two scopes:
 
 - **Board-scoped** (recommended) — created from a board's Developer tools card. It can only write to that one board. Passing another board's \`slug\`, \`siteId\` or \`X-Postback-Site\` returns \`403 This API key is scoped to another board.\`
-- **Account-level** — the legacy key from **Settings → Connections**, shared with deposit postbacks. It can write to every board the account owns and therefore always needs an explicit board reference.
+- **Account-level** — the legacy key from **Settings → Connections**, shared with conversion postbacks. It can write to every board the account owns and therefore always needs an explicit board reference.
 
 Every write request must reference a board with exactly one of \`slug\` (body), \`siteId\` (body) or the \`X-Postback-Site\` header; a request without a board reference returns \`400\`.
 
@@ -339,7 +339,7 @@ export const spec = {
             "application/json": {
               schema: { $ref: "#/components/schemas/Standings" },
               example: {
-                slug: "demo", name: "Demo Race", casino: "Example Casino", period: "Monthly", prizePool: "$5,000", rankBy: "score",
+                slug: "demo", name: "Demo Leaderboard", casino: "Example Sponsor", period: "Monthly", prizePool: "$5,000", rankBy: "score",
                 players: [{ name: "Alex", score: 4820, wagered: 12500.5, prize: 1000, position: 1 }],
                 countdown: { endsAt: "2026-10-31T23:59:59.000Z", remaining: 3372800000 },
               },
@@ -393,7 +393,7 @@ export const spec = {
           200: {
             description: "Rank sentence, or `NAME is not on BOARD's leaderboard yet.`",
             headers: RATE_LIMIT_HEADERS,
-            content: { "text/plain": { schema: { type: "string" }, example: "Alex is #2 of 40 on Demo Race's leaderboard. 4,820 points (280 points behind #1)" } },
+            content: { "text/plain": { schema: { type: "string" }, example: "Alex is #2 of 40 on Demo Leaderboard. 4,820 points (280 points behind #1)" } },
           },
           400: { description: "Missing `user` query parameter.", content: { "text/plain": { schema: { type: "string" }, example: "Usage: /api/public/:slug/rank?user=NAME" } } },
           401: { description: "Password-protected board.", content: { "text/plain": { schema: { type: "string" }, example: "Password required." } } },

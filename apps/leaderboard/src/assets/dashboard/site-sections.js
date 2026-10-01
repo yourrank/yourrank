@@ -1,9 +1,6 @@
 // Site settings → Sections: which pages and blocks the public site shows.
 //
-// These toggles used to live on the Games page, so a creator who wanted to
-// hide the Shop had to discover the control inside an unrelated feature. The
-// public page architecture belongs to the selected site, so it is managed
-// here. The API (/api/site/sections, keyed by siteId) is unchanged.
+// Public page visibility belongs to the selected site.
 import { $, getCsrf, guardAuth, logError, showToast } from "./utils.js";
 import { state } from "./state.js";
 import { refreshDesignPreview } from "./site.js";
@@ -13,13 +10,11 @@ export const SITE_SECTION_ROWS = [
   ["credits", "My activity", "Let members see their credits, claims and participation.", "Turning off hides this page from navigation and disables its public link."],
 ];
 
-/** Current persisted public-section flags; legacy Games remains preserved but is not promoted here. */
 export function siteSections() {
   const incoming = state.EXTRA?.siteSections || {};
   return {
     shop: incoming.shop !== false,
     credits: incoming.me !== false,
-    games: incoming.games === true,
   };
 }
 
@@ -68,7 +63,7 @@ async function saveSection(input) {
     }).then(guardAuth);
     const body = await res.json();
     if (!res.ok || !body.ok) throw new Error(body.error || "Could not save viewer pages.");
-    state.EXTRA.siteSections = { ...state.EXTRA.siteSections, shop: next.shop, games: next.games, me: next.credits };
+    state.EXTRA.siteSections = { ...state.EXTRA.siteSections, shop: next.shop, me: next.credits };
     setInlineSave(input, "Saved");
     showToast("Public page sections saved.", "success");
     // These toggles save immediately, so the preview beside them has to follow

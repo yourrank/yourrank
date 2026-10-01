@@ -229,7 +229,6 @@ describe("Engagement style requirements are declared by one owner", () => {
     const payload = await renderFragmentPayload(PAGES[fragment.pageKey], { user, tab: fragment.tab });
     expect(payload.styles).toEqual(activitiesConfig.styles);
     expect(payload.html).toContain('id="activities-root"');
-    expect(payload.html).not.toContain("No purchase or stake is required.");
   });
 
   it("declares the React stylesheet on the full Giveaways document", () => {

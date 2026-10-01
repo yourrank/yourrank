@@ -1,9 +1,8 @@
 // postgres.js serialises a JS value bound to a jsonb column as JSON already.
 // Pre-stringifying it first therefore encodes it TWICE and the column ends up
 // holding a JSON *string* instead of an object/array: `jsonb_typeof()` says
-// `string`, `params->>'mines'` reads nothing, and readers get a string back.
-// That is how game_rounds.params/outcome, tournaments.participants_json,
-// predictions.options, credit_ledger.metadata and friends were once written.
+// `string`, a JSONB key lookup reads nothing, and readers get a string back.
+// That is how JSONB columns in application tables could be written.
 // The contract is: bind the value, never a pre-serialised copy of it.
 //
 // The scan is column-driven rather than text-driven: the jsonb column names come
@@ -29,7 +28,7 @@ const ROOTS = [
 ];
 
 const SOURCE = /\.(ts|tsx|js|jsx)$/;
-const WRITES = /\b(insert\s+into|update|set_|place_bet|settle_round)\b/i;
+const WRITES = /\b(insert\s+into|update|set_)\b/i;
 
 // Browser-side code cannot reach Postgres, and `assets_bundled.js` is generated
 // from it, so neither can hold a jsonb writer — but both are full of quoted SQL
@@ -175,8 +174,8 @@ describe("jsonb parameter binding", () => {
     // The scan used to look at backticked SQL only, so a quoted or concatenated
     // statement was invisible to it. Each fixture must be reported.
     const fixtures = [
-      `await exec('INSERT INTO game_rounds (params) VALUES ($1::jsonb)', [JSON.stringify(params)]);`,
-      `await exec("UPDATE predictions SET options=$1" + " WHERE id=$2", [JSON.stringify(options), id]);`,
+      `await exec('INSERT INTO tournaments (participants_json) VALUES ($1::jsonb)', [JSON.stringify(participants)]);`,
+      `await exec("UPDATE credit_ledger SET metadata=$1" + " WHERE id=$2", [JSON.stringify(metadata), id]);`,
       "await exec(`UPDATE seasons SET tiers_json=$1`, [JSON.stringify(tiers)]);",
     ];
     for (const fixture of fixtures) {

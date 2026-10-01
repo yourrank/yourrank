@@ -31,7 +31,7 @@ shared as described in the other specs.
 | `/bot/dash/api/*`   | bot dashboard JSON API                         |
 | `/hook/*`           | Telegram webhook (per-bot secret)              |
 | `/r/*`              | tracked affiliate redirect                     |
-| `/pb`, `/pb/*`      | casino postbacks                               |
+| `/pb`, `/pb/*`      | conversion postbacks                           |
 
 ---
 

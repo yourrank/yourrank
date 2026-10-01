@@ -52,7 +52,7 @@
   // available, so the static Worker HTML remains fully readable without it.
   if (!prefersReducedMotion && "IntersectionObserver" in window) {
     const revealTargets = document.querySelectorAll(
-      ".marketing-page main > section:not(.hero-shell), .marketing-page .product-chapter, .marketing-page .games-proof"
+      ".marketing-page main > section:not(.hero-shell), .marketing-page .product-chapter"
     );
     const revealObserver = new IntersectionObserver((entries, observer) => {
       entries.forEach((entry) => {
@@ -222,8 +222,8 @@
 
   const recentEvents = [
     "pixelpilot redeemed 500 pts for VIP Chat Badge",
-    "nightowl unlocked Mines 3x Streak (+1,250 pts)",
-    "moxie_live received Kick Sub point bonus (+500 pts)",
+    "nightowl earned 1,250 pts from a community quest",
+    "moxie_live earned 500 pts from a Kick Sub reward",
     "arcade_ally climbed to #04 on Stream Standings",
     "pixelpilot claimed Discord Champion Role"
   ];
@@ -385,31 +385,5 @@
       }, 450);
     });
   });
-
-  // Provably Fair Dice Simulation
-  const simRollDiceBtn = document.getElementById("simRollDiceBtn");
-  const simDiceResult = document.getElementById("simDiceResult");
-  if (simRollDiceBtn && simDiceResult) {
-    simRollDiceBtn.addEventListener("click", () => {
-      simDiceResult.classList.add("is-rolling");
-      simDiceResult.innerHTML = "Rolling seed...";
-      simRollDiceBtn.disabled = true;
-
-      let count = 0;
-      const rollInterval = setInterval(() => {
-        const temp = (Math.random() * 99).toFixed(2);
-        simDiceResult.innerHTML = `Calculating: <strong>${temp}</strong>`;
-        count++;
-        if (count > 6) {
-          clearInterval(rollInterval);
-          const finalScore = (Math.random() * 50 + 50).toFixed(2);
-          const mult = (finalScore / 30).toFixed(2);
-          simDiceResult.classList.remove("is-rolling");
-          simDiceResult.innerHTML = `Result: <strong>${finalScore}</strong> (Payout: ${mult}x) · <span class="text-ok">✓ Verified</span>`;
-          simRollDiceBtn.disabled = false;
-        }
-      }, 80);
-    });
-  }
 
 })();

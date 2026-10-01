@@ -45,8 +45,6 @@ const EXPECTED = {
     tabs: {
       hub: "giveaways",
       chat: "giveaways",
-      raffles: "giveaways",
-      preds: "giveaways",
       tournaments: "giveaways",
     },
   },
@@ -119,10 +117,8 @@ describe("dynamic section routing parity", () => {
     expect(resolveFragment("/dashboard/settings")).toEqual({ pageKey: "settingsUnified", tab: "account" });
   });
 
-  it("maps the URL aliases to their internal tab keys", () => {
-    expect(parseDynamicPath("/dashboard/giveaways/predictions").tab).toBe("preds");
+  it("maps supported URL aliases to their internal tab keys", () => {
     expect(parseDynamicPath("/dashboard/settings/billing").tab).toBe("plan");
-    expect(resolveFragment("/dashboard/giveaways/predictions")).toEqual({ pageKey: "giveaways", tab: "preds" });
     expect(resolveFragment("/dashboard/settings/billing")).toEqual({ pageKey: "settingsUnified", tab: "plan" });
   });
 
@@ -199,7 +195,7 @@ describe("dynamic section shell integration", () => {
     expect(paletteJs).toContain('{ id: "nav-analytics", title: "Insights"');
     expect(paletteJs).toContain('{ id: "nav-members", title: "Members"');
     expect(paletteJs).toContain('{ id: "nav-settings", title: "Settings"');
-    for (const id of ["nav-games", "nav-raffles", "nav-predictions", "nav-tournaments", "act-obs-pred", "act-export-winners", "act-reload-games-preview"]) {
+    for (const id of ["nav-tournaments"]) {
       expect(paletteJs).not.toContain(`id: "${id}"`);
     }
   });

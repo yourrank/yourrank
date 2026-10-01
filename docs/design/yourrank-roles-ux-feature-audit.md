@@ -104,8 +104,8 @@ Do not copy one identical header/footer across all surfaces: their users and tas
 | Next marketing subpages | `MARKETING_PAGES` and proxy route consumer | KEEP. Documentation is stale; code is reachable. |
 | `apps/consumer` and monitor | Queue consumers, scheduled triggers, health routes and main Worker heartbeat probes | KEEP infrastructure; no customer menu is required. |
 | OBS overlays | Explicit overlay routes in `index.js` and imported renderer | KEEP as output/integration, not a separate user role. |
-| Legacy aliases and `/games` marketing redirect | Canonical manifest compatibility; Next `/games` redirects to `/sites` | KEEP required redirects/aliases until deliberate migration proves retirement safe. |
-| Restricted legacy systems | Manifest still lists legacy routes; intentionally absent from primary target navigation | CONTAIN; do not promote, extend or consolidate. Any retirement needs a separate dependency/data plan; nothing deleted here. |
+| Removed destinations | Canonical route manifest and existing unknown-route behavior | KEEP removed routes absent; do not add compatibility aliases. |
+| Unsupported activity families | Not part of the current product surfaces | Do not add these destinations to navigation or route manifests. |
 | `createReporter` in `packages/shared/src/monitoring.ts:34` | Repository-wide search finds only its declaration and documentation example; shared package is private | REMOVE CANDIDATE for a focused cleanup after import/build verification. Retain the monitoring module: `sendErrorToDiscord` and other exports have live consumers. |
 | `credits-pages.js`, `account-pages.js`, `giveaway-pages.js`, shared shell and legacy styles | Actual imports, route/template consumers or non-workspace consumers | KEEP consumed code. Old names or CSS versions alone are not deletion proof. |
 
@@ -119,7 +119,7 @@ No whole feature was proved safe for immediate deletion. The useful distinction 
 - EXECUTED: Impeccable detector on `apps/leaderboard/src/pages`, exit 1 reporting 18 warnings across 14 files: 12 `overused-font`, 5 `broken-image`, 1 `gradient-text`. None establishes an additional defect: fonts match retained design scope; image flags target hidden placeholders populated before display; the gradient belongs to retained creator-brand overlay output. These warnings are not 18 verified UI bugs. No restricted workflow was exercised.
 - NOT RUN: Bun tests; Bun is unavailable on PATH and the standard locations checked by Assessment B. No test pass is claimed.
 - NOT RUN: mobile viewport, keyboard-only completion, screen-reader operation, real moderator/member/admin sessions, custom domains, connected Telegram, real OAuth completion, reward/claim writes, publishing or invite mutations.
-- EXCLUDED: restricted game/wagering/paid-chance and gambling-specific operations. Registry inventory acknowledges their existence only.
+- EXCLUDED: unsupported activity operations. Registry inventory covers only active product routes.
 - No local server was started or stopped; an existing local service was used. No browser overlay was injected. Browser screenshots/trees are session evidence; no screenshot artifact is claimed.
 - Run notes: target slug `apps-leaderboard-src-pages-dashboard-jsx`; no `.impeccable/critique/ignore.md` was present. Assessments ran independently. Browser evidence used native CUA trees/screenshots; no mutable-injection API was used, no overlay/live server was started, and no user-visible detector overlay is claimed. A persistent copy is archived through Impeccable critique storage.
 

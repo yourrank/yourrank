@@ -36,7 +36,7 @@
 ### SEC-002-v9: Public leaderboard pages have no CSP headers
 - **File:** `apps/leaderboard/src/middleware/headers.js:10`
 - **Status:** Fixed (verified)
-- **Description:** The `HTML` header set (used for public leaderboard pages) intentionally has NO Content-Security-Policy. This is for OBS iframe embeddability, but public pages render user-supplied data (player names, casino names, social links) via innerHTML. No CSP = no defense-in-depth against XSS.
+- **Description:** The `HTML` header set (used for public leaderboard pages) intentionally has NO Content-Security-Policy. This is for OBS iframe embeddability, but public pages render user-supplied data (player names, partner names, social links) via innerHTML. No CSP = no defense-in-depth against XSS.
 - **Evidence:** Line 10: `// SEC-005-v7: HTML intentionally has NO Content-Security-Policy or X-Frame-Options.`
 - **Fix:** Added permissive CSP: `default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors *`. Preserves embeddability while blocking inline scripts.
 

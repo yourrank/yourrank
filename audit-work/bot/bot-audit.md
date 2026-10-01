@@ -45,9 +45,9 @@ The audit covered every source file, test suite, and configuration file. The arc
 | 25 | `apps/bot/src/dashboard-views/pages/bots.ts` | Bots management panel |
 | 26 | `apps/bot/src/dashboard-views/pages/broadcasts.ts`| Broadcasts UI panel |
 | 27 | `apps/bot/src/dashboard-views/pages/commands.ts`| Bot command customization panel |
-| 28 | `apps/bot/src/dashboard-views/pages/offers.ts` | Casino offers panel |
+| 28 | `apps/bot/src/dashboard-views/pages/offers.ts` | Partner offers panel |
 | 29 | `apps/bot/src/dashboard-views/pages/overview.ts`| Dashboard KPI overview |
-| 30 | `apps/bot/src/dashboard-views/pages/settings.ts`| Deposit tracking & Plan settings |
+| 30 | `apps/bot/src/dashboard-views/pages/settings.ts`| Conversion tracking & Plan settings |
 | 31 | `apps/bot/src/dashboard-views/shell.ts` | Navigation & Header components |
 | 32 | `apps/bot/src/dashboard-views/utils.ts` | View helpers (escHtml) |
 | 33 | `apps/bot/src/dashboard.ts` | Dashboard routing & Auth middleware |

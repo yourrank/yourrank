@@ -237,7 +237,6 @@ export function SiteFooter() {
       <div className="mx-auto mt-10 flex max-w-6xl flex-col justify-between gap-3 border-t border-devin-line pt-5 text-xs text-devin-ink-soft sm:flex-row">
         <span>© YourRank · contact@yourrank.site</span>
         <PolicyLinks />
-        <span className="font-mono">18+ · Entertainment only. Play responsibly.</span>
       </div>
     </footer>
   );

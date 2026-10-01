@@ -1,4 +1,4 @@
-// Attribution analytics and casino postback endpoint.
+// Attribution analytics and partner conversion endpoint.
 import { json, bad, denied, requireUser, rateLimit } from "../auth.js";
 import { one, query } from "@yourrank/shared/db";
 import { verifyHmacSha256Hex } from "@yourrank/shared/crypto";
@@ -36,7 +36,7 @@ async function getAttributionRows(env, userId, days) {
        COALESCE(ca.unique_visitors, 0) AS unique_visitors,
        COALESCE(co.conversions, 0) AS conversions,
        COALESCE(co.revenue, 0) AS revenue,
-       COALESCE(co.depositors, 0) AS depositors
+       COALESCE(co.converted_visitors, 0) AS converted_visitors
      FROM offers o
      LEFT JOIN casinos c ON c.id = o.casino_id
      LEFT JOIN (
@@ -52,7 +52,7 @@ async function getAttributionRows(env, userId, days) {
        SELECT cv.offer_id,
               COUNT(*) AS conversions,
               COALESCE(SUM(cv.amount), 0) AS revenue,
-              COUNT(DISTINCT cv.click_ref) AS depositors
+              COUNT(DISTINCT cv.click_ref) AS converted_visitors
          FROM conversions cv
         WHERE cv.owner_id = $1
           AND cv.ts > now() - ($2::text || ' days')::interval
@@ -71,7 +71,7 @@ async function getAttributionRows(env, userId, days) {
     uniqueVisitors: Number(r.unique_visitors) || 0,
     conversions: Number(r.conversions) || 0,
     revenue: Number(r.revenue) || 0,
-    depositors: Number(r.depositors) || 0,
+    convertedVisitors: Number(r.converted_visitors) || 0,
   }));
 }
 
@@ -105,9 +105,9 @@ export async function handleAttribution(request, env) {
     s.uniqueVisitors += o.uniqueVisitors;
     s.conversions += o.conversions;
     s.revenue += o.revenue;
-    s.depositors += o.depositors;
+    s.convertedVisitors += o.convertedVisitors;
     return s;
-  }, { clicks: 0, uniqueVisitors: 0, conversions: 0, revenue: 0, depositors: 0 });
+  }, { clicks: 0, uniqueVisitors: 0, conversions: 0, revenue: 0, convertedVisitors: 0 });
 
   return json({ ok: true, days, summary, postback, offers });
 }
@@ -127,7 +127,7 @@ export async function handleAttributionExport(request, env) {
     if (/[",\n\r]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
     return str;
   };
-  const header = ["Offer", "Casino", "Clicks", "Unique Visitors", "Conversions", "Revenue", "Depositors"];
+  const header = ["Offer", "Brand", "Clicks", "Unique Visitors", "Conversions", "Revenue", "Converted Visitors"];
   const lines = [header.join(",")];
   for (const o of offers) {
     lines.push([
@@ -137,7 +137,7 @@ export async function handleAttributionExport(request, env) {
       escapeCsv(o.uniqueVisitors),
       escapeCsv(o.conversions),
       escapeCsv(o.revenue.toFixed(2)),
-      escapeCsv(o.depositors),
+      escapeCsv(o.convertedVisitors),
     ].join(","));
   }
   const csv = lines.join("\n") + "\n";
@@ -183,7 +183,7 @@ export async function handleRevokePostbackKey(request, env) {
   return json({ ok: true });
 }
 
-// POST /api/postback — receive casino conversion postbacks.
+// POST /api/postback — receive partner conversion postbacks.
 export async function handlePostback(request, env) {
   const url = new URL(request.url);
   const key = url.searchParams.get("key") || request.headers.get("x-postback-key");

@@ -116,7 +116,6 @@ describe("help pages", () => {
       "/dashboard/analytics",
       "/dashboard/settings",
     ]) expect(signedIn).toContain(`href="${href}"`);
-    expect(signedIn).not.toContain('href="/dashboard/games"');
     expect(signedIn).toContain("Help &amp; feedback");
     expect(signedIn).toContain('href="/help/support?area=help');
     expect(signedIn).not.toContain('data-nav="help"');

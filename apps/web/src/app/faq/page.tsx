@@ -39,7 +39,7 @@ const FAQ_GROUPS: Array<{ category: string; items: Array<{ q: string; a: string 
   {
     category: "Pricing & billing",
     items: [
-      { q: "Is YourRank free?", a: `Yes. Free includes one site, up to ${FREE_PLAYERS} leaderboard players, ${FREE_VIEWERS} distinct active viewers in the rolling 30-day account window, ${FREE_MAPPINGS} reward mappings, and ${FREE_SHOP_ITEMS} shop items. Starter adds up to ${STARTER_PLAYERS} players and ${STARTER_VIEWERS} active viewers, plus predictions and tournaments. Pro adds higher operating limits, custom domains, automatic scores, and more. Team is not currently sold; existing Team accounts remain supported.` },
+      { q: "Is YourRank free?", a: `Yes. Free includes one site, up to ${FREE_PLAYERS} leaderboard players, ${FREE_VIEWERS} distinct active viewers in the rolling 30-day account window, ${FREE_MAPPINGS} reward mappings, and ${FREE_SHOP_ITEMS} shop items. Starter adds up to ${STARTER_PLAYERS} players and ${STARTER_VIEWERS} active viewers, plus tournaments. Pro adds higher operating limits, custom domains, automatic scores, and more. Team is not currently sold; existing Team accounts remain supported.` },
       { q: "What payment methods do you accept?", a: PAYMENT_METHODS_ANSWER },
     ],
   },

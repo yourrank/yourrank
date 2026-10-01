@@ -48,7 +48,6 @@ export const SECTIONS = {
   home: { path: HOME_PATH, title: DASHBOARD_SECTION_TITLES.home },
   board: { path: routeById("board").canonicalPath, title: DASHBOARD_SECTION_TITLES.board, tabs: sectionTabs("board") },
   boards: { path: routeById("boards").canonicalPath, title: DASHBOARD_SECTION_TITLES.boards },
-  games: { path: routeById("games").canonicalPath, title: DASHBOARD_SECTION_TITLES.games },
   performance: { path: routeById("performance").canonicalPath, title: DASHBOARD_SECTION_TITLES.performance, tabs: sectionTabs("performance") },
   // Account settings (`/dashboard/settings` and its tabs) are their own
   // documents, served by the Worker. This section is the selected site's

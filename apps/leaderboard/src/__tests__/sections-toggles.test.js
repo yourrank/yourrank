@@ -249,11 +249,11 @@ describe("every Layout & blocks toggle changes the public page", () => {
       { name: "Alice", rank: 1, wagered: 5000, prize: "$100" },
       { name: "Bob", rank: 2, wagered: 3000, prize: "$60" },
     ],
-    prizes: { currency: "$", wagerLabel: "Wagered", prizeLabel: "Prize" },
+    prizes: { currency: "$", prizeLabel: "Prize" },
     socials: [{ name: "Kick", type: "kick", url: "https://kick.com/creator", enabled: true }],
     rules: DEFAULT_EXTRA.rules,
     endsAt: new Date(Date.now() + 86400000).toISOString(),
-    siteSections: { home: true, leaderboard: true, shop: true, games: false, me: true },
+    siteSections: { home: true, leaderboard: true, shop: true, me: true },
   };
   const render = (section, sections) => renderSite({
     r: { slug: "creator", plan: "pro", data: { ...baseData, sections: normalizeSections(sections) } },

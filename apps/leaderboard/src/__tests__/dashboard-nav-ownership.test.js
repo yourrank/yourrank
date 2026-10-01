@@ -55,21 +55,17 @@ describe("dashboard navigation ownership", () => {
       "home", "board", "audience", "rewards", "performance", "telegram", "settings",
     ]);
 
-    // Restricted legacy destinations remain routable for owners but are not
-    // promoted as target product navigation.
-    const topLevelKeys = topLevel.map((item) => item.key);
-    expect(topLevelKeys).not.toContain("games");
-    expect(topLevelKeys).not.toContain("sites");
+    // Site management stays within the Community workspace.
+    expect(topLevel.map((item) => item.key)).not.toContain("sites");
   });
 
   it("keeps the route owner map consistent with the scope grouping", () => {
     // Route ownership is independent of visual grouping: every route still
     // resolves to exactly one rendered rail key.
     const keys = new Set([...dashboardNavItems(), ...flattenNav(dashboardNavItems())].map((item) => item.key));
-    const containedLegacyOwners = new Set(["games"]);
     for (const route of Object.keys(NAV_OWNER_MAP)) {
       const owner = navOwner(route);
-      expect(keys.has(owner) || containedLegacyOwners.has(owner)).toBe(true);
+      expect(keys.has(owner)).toBe(true);
     }
     for (const item of flattenNav(dashboardNavItems())) {
       expect(keys.has(item.key)).toBe(true);
@@ -127,7 +123,7 @@ describe("dashboard navigation ownership", () => {
       const end = html.indexOf("</section>", start);
       return { markup: html.slice(open, end), active: /class="lb-page[^"]*\bis-on\b/.test(html.slice(open, start + 20)) };
     };
-    for (const path of ["/dashboard", "/dashboard/games", "/dashboard/analytics/activity", "/dashboard/leaderboards"]) {
+    for (const path of ["/dashboard", "/dashboard/analytics/activity", "/dashboard/leaderboards"]) {
       const board = boardSection(dashboardHtml(path));
       expect(board.markup).toContain('aria-label="Community sections"');
       expect(board.active).toBe(false);
@@ -174,8 +170,6 @@ describe("dashboard navigation ownership", () => {
       ["history", "audience"],
       ["engage", "engage"],
       ["giveaways", "engage"],
-      ["raffles", "engage"],
-      ["predictions", "engage"],
       ["drops", "engage"],
       ["tournaments", "engage"],
       ["channel", "settings"],
@@ -187,12 +181,6 @@ describe("dashboard navigation ownership", () => {
       expect(navOwner(route)).toBe(owner);
       expect(mapActiveNav(route)).toBe(navOwner(route));
       expect(keys.has(NAV_OWNER_MAP[route] || route)).toBe(true);
-    }
-    // Games remains routable but has no rendered rail owner.
-    for (const [route, owner] of [["games", "games"]]) {
-      expect(navOwner(route)).toBe(owner);
-      expect(mapActiveNav(route)).toBe(owner);
-      expect(keys.has(owner)).toBe(false);
     }
     for (const path of ["/dashboard", "/dashboard/leaderboard/setup", "/dashboard/analytics/activity", "/dashboard/leaderboards", "/dashboard/site", "/dashboard/audience/members", "/dashboard/rewards/activity", "/dashboard/settings/billing"]) {
       expect((dashboardHtml(path).match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);

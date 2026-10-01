@@ -5,7 +5,7 @@
 Goal: complete remaining creator-workspace hierarchy work and redesign viewer account and creator-branded membership surfaces.
 Order: People evidence → runtime prerequisites → creator operational pages → viewer account/membership → cleanup and verification.
 In scope: canonical templates/styles, disclosure/navigation hierarchy, truthful copy, loading/error states, regression tests.
-Out of scope: deployment, real OAuth/messaging, billing reconciliation, restricted mechanics, identity/schema consolidation.
+Out of scope: deployment, real OAuth/messaging, billing reconciliation, unsupported mechanics, identity/schema consolidation.
 Acceptance: current tasks precede optional setup; account/site boundaries remain explicit; balances and claims remain per-community; native controls/mobile remain usable; live evidence is distinguished from fixture tests.
 
 ## Direction
@@ -14,7 +14,7 @@ Creator pages extend the mineral/slate workspace. Activities puts current work b
 
 Viewer mode is Operate: a member returning from a stream, often on a phone, wants to resume a community and check a claim. Keep creator branding on membership pages. The global account becomes a membership directory with compact identity—not another admin console or aggregate credit wallet. Membership puts claims before historical records and discloses occasional code entry.
 
-The user rejected the prior incremental viewer direction (`85715f46`) and explicitly authorized structural replacement. The implemented Channel guide uses seed `c2610fb4`, candidate 6: visible blue navigation, flat ice reading surface, navy Fira typography, a membership directory followed by account maintenance, and claims-first community pages. This is code-led, not fidelity to an approved comp. `viewer-shell.ts` and `viewer-shell.css` own supported viewer chrome and material; stored templates and `devin-system.css` no longer govern these pages. Restricted Games retain their legacy shell without mechanics changes.
+The user rejected the prior incremental viewer direction (`85715f46`) and explicitly authorized structural replacement. The implemented Channel guide uses seed `c2610fb4`, candidate 6: visible blue navigation, flat ice reading surface, navy Fira typography, a membership directory followed by account maintenance, and claims-first community pages. This is code-led, not fidelity to an approved comp. `viewer-shell.ts` and `viewer-shell.css` own supported viewer chrome and material; stored templates and `devin-system.css` no longer govern these pages.
 
 ## Evidence and coverage
 

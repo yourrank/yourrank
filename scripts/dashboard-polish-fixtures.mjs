@@ -36,7 +36,7 @@ const activitySchedules = [
 const members = Array.from({ length: 12 }, (_, i) => ({ id: `member-${i}`, displayName: i === 1 ? name : `Community member ${i + 1}`, linkedIdentities: [{ provider: 'kick' }], balance: 1250 + i * 100, totalEarned: 12000, totalSpent: 500, joinedAt: now, lastSeenAt: now }));
 const shopItems = Array.from({ length: 4 }, (_, i) => ({ id: `reward-${i}`, name: i === 1 ? 'Choose the theme for our next community celebration stream' : ['Community shout-out', '', 'Suggest a stream topic', 'Choose a community emote'][i], description: 'A creator reward for participating in the community. Claim it with earned credits.', cost: 500 + i * 250, stock: null, active: true, cooldown_seconds: 0 }));
 const claims = members.slice(0, 4).map((m, i) => ({ id: `redemption:claim-${i}`, source: { id: `claim-${i}`, title: shopItems[i].name }, subject: { displayName: m.displayName }, reward: shopItems[i], status: 'submitted', statusLabel: 'Needs fulfillment', submittedAt: now }));
-const credits = { ok: true, enabled: true, channel: { connected: true, name: 'community', externalId: '123', status: 'authorized', statusLabel: 'Connected' }, shopItems, mappings: [{ id: 'mapping-1', kick_reward_title: 'Community participation bonus with a longer reward title', kick_reward_id: 'kick-1', kick_reward_cost: 150, credits: 200, active: true }], usage: { shopItems: 4, rewardMappings: 1, pendingRedemptions: 4, redemptionsPer30Days: 16, newViewersPer30Days: 24 }, limits: { shopItems: 50, rewardMappings: 50, pendingRedemptions: 100, redemptionsPer30Days: 1000, newViewersPer30Days: 1000 }, viewerAuth: {}, capabilities: { manageRewards: true, manageConnections: true, manageClaims: true, manageMembers: true } };
+const credits = { ok: true, enabled: true, channel: { connected: true, name: 'community', externalId: '123', status: 'authorized', statusLabel: 'Connected' }, shopItems, mappings: [{ id: 'mapping-1', kick_reward_title: 'Community participation reward with a longer title', kick_reward_id: 'kick-1', kick_reward_cost: 150, credits: 200, active: true }], usage: { shopItems: 4, rewardMappings: 1, pendingRedemptions: 4, redemptionsPer30Days: 16, newViewersPer30Days: 24 }, limits: { shopItems: 50, rewardMappings: 50, pendingRedemptions: 100, redemptionsPer30Days: 1000, newViewersPer30Days: 1000 }, viewerAuth: {}, capabilities: { manageRewards: true, manageConnections: true, manageClaims: true, manageMembers: true } };
 const competitions = new Map([[site.id, [
   { id: '11111111-1111-4111-8111-111111111111', name: 'Summer Challenge', published: true, players: [{ name: 'Summer player', score: 42 }], updated_at: now },
   { id: '22222222-2222-4222-8222-222222222222', name: 'September Challenge', published: false, players: [{ name: 'Draft player', score: 18 }], updated_at: now },
@@ -80,33 +80,6 @@ const giveawayChat = {
   winner: null,
   draws: [],
 };
-const giveawayRaffles = [
-  {
-    id: 'fixture-active-raffle',
-    title: 'Community headset bundle',
-    description: 'A thank-you prize for the community.',
-    ticket_cost: 30,
-    max_tickets_per_viewer: 10,
-    status: 'active',
-    total_tickets: 24,
-    participant_count: 8,
-    created_at: now,
-  },
-  {
-    id: 'fixture-completed-raffle',
-    title: 'Stream avatar commission',
-    ticket_cost: 25,
-    max_tickets_per_viewer: 10,
-    status: 'completed',
-    winner_name: 'Jordan',
-    winner_ticket_number: 4,
-    total_tickets: 32,
-    participant_count: 12,
-    drawn_at: now,
-    created_at: now,
-  },
-];
-
 // Tournament fixture variants: real buildBracket() output, no hand-written
 // rows. FIXTURE_TOURNAMENT selects the shape; `empty` mode still wins.
 // setup — unstarted tournament with eligible entries and no bracket.
@@ -319,7 +292,6 @@ const server = createServer(async (req, res) => {
     if (path === '/api/giveaways/chat') return json(res, empty
       ? { ...giveawayChat, session: null, entries: [] }
       : giveawayChat);
-    if (path === '/api/events/raffles') return json(res, { raffles: empty ? [] : giveawayRaffles });
     if (path === '/dashboard/preview') return html(res, '<!doctype html><p>Isolated audit preview</p>');
     if (path.startsWith('/api/') || path.startsWith('/bot/')) return json(res, { ok: true, items: [], events: [], sessions: [], bots: [], broadcasts: [], commands: [], accounts: [], stats: {}, usage: {}, billing: {}, data: {}, connected: false });
     res.writeHead(404).end('Not found');

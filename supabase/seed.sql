@@ -26,17 +26,17 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO sites (id, user_id, slug, name, tagline, casino, code, prize_pool, period, published, extra_json, theme_json)
 VALUES
   ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002',
-   'testboard', 'Test Leaderboard', 'The best crypto leaderboard', 'Stake', 'PROMO1',
+   'testboard', 'Test Leaderboard', 'Community standings for streamers', 'Acme', 'WELCOME',
    '$10,000', 'monthly', true,
-   '{"chips":["Fast Payouts","Crypto Friendly"]}'::jsonb,
+   '{"chips":["Community Rewards","Built for Streamers"]}'::jsonb,
    '{"template":"classic","accentColor":"#c8ff00"}'::jsonb),
   ('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000003',
-   'freeboard', 'Free Board', 'Starter board', 'Rollbit', 'FREEPROMO',
+   'freeboard', 'Free Board', 'Starter board', 'Northstar', 'COMMUNITY',
    '$1,000', 'weekly', true,
    '{}'::jsonb,
    '{"template":"midnight"}'::jsonb),
   ('b0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004',
-   'starterboard', 'Starter Board', 'Telegram-connected', 'BC.Game', 'BCPROMO',
+   'starterboard', 'Starter Board', 'Telegram-connected', 'Brightside', 'PARTNER',
    '$5,000', 'monthly', true,
    '{}'::jsonb,
    '{}'::jsonb)
@@ -45,11 +45,11 @@ ON CONFLICT (id) DO NOTHING;
 -- ── Players ──────────────────────────────────────────────────────────────
 INSERT INTO players (id, site_id, name, wagered, prize, sort)
 VALUES
-  ('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'CryptoKing', 152000, 1500, 1),
-  ('c0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'LuckyStar', 98000, 700, 2),
-  ('c0000000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000001', 'DiceHero', 61250, 500, 3),
-  ('c0000000-0000-0000-0000-000000000004', 'b0000000-0000-0000-0000-000000000001', 'SlotMaster', 45000, 250, 4),
-  ('c0000000-0000-0000-0000-000000000005', 'b0000000-0000-0000-0000-000000000001', 'BetPro', 32000, 0, 5),
+  ('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'StreamChampion', 152000, 1500, 1),
+  ('c0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'CommunityBuilder', 98000, 700, 2),
+  ('c0000000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000001', 'TeamPlayer', 61250, 500, 3),
+  ('c0000000-0000-0000-0000-000000000004', 'b0000000-0000-0000-0000-000000000001', 'RegularViewer', 45000, 250, 4),
+  ('c0000000-0000-0000-0000-000000000005', 'b0000000-0000-0000-0000-000000000001', 'NewMember', 32000, 0, 5),
   ('c0000000-0000-0000-0000-000000000006', 'b0000000-0000-0000-0000-000000000002', 'FreeGamer', 5000, 100, 1),
   ('c0000000-0000-0000-0000-000000000007', 'b0000000-0000-0000-0000-000000000002', 'NewbiePlayer', 2000, 50, 2)
 ON CONFLICT (id) DO NOTHING;
@@ -85,32 +85,32 @@ ON CONFLICT (id) DO NOTHING;
 -- ── Leads ────────────────────────────────────────────────────────────────
 INSERT INTO leads (id, handle, casino, contact, note)
 VALUES
-  ('10000000-0000-0000-0000-000000000001', 'high_roller_42', 'Stake', 'tg:@high_roller_42', 'VIP player, interested in Pro'),
-  ('10000000-0000-0000-0000-000000000002', 'crypto_casino_fan', 'Rollbit', 'email:fan@example.com', 'Medium volume')
+  ('10000000-0000-0000-0000-000000000001', 'streamer_42', 'Acme', 'tg:@streamer_42', 'Creator interested in Pro'),
+  ('10000000-0000-0000-0000-000000000002', 'community_creator', 'Northstar', 'email:fan@example.com', 'Community account')
 ON CONFLICT (id) DO NOTHING;
 
--- ── Casinos ──────────────────────────────────────────────────────────────
+-- ── Partners ──────────────────────────────────────────────────────────────
 INSERT INTO casinos (id, name, slug, website_url, is_global, created_by)
 VALUES
-  ('11500000-0000-0000-0000-000000000001', 'Stake', 'stake', 'https://stake.com', true, 'a0000000-0000-0000-0000-000000000002'),
-  ('11500000-0000-0000-0000-000000000002', 'Rollbit', 'rollbit', 'https://rollbit.com', true, 'a0000000-0000-0000-0000-000000000002'),
-  ('11500000-0000-0000-0000-000000000003', 'BC.Game', 'bcgame', 'https://bc.game', true, 'a0000000-0000-0000-0000-000000000004')
+  ('11500000-0000-0000-0000-000000000001', 'Acme', 'acme', 'https://example.com/acme', true, 'a0000000-0000-0000-0000-000000000002'),
+  ('11500000-0000-0000-0000-000000000002', 'Northstar', 'northstar', 'https://example.com/northstar', true, 'a0000000-0000-0000-0000-000000000002'),
+  ('11500000-0000-0000-0000-000000000003', 'Brightside', 'brightside', 'https://example.com/brightside', true, 'a0000000-0000-0000-0000-000000000004')
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Offers ───────────────────────────────────────────────────────────────
 INSERT INTO offers (id, owner_id, casino_id, label, referral_url, bonus_text, promo_code, is_active)
 VALUES
   ('11000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002',
-   '11500000-0000-0000-0000-000000000001', 'Stake 200% Bonus', 'https://stake.com/?c=promo', '200% deposit bonus up to $1000', 'PROMO1', true),
+   '11500000-0000-0000-0000-000000000001', 'Welcome offer', 'https://example.com/acme/welcome', 'A welcome offer for your community', 'WELCOME', true),
   ('11000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000002',
-   '11500000-0000-0000-0000-000000000002', 'Rollbit Cashback', 'https://rollbit.com/ref/test', '10% cashback on losses', 'CASH10', true)
+   '11500000-0000-0000-0000-000000000002', 'Community offer', 'https://example.com/northstar/community', 'A thank-you for your community', 'COMMUNITY', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Short Links ──────────────────────────────────────────────────────────
 INSERT INTO short_links (id, offer_id, slug, source)
 VALUES
-  ('12000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'stake-bonus', 'telegram'),
-  ('12000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000002', 'rollbit-cash', 'twitter')
+  ('12000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'welcome-offer', 'telegram'),
+  ('12000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000002', 'community-offer', 'twitter')
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Clicks ───────────────────────────────────────────────────────────────
@@ -124,7 +124,7 @@ VALUES
 INSERT INTO conversions (id, owner_id, offer_id, click_ref, event, amount, currency)
 VALUES
   ('14000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002',
-   '11000000-0000-0000-0000-000000000001', 'ref_001', 'deposit', 50, 'USD')
+   '11000000-0000-0000-0000-000000000001', 'ref_001', 'conversion', 50, 'USD')
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Bot Subscribers ──────────────────────────────────────────────────────
@@ -138,7 +138,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO player_subscriptions (id, bot_id, site_id, tg_user_id, player_name)
 VALUES
   ('16000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
-   'b0000000-0000-0000-0000-000000000001', 6037437861, 'CryptoKing')
+   'b0000000-0000-0000-0000-000000000001', 6037437861, 'StreamChampion')
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Archives ─────────────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ ON CONFLICT (site_id, day) DO NOTHING;
 INSERT INTO bot_commands (id, bot_id, command, response, is_enabled)
 VALUES
   ('18000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
-   '/bonus', 'Use code PROMO1 for a 200% bonus at Stake!', true)
+   '/welcome', 'Use code WELCOME for a welcome offer from Acme.', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Admin Audit ──────────────────────────────────────────────────────────

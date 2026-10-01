@@ -11,7 +11,7 @@ const dbOne = mock(() => Promise.resolve(null));
 
 const mockSiteData = {
   rankBy: "wagered",
-  brand: { name: "Test Casino", casino: "Stake", period: "Monthly", prizePool: "$10,000" },
+  brand: { name: "Test Community", casino: "Acme Sponsor", period: "Monthly", prizePool: "$10,000" },
   playerCount: 3,
   players: [
     { name: "Alice", wagered: 50000, prize: "$5,000", rank: 1 },
@@ -85,8 +85,8 @@ describe("handlePublicStandings", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toHaveProperty("slug", "testboard");
-    expect(body).toHaveProperty("name", "Test Casino");
-    expect(body).toHaveProperty("casino", "Stake");
+    expect(body).toHaveProperty("name", "Test Community");
+    expect(body).toHaveProperty("casino", "Acme Sponsor");
     expect(body).toHaveProperty("period", "Monthly");
     expect(body).toHaveProperty("prizePool", "$10,000");
     expect(body).toHaveProperty("players");
@@ -199,7 +199,9 @@ describe("handlePublicRank", () => {
     const text = await res.text();
     expect(text).toContain("Alice");
     expect(text).toContain("#1");
-    expect(text).toContain("Test Casino");
+    expect(text).toContain("Test Community");
+    expect(text).toContain("Amount: $50,000");
+    expect(text.toLowerCase()).not.toContain("wager");
     expect(res.headers.get("content-type")).toContain("text/plain");
   });
 

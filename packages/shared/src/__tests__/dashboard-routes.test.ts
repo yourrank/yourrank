@@ -58,7 +58,6 @@ describe("dashboard route manifest invariants", () => {
     for (const [id, path] of [
       ["activities.overview", "/dashboard/activities"],
       ["settings.plan", "/dashboard/settings/billing"],
-      ["giveaways.preds", "/dashboard/giveaways/predictions"],
       ["audience.viewers", "/dashboard/audience/members"],
       ["performance", "/dashboard/analytics"],
       ["boards", "/dashboard/leaderboards"],
@@ -101,7 +100,7 @@ describe("dashboard route manifest invariants", () => {
       "/", "/help", "/auth", "/api/auth/me", "/api/site/list", "/hook/x",
       "/billing/hook/x", "/r/slug", "/pb", "/some-site-slug",
       "/dashboard/_content", "/dashboard/preview", "/dashboard/invite",
-      "/dashboard/support", "/dashboard/nope",
+      "/dashboard/support", "/dashboard/nope", "/dashboard/games",
     ]) {
       expect(resolveDashboardPath(outside), outside).toBeUndefined();
     }
@@ -117,8 +116,6 @@ describe("dashboard route manifest invariants", () => {
     expect(buildDashboardPath("rewards.shop", { board: "s1" })).toBe("/dashboard/rewards/shop");
     expect(buildDashboardPath("settings.plan", { siteId: "s1", board: "s1" })).toBe("/dashboard/settings/billing");
     // Values are encoded; empty values are dropped.
-    expect(buildDashboardPath("games", { board: "a b/c" })).toBe("/dashboard/games?board=a%20b%2Fc");
-    expect(buildDashboardPath("games", { board: "" })).toBe("/dashboard/games");
     // Deterministic: same input, same output.
     expect(buildDashboardPath("board.design", { board: "s1" })).toBe(buildDashboardPath("board.design", { board: "s1" }));
   });
@@ -191,7 +188,7 @@ describe("dashboard route manifest invariants", () => {
   it("encodes the legacy ?nav= redirect policy as executable manifest data", () => {
     // One uniform policy for every nav alias: 302, strip nav, preserve rest.
     expect(NAV_QUERY_REDIRECT_POLICY.status).toBe(302);
-    expect(applyAliasSearch(NAV_QUERY_REDIRECT_POLICY.search, new URLSearchParams("nav=games&from=test&keep=2")).toString())
+    expect(applyAliasSearch(NAV_QUERY_REDIRECT_POLICY.search, new URLSearchParams("nav=unknown&from=test&keep=2")).toString())
       .toBe("from=test&keep=2");
     for (const [nav, routeId] of Object.entries(NAV_QUERY_ALIASES)) {
       const redirect = resolveNavRedirect(nav, `nav=${nav}&from=test&keep=2`);
@@ -206,9 +203,8 @@ describe("dashboard route manifest invariants", () => {
     // The two legacy-spelling Locations (LEGACY_ACCOUNT_PATHS in the Worker).
     expect(resolveNavRedirect("settings")!.pathname).toBe("/dashboard/settings");
     expect(resolveNavRedirect("manage")!.pathname).toBe("/dashboard/settings");
-    // Everything else lands on the target route's canonical path.
-    expect(resolveNavRedirect("games")!.pathname).toBe("/dashboard/games");
     expect(resolveNavRedirect("kickrewards")!.pathname).toBe("/dashboard/site/connections");
+    expect(resolveNavRedirect("games")).toBeUndefined();
     // Unknown nav values are not redirects.
     expect(resolveNavRedirect("nope")).toBeUndefined();
   });
@@ -292,29 +288,27 @@ describe("location-level route resolution", () => {
     // ?tab= is ignored on the per-tab settings paths (path wins).
     expect(loc("/dashboard/settings/team", "tab=billing")?.routeId).toBe("settings.team");
     // ?nav= is ignored on the settings root (served before nav handling).
-    expect(loc("/dashboard/settings", "nav=games")?.routeId).toBe("settings.account");
+    expect(loc("/dashboard/settings", "nav=unknown")?.routeId).toBe("settings.account");
   });
 
-  it("resolves legacy ?nav= on spa-section paths only (review example)", () => {
-    const games = loc("/dashboard", "nav=games");
-    expect(games?.routeId).toBe("games");
-    expect(games?.canonicalPath).toBe("/dashboard/games");
-    expect(games?.canonical).toBe(false);
-    expect(games?.navAlias).toBe("games");
+  it("resolves only registered legacy ?nav= aliases on spa-section paths", () => {
+    const settings = loc("/dashboard", "nav=manage");
+    expect(settings?.routeId).toBe("settings.account");
+    expect(settings?.canonical).toBe(false);
     // Every declared ?nav= alias resolves to its target from /dashboard.
     for (const [nav, id] of Object.entries(NAV_QUERY_ALIASES)) {
       expect(loc("/dashboard", `nav=${nav}`)?.routeId, `?nav=${nav}`).toBe(id);
     }
     // Unknown nav values are ignored (the Worker serves the path).
-    expect(loc("/dashboard", "nav=bogus")?.routeId).toBe("home");
-    expect(loc("/dashboard", "nav=bogus")?.navAlias).toBeUndefined();
+    expect(loc("/dashboard", "nav=unknown")?.routeId).toBe("home");
+    expect(loc("/dashboard", "nav=unknown")?.navAlias).toBeUndefined();
     // nav applies on other spa-section paths too (parseDashboardPath branch)…
-    expect(loc("/dashboard/games", "nav=settings")?.routeId).toBe("settings.account");
+    expect(loc("/dashboard/sites", "nav=manage")?.routeId).toBe("settings.account");
     // …including spa-section rewrite aliases…
-    expect(loc("/dashboard/sites", "nav=games")?.routeId).toBe("games");
+    expect(loc("/dashboard/sites", "nav=unknown")?.routeId).toBe("boards");
     // …but never on fragment or worker-document destinations.
-    expect(loc("/dashboard/rewards", "nav=games")?.routeId).toBe("rewards.overview");
-    expect(loc("/dashboard/telegram", "nav=games")?.routeId).toBe("telegram");
+    expect(loc("/dashboard/rewards", "nav=manage")?.routeId).toBe("rewards.overview");
+    expect(loc("/dashboard/telegram", "nav=manage")?.routeId).toBe("telegram");
   });
 
   it("canonicalizes paths, aliases and trailing slashes at the location level", () => {
@@ -335,7 +329,7 @@ describe("location-level route resolution", () => {
       expect(at?.alias?.path, a.path).toBe(a.path);
     }
     // Non-dashboard locations resolve to nothing, with or without query.
-    expect(loc("/", "nav=games")).toBeUndefined();
+    expect(loc("/", "nav=unknown")).toBeUndefined();
     expect(loc("/api/site/list", "tab=team")).toBeUndefined();
   });
 
@@ -348,8 +342,8 @@ describe("location-level route resolution", () => {
     // Undeclared context params are not retained for routes that ignore them.
     expect(loc("/dashboard/settings/team", "board=s1")?.navParams).toEqual({});
     // ?nav= targets expose the params the TARGET declares.
-    const nav = loc("/dashboard", "nav=games&board=s3&x=1");
-    expect(nav?.routeId).toBe("games");
+    const nav = loc("/dashboard", "nav=board&board=s3&x=1");
+    expect(nav?.routeId).toBe("board");
     expect(nav?.navParams).toEqual({ board: "s3" });
   });
 });

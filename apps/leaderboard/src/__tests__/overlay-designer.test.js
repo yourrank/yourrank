@@ -133,7 +133,7 @@ describe("designer surface wiring", () => {
     expect(jsx).toContain('id="odAnimate" type="checkbox" role="switch" checked');
     // One canonical OBS copy action; the standalone HUD/alerts/ticker cards are gone.
     expect(jsx.match(/Copy OBS link/gi)).toHaveLength(1);
-    for (const gone of ["OBS_TOOLS", "Live Betting Overlay", "Stream Alerts", "Leaderboard Bar", "ov-btn-copy-ticker", "ov-btn-copy-pred-hud", "ov-btn-copy-alerts", 'id="embedObsCopy"']) {
+    for (const gone of ["OBS_TOOLS", "Stream Alerts", "Leaderboard Bar", "ov-btn-copy-ticker", "ov-btn-copy-alerts", 'id="embedObsCopy"']) {
       expect(jsx.includes(gone), gone).toBe(false);
     }
     // The public-site link keeps its own copy action because it serves a different purpose.

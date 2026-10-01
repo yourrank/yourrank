@@ -38,7 +38,7 @@ describe("Phase 3 dashboard information architecture", () => {
     expect(dashboardNavItems().filter((item) => item.kind === "group").map(item => item.key)).toEqual(["engage"]);
 
     const sidebar = dashboardHtml().match(/<nav class="lb-side-group lb-side-nav"[\s\S]*?<\/nav>/)?.[0] || "";
-    for (const label of ["My board", "Players", "Stats", "Members", "Drops", "Raffles", "Predictions"]) {
+    for (const label of ["My board", "Players", "Stats", "Members", "Drops"]) {
       expect(sidebar).not.toContain(`>${label}</span>`);
     }
   });
@@ -78,7 +78,7 @@ describe("Phase 3 dashboard information architecture", () => {
   });
 
   it("keeps Engage and Rewards strips separate", () => {
-    expect(GIVEAWAY_TABS.map(([, label]) => label)).toEqual(["Chat Giveaway", "Raffle", "Prediction"]);
+    expect(GIVEAWAY_TABS.map(([, label]) => label)).toEqual(["Chat Giveaway"]);
     expect(REWARDS_TABS.map(({ label }) => label)).toEqual(["Overview", "Ways to earn", "Shop", "Claims"]);
     expect(PAGES.rewardsShop.Component({ user: {} }).toString()).not.toContain("gw-subnav");
     expect(renderGiveawaysContentHtml("chat")).toContain('id="giveaway-root"');

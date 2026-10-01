@@ -12,7 +12,7 @@ export const COMMUNITY_HANDLE_RULES = "Lowercase letters, numbers and hyphens, u
 // behind the hardcoded demo tour at /demo, unreachable to its owner.
 export const RESERVED_COMMUNITY_HANDLES: ReadonlySet<string> = new Set([
   "api", "assets", "login", "signup", "logout", "dashboard", "admin", "account", "billing", "favicon", "robots",
-  "sitemap", "index", "forgot", "reset", "terms", "privacy", "responsible", "logo", "go", "stats", "bot", "hook",
+  "sitemap", "index", "forgot", "reset", "terms", "privacy", "logo", "go", "stats", "bot", "hook",
   "r", "pb", "health", "demo", "invite",
 ]);
 

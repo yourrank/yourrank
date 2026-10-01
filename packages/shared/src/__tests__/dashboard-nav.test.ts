@@ -69,7 +69,7 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
     // navKey is the fallback for routes without one.
     expect(routeById("giveaways.hub").railKey).toBe("overview");
     expect(routeById("activities.overview").railKey).toBe("activities");
-    expect(["giveaways.chat", "giveaways.raffles", "giveaways.preds"].map(id => routeById(id).railKey)).toEqual(["giveaways", "giveaways", "giveaways"]);
+    expect(["giveaways.chat", "giveaways.tournaments"].map(id => routeById(id).railKey)).toEqual(["giveaways", "tournaments"]);
     expect(routeById("giveaways.tournaments").railKey).toBe("tournaments");
     for (const route of DASHBOARD_ROUTES) {
       const selected = sidebarActiveKey(route.canonicalPath);
@@ -83,16 +83,13 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
     for (const [key, owner] of Object.entries(NAV_OWNER_MAP)) {
       expect(navKeys.has(owner), `${key} → ${owner}`).toBe(true);
     }
-    // Route ownership remains available for direct legacy URLs even where an
-    // owner is intentionally absent from the rendered primary rail (games).
+    // Accepted navigation spellings resolve through the canonical manifest.
     expect(NAV_OWNER_MAP).toEqual({
       board: "board", leaderboard: "board",
       activities: "engage",
       // Engage's rail owner route is the hub Overview; the owner value is
       // still the group key, so spelling → rail mapping is unchanged.
-      engage: "engage", giveaways: "engage", raffles: "engage",
-      predictions: "engage", drops: "engage", tournaments: "engage",
-      games: "games",
+      engage: "engage", giveaways: "engage", drops: "engage", tournaments: "engage",
       activity: "performance", referrals: "performance", performance: "performance",
       redemptions: "rewards", overview: "rewards", shop: "rewards",
       rules: "rewards", rewards: "rewards", history: "audience",

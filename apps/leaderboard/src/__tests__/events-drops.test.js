@@ -1,8 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from "bun:test";
 import {
-  handleGetRaffles,
-  handleCreateRaffle,
-  handleDrawRaffle,
   handleGetCodeDrops,
   handleCreateCodeDrop,
   handleClaimCodeDrop,
@@ -19,7 +16,7 @@ function mockEnv() {
 const USER = { id: "user-123", email: "streamer@test.com", plan: "pro" };
 const SITE = { id: "site-456", user_id: "user-123", slug: "streamer" };
 
-describe("Community Events: Raffles & Flash Code Drops", () => {
+describe("Flash Code Drops", () => {
   let mockOne;
   let mockQuery;
   let mockExec;
@@ -58,20 +55,6 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     };
   });
 
-  it("handleGetRaffles lists raffles for the streamer site", async () => {
-    mockQuery.mockResolvedValueOnce([
-      { id: "raffle-1", title: "VIP Role", ticket_cost: 30, status: "active", total_tickets: 10, participant_count: 4 },
-    ]);
-
-    const req = new Request("http://localhost/api/events/raffles?siteId=site-456");
-    const res = await handleGetRaffles(req, mockEnv(), deps);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.ok).toBe(true);
-    expect(body.raffles.length).toBe(1);
-    expect(body.raffles[0].title).toBe("VIP Role");
-  });
-
   it("handleGetCodeDrops lists active drops for the streamer site", async () => {
     mockQuery.mockResolvedValueOnce([
       { id: "drop-1", code: "KICK30", points_reward: 30, max_claims: 20, claimed_count: 3, status: "active" },
@@ -105,99 +88,6 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
 
     expect(response.status).toBe(200);
     expect(capability).toHaveBeenCalledWith(moderator, SITE, "canRoleManageActivities");
-  });
-
-  it("handleCreateRaffle creates a custom-priced raffle successfully", async () => {
-    mockOne.mockResolvedValueOnce({
-      id: "raffle-1",
-      title: "VIP Role + $50",
-      ticket_cost: 30, // custom price
-      max_tickets_per_viewer: 5,
-      status: "active",
-      created_at: new Date().toISOString(),
-    });
-
-    const req = new Request("http://localhost/api/events/raffles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: "VIP Role + $50",
-        ticketCost: 30,
-        maxTickets: 5,
-        description: "Must be active in Discord",
-      }),
-    });
-
-    const res = await handleCreateRaffle(req, mockEnv(), deps);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.ok).toBe(true);
-    expect(body.raffle.title).toBe("VIP Role + $50");
-    expect(body.raffle.ticket_cost).toBe(30);
-  });
-
-  it("handleDrawRaffle draws provably fair winner from tickets", async () => {
-    mockOne.mockResolvedValueOnce({
-      id: "raffle-1",
-      site_id: "site-456",
-      title: "VIP Role",
-      status: "active",
-      total_tickets: 3,
-    });
-
-    mockOne.mockResolvedValueOnce({ id: "raffle-1" }); // guarded update
-    mockExec.mockResolvedValueOnce([
-      { id: "t-1", ticket_number: 1, viewer_id: "v-1", site_viewer_id: "sv-1", viewer_name: "Alice" },
-      { id: "t-2", ticket_number: 2, viewer_id: "v-2", site_viewer_id: "sv-2", viewer_name: "Bob" },
-      { id: "t-3", ticket_number: 3, viewer_id: "v-3", site_viewer_id: "sv-3", viewer_name: "Charlie" },
-    ]); // lock raffle tickets for the draw transaction
-
-    const req = new Request("http://localhost/api/events/raffles/draw", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raffleId: "raffle-1" }),
-    });
-
-    const res = await handleDrawRaffle(req, mockEnv(), deps);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.ok).toBe(true);
-    expect(body.status).toBe("drawn");
-    expect(["Alice", "Bob", "Charlie"]).toContain(body.winnerName);
-    expect([1, 2, 3]).toContain(body.winnerTicketNumber);
-    const ticketSql = mockExec.mock.calls[0][0];
-    expect(ticketSql).toContain("COALESCE(v.kick_username, 'Viewer') AS viewer_name");
-    expect(ticketSql).not.toContain("v.username");
-    expect(ticketSql).not.toContain("v.display_name");
-    expect(mockOne.mock.calls[0][0]).toContain("FOR UPDATE OF r");
-    expect(mockOne.mock.calls[1][0]).toContain("WHERE id=$4 AND status='active'");
-  });
-
-  it("handleDrawRaffle refuses to draw when no tickets were sold", async () => {
-    mockOne.mockResolvedValueOnce({
-      id: "raffle-1",
-      site_id: "site-456",
-      title: "VIP Role",
-      status: "active",
-      total_tickets: 0,
-    });
-    mockExec.mockResolvedValueOnce([]); // no tickets
-
-    const req = new Request("http://localhost/api/events/raffles/draw", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raffleId: "raffle-1" }),
-    });
-
-    const res = await handleDrawRaffle(req, mockEnv(), deps);
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.ok).toBe(false);
-    expect(body.error).toContain("nothing to draw");
-    // The raffle must stay active: no state transition, no fabricated winner.
-    expect(mockOne).toHaveBeenCalledTimes(1);
-    expect(body.status).toBeUndefined();
-    expect(body.winnerName).toBeUndefined();
   });
 
   it("handleCreateCodeDrop creates a drop code with custom reward and claims limit", async () => {

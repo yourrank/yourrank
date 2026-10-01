@@ -9,7 +9,7 @@ const SITE = {
   id: "site-1",
   slug: "actual-board",
   data: {
-    brand: { name: "Actual Board", casino: "Stake", prizePool: "$5,000", period: "Monthly" },
+    brand: { name: "Actual Board", casino: "Example Sponsor", prizePool: "$5,000", period: "Monthly" },
     branding: { template: "classic", accentA: "#111111", accentB: "#222222" },
     players: [{ name: "Actual Player", wagered: 1000, prize: 100 }],
     partner: {},

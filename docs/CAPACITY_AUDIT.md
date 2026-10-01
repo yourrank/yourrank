@@ -29,14 +29,14 @@ Now cross that against your actual SQL:
 | `SELECT ... FROM players WHERE site_id=$1 ORDER BY wagered DESC` (`site.js:186`) | **Yes** | ” |
 | `SELECT max(updated_at) FROM players WHERE site_id=$1` (SSE tick, `public.js:130`) | **Yes** | If caching is on, your "live" leaderboard is up to **75s stale** (60s max_age + 15s SWR) and the 4s poll interval is theatre |
 | `SELECT ... FROM sites WHERE user_id=$1 ORDER BY CASE WHEN id=(SELECT active_site_id ...)` (`site.js:161`) | **Yes** | The code comment above this line says it is deliberately *not* cached so "the dashboard … must see the latest saves immediately". Hyperdrive can cache it anyway for up to 60s. If you have ever had a "I saved and it didn't change" report, this is a prime suspect. |
-| every `INSERT`/`UPDATE`, `bumpStat` transaction, `place_bet`, click inserts | **No** (writes) | Write load is never absorbed |
+| every `INSERT`/`UPDATE`, `bumpStat` transaction, click inserts | **No** (writes) | Write load is never absorbed |
 
 So there are two very different systems depending on one dashboard toggle:
 
 * **Branch A — caching OFF (or effectively bypassed):** the DB eats the full SSE poll load. This is the branch all headline numbers below assume, because it is the pessimistic and load-test-verifiable one.
 * **Branch B — caching ON (the default):** public read QPS collapses to roughly `#distinct hot boards / 60s`, capacity rises several-fold, **and** you are shipping up-to-75s-stale leaderboards, stale dashboards after save, and stale `boards`/`plan` gating.
 
-**Action before anything else:** open the Hyperdrive config and write down which branch you are in. Then decide it deliberately — the right end state is caching ON for genuinely public read queries and a **second cache-disabled Hyperdrive config** used by session/dashboard/games code paths, instead of leaving correctness to accident.
+**Action before anything else:** open the Hyperdrive config and write down which branch you are in. Then decide it deliberately — the right end state is caching ON for genuinely public read queries and a **second cache-disabled Hyperdrive config** used by session and dashboard code paths, instead of leaving correctness to accident.
 
 ---
 
@@ -96,7 +96,7 @@ These are **not** interchangeable and the ratios are load-bearing: 50,000 regist
 
 ### 2.5 Supabase/PostgreSQL — the resource that saturates
 
-**[FACT]** Indexing is genuinely good: `idx_players_site_wagered ON players(site_id, wagered DESC)` exists precisely for the hot query (`20260705000008_players_composite_index.sql`), `sessions` is PK-on-token, `site_viewers` has `UNIQUE (site_id, viewer_id)`, `game_rounds` has viewer/site + created_at composites and a partial unique on open rounds, `clicks` is monthly-partitioned. **I found no missing index on any hot path.** Your database problem is *round-trip count and polling*, not query plans — do not go index-hunting.
+**[FACT]** Indexing is genuinely good: `idx_players_site_wagered ON players(site_id, wagered DESC)` exists precisely for the hot query (`20260705000008_players_composite_index.sql`), `sessions` is PK-on-token, `site_viewers` has `UNIQUE (site_id, viewer_id)`, and `clicks` is monthly-partitioned. **I found no missing index on any hot path.** Your database problem is *round-trip count and polling*, not query plans — do not go index-hunting.
 
 * **Limit [ASSUMPTION + DERIVED]:** 2 shared vCPU on Small; short indexed point queries cost ~0.2-0.5 ms CPU each, so ~700-900 q/s is the wall and p95 degrades from ~450-600 q/s. Large (2 dedicated cores) roughly triples that; each step up is a config change, not a rewrite.
 * **Connections are *not* your first wall [FACT+DERIVED]:** Hyperdrive holds ~100 origin connections on Paid and pools them, so the per-query `postgres()` client churn in `shared/db.ts` does not create Postgres backends. At ~2 ms average query time, 100 connections is >10,000 q/s of headroom — DB CPU gives out long before. **But** see 2.6.
@@ -132,11 +132,11 @@ These are **not** interchangeable and the ratios are load-bearing: 50,000 regist
 
 ### 2.11 Rate limiting — better than your own docs claim, with two real gaps
 
-Correction to `docs/security-review.md` and to a claim in the raw inventory: limiters are **not** missing from login/signup/games/credits. Verified **[FACT]**: `login:<ip>` 20/600s, `login-email:<email>` 10/900s, `signup:<ip>` 10/3600s, `totp` 5/300s, `games:bet:<site>:<player>` 30/60s, `games:reveal` 120/60s, `credits:*` 5-60/60s, `pub-standings` 100/60s, `pub-players` 120/60s, `pub-stream` 60/60s, `go:<ip>` 120/60s, viewer/redeem/oauth limiters, ~60 distinct keys in total. Backend is Durable Objects with `RL_FAIL_OPEN=false` in production and fail-closed as the library default (`shared/ratelimit.ts:48-53,81-90`) — the right choice.
+Correction to `docs/security-review.md` and to a claim in the raw inventory: limiters are **not** missing from login/signup/credits. Verified **[FACT]**: `login:<ip>` 20/600s, `login-email:<email>` 10/900s, `signup:<ip>` 10/3600s, `totp` 5/300s, `credits:*` 5-60/60s, `pub-standings` 100/60s, `pub-players` 120/60s, `pub-stream` 60/60s, `go:<ip>` 120/60s, viewer/redeem/oauth limiters, ~60 distinct keys in total. Backend is Durable Objects with `RL_FAIL_OPEN=false` in production and fail-closed as the library default (`shared/ratelimit.ts:48-53,81-90`) — the right choice.
 
 The real gaps:
 1. **The public board HTML render has no limiter at all** — the most expensive uncached path in the product is the one path anyone can hammer. Even 120/60s per IP would help; better, put a Cloudflare WAF rate-limit rule in front of `/<slug>` so it never reaches the Worker.
-2. **Per-site DO keys are serialization points [FACT+DERIVED]:** `games:config:<site_id>`, `kick-earn:<site_id>:<user>` etc. map to a *single* DO instance per key (`shared/ratelimit.ts:136-163`), pinned to one location, single-threaded, doing a storage get+put per check. A viral board funnels all its config checks through one object — expect a few hundred checks/s ceiling and added cross-region latency for distant viewers. Shard hot per-site keys (`…:<site_id>:<hash(ip)%16>`) or move genuinely-global-per-site checks off the DO.
+2. **Per-site DO keys are serialization points [FACT+DERIVED]:** `kick-earn:<site_id>:<user>` keys map to a *single* DO instance per key (`shared/ratelimit.ts:136-163`), pinned to one location, single-threaded, doing a storage get+put per check. A viral board funnels all its config checks through one object — expect a few hundred checks/s ceiling and added cross-region latency for distant viewers. Shard hot per-site keys (`…:<site_id>:<hash(ip)%16>`) or move genuinely-global-per-site checks off the DO.
 3. `pub-stream` at 60/60s per IP still permits a reconnect storm: `EventSource` auto-reconnects, and on error the client keeps retrying (`leaderboard.js:311`). A deploy or DB blip disconnects every stream at once and they all come back within seconds, each re-running `getPublicSite()`. Add jittered client backoff.
 
 ### 2.12 Cron and background work
@@ -182,11 +182,7 @@ Browser → CF edge (`no-store`, always a miss) → leaderboard Worker → `getB
 1 session+user read for the SSR shell → client calls `/api/auth/me` (2) → `/api/site` = `getUserSite` + `getUserBoardsList` + `onboardingForSite`'s 4-way `Promise.all` (bots, postback_keys, `COUNT(*) players`, site_stats) (`handlers/sites.js:25-40,162-178`) → optional `/api/site/stats` + `/stats/heatmap` aggregates.
 **~10-18 queries per dashboard load**, mostly parallel, all indexed. Cheap in aggregate because streamers are few.
 
-**W4 — Viewer plays a game** `POST /api/games/bet` — most expensive authenticated action
-`requireViewer` (viewer session, 1-2) → `getPublicSite` (5) → `getSiteViewer` (1) → DO rate-limit → `getGameSettings` (1) → `ensureSeed` (1-2) → `place_bet()` (1, transactional SQL function) → `setRoundOutcome` (1) → `settleRound` (1).
-**[DERIVED] 12-14 sequential DB round trips per bet.** Correctness is excellent (single-statement transactional functions, idempotency keys, outcome stored before it is returned, seed never leaked) — this is the best-engineered part of the codebase. But at 30 bets/min/player allowed, ~25 simultaneously-betting players ≈ 150 q/s, i.e. a handful of engaged viewers can rival a thousand idle ones. Fix by not calling `getPublicSite()` here (you need `id` + a few flags) and folding settings/seed lookups into `place_bet`.
-
-**W5 — Click-out** `GET /go/<slug>`: DO limiter → 5-query `getPublicSite` → blocking `INSERT site_clicks` → queue bump → 302. See 2.8.
+**W4 — Click-out** `GET /go/<slug>`: DO limiter → 5-query `getPublicSite` → blocking `INSERT site_clicks` → queue bump → 302. See 2.8.
 **W6 — Telegram update** `POST /hook/:secret`: 1 read + decrypt + grammY construction + subscriber upsert + blocking Telegram API call. See 2.14.
 **W7 — Postback** `POST /pb`: HMAC verify (CPU) → owner lookup → replay-guard write → queue (fallback = inline conversion writes). Unsigned `/pb/:key` returns 410 in production **[FACT]** (`POSTBACK_UNSIGNED_ENABLED=false`) — good.
 **W8 — Payments:** NOWPayments checkout blocks on the provider inside the request; IPN is signature-verified with an idempotency ledger (`provider_events`). Low volume, no capacity concern; the only risk is provider latency being user-visible.
@@ -213,7 +209,7 @@ comfortable (p95 stable, ~250 q/s of budget)   250 / 0.286 ≈  875 tabs
 stress      (~500 q/s)                         500 / 0.286 ≈ 1,750 tabs
 failure     (~800 q/s on Small)                800 / 0.286 ≈ 2,800 tabs
 ```
-Reserve ~20-25% for dashboards, games, bot, consumer, cron → **comfortable ≈ 600-1,000; failure ≈ 2,500.**
+Reserve ~20-25% for dashboards, viewer actions, bot, consumer, cron → **comfortable ≈ 600-1,000; failure ≈ 2,500.**
 
 Worker RPS at 800 concurrent tabs:
 ```
@@ -251,7 +247,7 @@ The failure mode to internalise: it is not a graceful slope. Because every faile
 
 ## 6. Multi-tenant analysis
 
-Tenancy model **[FACT]**: `users` → `sites` (boards) → `players` / `site_viewers` / `credit_ledger` / `game_rounds`; enforcement is application-level `WHERE site_id=$1` / `WHERE user_id=$1`, all indexed. Isolation of *data* looked correct in every query I read — `getBoardById` and `getUserSiteById` always carry the owner id, games always resolve the viewer from the cookie.
+Tenancy model **[FACT]**: `users` → `sites` (boards) → `players` / `site_viewers` / `credit_ledger`; enforcement is application-level `WHERE site_id=$1` / `WHERE user_id=$1`, all indexed. Isolation of *data* looked correct in every query I read — `getBoardById` and `getUserSiteById` always carry the owner id, viewer actions resolve identity from the session.
 
 **RLS is not doing what your docs say [FACT].** Policies are created as `USING (true) WITH CHECK (true)` for the service role via dynamic SQL (`20260715000001_rls_security_sweep.sql`), tables are owned by `postgres`, and the Workers connect with that owner role through Hyperdrive — no `FORCE ROW LEVEL SECURITY` exists anywhere in the migrations. So: **RLS costs you essentially zero capacity** (good news for this audit) but also provides **zero tenant isolation for the application path**; it only constrains Supabase API/anon-key access. Your isolation is your `WHERE` clauses. That is a defensible architecture — just stop describing it as RLS-enforced in `docs/security-review.md`, and treat every new query as security-critical.
 
@@ -261,7 +257,7 @@ Tenancy model **[FACT]**: `users` → `sites` (boards) → `players` / `site_vie
 |---|---|---|---|
 | Small board (20 players, 6 archives, 5 viewers) | 5 | ~1.4 | negligible |
 | Active board (100 players, 24 archives, 100 viewers) | 60 | ~17 | ~2-6% of a Small instance each |
-| Large board (500 players, 24 archives, credits+games on) | 300 | ~86 + game bets | **one tenant can consume a third of the instance** |
+| Large board (500 players, 24 archives, credits on) | 300 | ~86 | **one tenant can consume a third of the instance** |
 | Agency (999-archive cap) | any | — | 2.4 makes this dangerous regardless of traffic |
 
 **Can one tenant hurt others? Yes, four ways [DERIVED from FACTs]:**
@@ -276,7 +272,7 @@ Tenancy model **[FACT]**: `users` → `sites` (boards) → `players` / `site_vie
 
 ## 7. Database detail
 
-**Good, verified [FACT]:** every hot-path predicate has a matching index (`sites.slug` unique, `sites(user_id)`, `players(site_id, wagered DESC)`, `sessions` PK token + `user_id` + `expires_at`, `viewer_sessions(viewer_id/expires_at)`, `site_viewers UNIQUE(site_id, viewer_id)`, `credit_ledger(site_viewer_id)`, `game_rounds(site_viewer_id, created_at DESC)` + partial unique open round, `site_clicks(site_id, created_at)`, `conversions(site_id, ts)` partial, `click_daily` uniques, monthly `clicks` partitions). No `OFFSET` pagination anywhere; broadcasts use keyset pagination; exports and history use `LIMIT`. Triggers are cheap (`updated_at`, suspension sync). Game money-moves are single-statement PL/pgSQL functions (`place_bet`, `settle_round`) — the right pattern for a Worker.
+**Good, verified [FACT]:** every hot-path predicate has a matching index (`sites.slug` unique, `sites(user_id)`, `players(site_id, wagered DESC)`, `sessions` PK token + `user_id` + `expires_at`, `viewer_sessions(viewer_id/expires_at)`, `site_viewers UNIQUE(site_id, viewer_id)`, `credit_ledger(site_viewer_id)`, `site_clicks(site_id, created_at)`, `conversions(site_id, ts)` partial, `click_daily` uniques, monthly `clicks` partitions). No `OFFSET` pagination anywhere; broadcasts use keyset pagination; exports and history use `LIMIT`. Triggers are cheap (`updated_at`, suspension sync).
 
 **Queries most likely to become bottlenecks, and how each scales:**
 
@@ -293,7 +289,7 @@ Tenancy model **[FACT]**: `users` → `sites` (boards) → `players` / `site_vie
 | `COUNT(*) FILTER` over `site_visitors` (dashboard stats) | unique visitors per site (lifetime) | Grows forever; the dashboard pays for all history to show "last 30 days". |
 | `bumpStat` transaction (1-4 statements) | page views | Write amplification ×4 for referrer+visitor events; batch in the consumer (2.10). |
 
-**Heavy writes:** views/clicks/scroll (queued — correct), game rounds (transactional — correct), sessions (per-request refresh — throttle it). **Heavy reads:** the public render path, dominated by archives. **N+1:** I looked specifically and found **no classic N+1 in the request path** — the fan-outs are `Promise.all`ed, and `onboardingForSite`/`getViewerSiteData` parallelise correctly. The N+1-shaped problems are in *background* loops: auto-reset per board, `/api/reencrypt` per bot, broadcast per recipient (unavoidable), consumer per message.
+**Heavy writes:** views/clicks/scroll (queued — correct), sessions (per-request refresh — throttle it). **Heavy reads:** the public render path, dominated by archives. **N+1:** I looked specifically and found **no classic N+1 in the request path** — the fan-outs are `Promise.all`ed, and `onboardingForSite`/`getViewerSiteData` parallelise correctly. The N+1-shaped problems are in *background* loops: auto-reset per board, `/api/reencrypt` per bot, broadcast per recipient (unavoidable), consumer per message.
 
 ---
 
@@ -329,7 +325,6 @@ The security posture is, with one exception, both correct and cheap — I am not
 | 4 | 5 queries per view even on L1 hit; only the `sites` row is cached | `site.js:339-365` | **High** |
 | 5 | Unbounded queries: players, public boards, shop items | `site.js:186,177`, `site-data.js:4-8` | **High** |
 | 6 | Lifetime-unbounded analytics aggregates → Hyperdrive pool starvation | `credits.js:801-881`, `hono-app.ts:424-438`, `dashboard-api.ts:708-721` | **High** |
-| 7 | 12-14 sequential round trips per game bet, incl. a full `getPublicSite` | `handlers/games.js:149-200` | **Medium-High** |
 | 8 | `/go/<slug>` blocks redirect on a non-retried insert, and fans out 5 queries for one field | `index.js:722-752` | **Medium** |
 | 9 | Queue fallback runs analytics inline on send failure | `queue-producer.ts:107-129` | **Medium** |
 | 10 | Consumer processes 50 messages sequentially, no per-batch grouping of bumps | `consumer/src/worker.js:45-150` | **Medium** |
@@ -369,7 +364,7 @@ Then, and only then: Supabase Small → Large (a config change, ~3x DB CPU) buys
 
 ## 12. Load-test plan
 
-Prerequisites, in order: (1) provision the staging Hyperdrive id so you are not testing production; (2) enable `[observability]` on all four Workers; (3) record your Supabase compute size and the Hyperdrive caching setting; (4) seed realistic fixtures — this is the part that decides whether the test means anything: **one small board (20 players/6 archives), one active board (100/24), one large board (500/24), one board with credits+games enabled, and 5,000 `site_viewers`**. Testing against `demo` proves nothing, and note the existing `docs/load-test.js` both uses only 50 VUs and hits a stale path (`/<slug>/api/standings`) — fix the path to `/api/public/:slug/standings` before reusing it.
+Prerequisites, in order: (1) provision the staging Hyperdrive id so you are not testing production; (2) enable `[observability]` on all four Workers; (3) record your Supabase compute size and the Hyperdrive caching setting; (4) seed realistic fixtures — this is the part that decides whether the test means anything: **one small board (20 players/6 archives), one active board (100/24), one large board (500/24), one credits-enabled board, and 5,000 `site_viewers`**. Testing against `demo` proves nothing, and note the existing `docs/load-test.js` both uses only 50 VUs and hits a stale path (`/<slug>/api/standings`) — fix the path to `/api/public/:slug/standings` before reusing it.
 
 **Metrics to watch on every stage:** k6 `http_req_duration` p50/p95/p99 and `http_req_failed`; Cloudflare per-Worker CPU time p99, error rate, and subrequest count; Hyperdrive query latency, connection-pool acquisition failures (`Failed to acquire a connection from the pool` is your primary early-warning signal), cache hit ratio if caching is on; Supabase CPU %, active connections, and `pg_stat_statements` top queries by total time; queue backlog and DLQ depth.
 
@@ -386,7 +381,7 @@ Prerequisites, in order: (1) provision the staging Hyperdrive id so you are not 
 | **T6 — 5,000** | 5,000 | 5 min | 10 min | ~1,000 rps | Expect sustained 5xx on Small. Only meaningful *after* fixes 1-4 land; use it to verify the edge now absorbs page loads (CF cache hit ratio > 90% on board HTML) and DB q/s stays flat as VUs rise. That flatness is the whole goal. |
 | **T7 — 10,000** | 10,000 | 10 min | 15 min | ~2,000 rps | Post-fix validation only. New expected limits, in order: Worker CPU per render (§2.15), then DO limiter hot keys (§2.11), then write throughput on `site_clicks`/`bumpStat`. |
 
-Additional targeted tests worth their setup cost: **games** — 200 VUs betting at the 30/60s limiter on one board (12-14 round trips per bet; expect this to saturate DB CPU at surprisingly low VU counts, and verify no negative balances and no duplicate rounds under idempotency-key replay); **`/go/<slug>`** — 500 rps to measure the blocking insert's contribution to redirect latency; **Telegram webhook** — 200 updates/s against `/hook/:secret` to see whether Telegram's retry behaviour amplifies; **auto-reset** — 500 boards all due at once, to measure the real reset window against the 100-per-5-minutes budget.
+Additional targeted tests worth their setup cost: **`/go/<slug>`** — 500 rps to measure the blocking insert's contribution to redirect latency; **Telegram webhook** — 200 updates/s against `/hook/:secret` to see whether Telegram's retry behaviour amplifies; **auto-reset** — 500 boards all due at once, to measure the real reset window against the 100-per-5-minutes budget.
 
 ---
 
@@ -406,9 +401,9 @@ I cannot prove those numbers from static analysis alone, and I am not going to p
 
 **Before 1,000 concurrent viewers:** items 1-3 above, plus `waitUntil` the `/go` insert, cache the assembled site payload, and bound the players/boards/shop queries.
 **Before 10,000:** replace SSE polling with DO push; analytics rollups + `statement_timeout` + a separate Hyperdrive config for background work; batch consumer bumps; parallelise auto-reset; async Telegram webhook; per-site SSE and render limits; Supabase → Large.
-**Before 100,000:** read replicas or a dedicated read path (and accept explicit staleness) for public boards; per-tenant quotas and isolation so no single board can consume the shared instance; move analytics off the OLTP database entirely; partition/retain `game_rounds`, `credit_ledger`, `site_visitors` the way `clicks` already is; shard rate-limit DOs per site+region; multi-region or split databases for the bot vs the leaderboard so a Telegram incident cannot take boards down.
+**Before 100,000:** read replicas or a dedicated read path (and accept explicit staleness) for public boards; per-tenant quotas and isolation so no single board can consume the shared instance; move analytics off the OLTP database entirely; partition/retain `credit_ledger` and `site_visitors` the way `clicks` already is; shard rate-limit DOs per site+region; multi-region or split databases for the bot vs the leaderboard so a Telegram incident cannot take boards down.
 
-One last honest note on the codebase itself: the parts most people get wrong — money movement, idempotency, provably-fair game settlement, CSRF, token encryption, fail-closed rate limiting, indexing — are done properly here, and the previous performance work (`PERF-004`, `DB-003-v8`, single-flight cache, `Promise.all` fan-outs, queue offload) is real and visible in the code. The capacity ceiling is not sloppiness; it is three specific design decisions — poll-based SSE, `no-store` HTML, and archives on the read path — each of which is a day of work to change.
+One last honest note on the codebase itself: the parts most people get wrong — idempotency, CSRF, token encryption, fail-closed rate limiting, indexing — are done properly here, and the previous performance work (`PERF-004`, `DB-003-v8`, single-flight cache, `Promise.all` fan-outs, queue offload) is real and visible in the code. The capacity ceiling is not sloppiness; it is three specific design decisions — poll-based SSE, `no-store` HTML, and archives on the read path — each of which is a day of work to change.
 
 ---
 
@@ -445,10 +440,9 @@ total, rank, or export:
   #430 lands. The correct fix is maintained counters, not a date bound.
 - **Notification fan-out:** the deferred, changed-name-filtered, batched implementation
   is in #429 and is not counted here as merged.
-- **Other lower-frequency growth paths:** game bets still have several transactional
-  round trips, and administrative `/api/reencrypt` work remains sequential and
-  unbounded. These are not the dominant anonymous-viewer bottleneck, but remain code
-  work if their tenant sizes grow substantially.
+- **Other lower-frequency growth paths:** administrative `/api/reencrypt` work
+  remains sequential and unbounded. It is not the dominant anonymous-viewer
+  bottleneck, but remains code work if tenant sizes grow substantially.
 
 ### Configuration-only limits
 
@@ -546,8 +540,8 @@ remain unchanged and authoritative for their before-state measurements.
 
 - Complete account/security exports still need streaming or an asynchronous,
   resumable export; they must not receive a hidden row cap.
-- Game-bet transactions and administrative `/api/reencrypt` work remain lower-frequency
-  growth paths with additional round trips or sequential unbounded work.
+- Administrative `/api/reencrypt` work remains a lower-frequency growth path
+  with sequential unbounded work.
 - Broad search is bounded by the defensive 10,000-match ceiling and separately
   rate-limited, but it is still more expensive than an ordinary page fetch.
 

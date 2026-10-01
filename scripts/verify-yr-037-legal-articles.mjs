@@ -1,4 +1,4 @@
-// YR-037: the six community policy/contact routes render as one shared article
+// YR-037: the five community policy/contact routes render as one shared article
 // (one H1, no overview/share/credits clutter), link each other, open cookie
 // preferences from the Cookie Policy and keep honest support destinations.
 // Exercises the production renderer and browser assets with a fixture; not a
@@ -13,7 +13,7 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH ? pathToFil
 const output = '.local-logs/yr-037';
 await mkdir(output, { recursive: true });
 
-const PAGES = ['terms', 'privacy', 'cookies', 'refund', 'contact', 'responsible'];
+const PAGES = ['terms', 'privacy', 'cookies', 'refund', 'contact'];
 const data = {
   brand: { name: 'Nova', tagline: 'Weekly board' },
   branding: {},
@@ -32,7 +32,7 @@ const server = createServer(async (req, res) => {
       res.setHeader('content-type', url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript');
       res.end(await readFile(new URL(`../apps/leaderboard/src${url.pathname}`, import.meta.url))); return;
     }
-    const m = url.pathname.match(/^\/nova\/(terms|privacy|cookies|refund|contact|responsible)$/);
+    const m = url.pathname.match(/^\/nova\/(terms|privacy|cookies|refund|contact)$/);
     if (!m) { res.writeHead(404).end('not found'); return; }
     res.setHeader('content-type', 'text/html');
     res.end(await renderNewLegalPage(data, m[1], { nonce: 'n', slug: 'nova', plan: 'pro', homeUrl: origin, isCustomDomain: false, logoUrl: null }));
@@ -58,16 +58,20 @@ try {
         standings: !!document.querySelector('main .yr-lb, main .viewer-stats, main [data-reward-card]'),
         signin: !!document.querySelector('main a[href*="/auth/"], main [data-guest-gate]'),
         nav: [...document.querySelectorAll('.viewer-article-nav a')].map((a) => [a.textContent, a.getAttribute('href'), a.getAttribute('aria-current')]),
-        support: [...document.querySelectorAll('.viewer-article-support a')].map((a) => [a.textContent.replace(/\s+\(opens.*$/, ''), a.getAttribute('href')]),
+        support: [...document.querySelectorAll('.viewer-article-support a, .yr-contact-card--support a')].map((a) => [a.textContent.replace(/\s+\(opens.*$/, ''), a.getAttribute('href')]),
         back: document.querySelector('.viewer-rail a[href="/nova"]')?.textContent.trim() || null,
         menu: !!document.querySelector('#viewer-menu')?.offsetParent,
       }));
       assert.deepEqual(m.h1.length, 1, `${key}@${width}: one H1`);
       assert.equal(m.scrollW, m.innerW, `${key}@${width}: no horizontal overflow`);
       assert.ok(!m.overview && !m.share && !m.credits && !m.standings && !m.signin, `${key}@${width}: no rail/share/credits/standings/sign-in clutter`);
-      assert.equal(m.nav.length, key === 'refund' ? 6 : 5, `${key}@${width}: enabled sibling policies (refund disabled, but still listed on its own page)`);
-      assert.equal(m.nav.some(([t]) => /Refund/.test(t)), key === 'refund', `${key}@${width}: disabled refund policy not listed elsewhere`);
-      assert.deepEqual(m.nav.filter(([, , cur]) => cur === 'page').map(([, h]) => h), [`/nova/${key}`], `${key}@${width}: current policy marked`);
+      if (key === 'contact') {
+        assert.equal(m.nav.length, 0, `${key}@${width}: contact page has no policy navigation`);
+      } else {
+        assert.equal(m.nav.length, key === 'refund' ? 4 : 3, `${key}@${width}: enabled sibling policies (refund disabled, but still listed on its own page)`);
+        assert.equal(m.nav.some(([t]) => /Refund/.test(t)), key === 'refund', `${key}@${width}: disabled refund policy not listed elsewhere`);
+        assert.deepEqual(m.nav.filter(([, , cur]) => cur === 'page').map(([, h]) => h), [`/nova/${key}`], `${key}@${width}: current policy marked`);
+      }
       assert.ok(m.support.some(([t, h]) => t === 'Contact YourRank support' && h.startsWith('/help/support?audience=viewer&return=%2Fnova%2Fcontact')), `${key}@${width}: platform support destination`);
       if (key !== 'contact') assert.ok(m.support.some(([t, h]) => t === 'Discord' && h === 'https://discord.gg/nova'), `${key}@${width}: creator destination`);
       assert.ok(m.back, `${key}@${width}: back-to-community link in shared nav`);
@@ -94,7 +98,7 @@ try {
     assert.deepEqual(errors, [], `no page errors @${width}`);
     await page.close();
   }
-  console.log('PASSED: six community policy/contact routes render as one article at 1440/390 (one H1, no rail/share/credits/standings/sign-in clutter, sibling nav with current page, creator + platform support links, cookie preferences open, no page errors).');
+  console.log('PASSED: five community policy/contact routes render as one article at 1440/390 (one H1, no rail/share/credits/standings/sign-in clutter, sibling nav with current page, creator + platform support links, cookie preferences open, no page errors).');
 } finally {
   await browser.close();
   server.close();

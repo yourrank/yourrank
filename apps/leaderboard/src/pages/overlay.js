@@ -22,9 +22,9 @@ export const overlayPage = (data, opts = {}) => {
   };
   const fmtMetric = (player) => rankBy === "score" ? `${Number(player.score || 0).toLocaleString("en-US")} pts` : fmt(player.wagered);
   const medal = (i) => i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "#" + (i + 1);
-  const rows = players.map((p, i) => `<div class="ov-row" data-name="${esc(p.name)}"><span class="ov-medal">${medal(i)}</span><span class="ov-name">${esc(p.name)}</span><span class="ov-wager">${fmtMetric(p)}</span></div>`).join("");
+  const rows = players.map((p, i) => `<div class="ov-row" data-name="${esc(p.name)}"><span class="ov-medal">${medal(i)}</span><span class="ov-name">${esc(p.name)}</span><span class="ov-value">${fmtMetric(p)}</span></div>`).join("");
   const empty = 5 - players.length;
-  const emptyRows = empty > 0 ? Array.from({ length: empty }, (_, i) => `<div class="ov-row ov-empty"><span class="ov-medal">#${players.length + i + 1}</span><span class="ov-name">—</span><span class="ov-wager">—</span></div>`).join("") : "";
+  const emptyRows = empty > 0 ? Array.from({ length: empty }, (_, i) => `<div class="ov-row ov-empty"><span class="ov-medal">#${players.length + i + 1}</span><span class="ov-name">—</span><span class="ov-value">—</span></div>`).join("") : "";
   const accentA = (br.accentA && /^#[0-9a-fA-F]{6}$/.test(br.accentA)) ? br.accentA : "#53fc18";
   const accentB = (br.accentB && /^#[0-9a-fA-F]{6}$/.test(br.accentB)) ? br.accentB : "#35c211";
   const dataJson = JSON.stringify({ players, endsAt, rankBy }).replace(/</g, "\\u003c");
@@ -42,7 +42,7 @@ html,body{width:100vw;height:100vh;}
 ${isTicker
     ? `.ov-ticker-bar{position:fixed;left:0;top:${cy}%;transform:translateY(-50%);}`
     : `.ov-wrap{position:fixed;left:${cx}%;top:${cy}%;transform:translate(-50%,-50%) scale(${cs});transform-origin:center center;}`}` : "";
-  const tickerRows = players.map((p, i) => `<div class="ov-ticker-item" data-name="${esc(p.name)}"><span class="ov-medal">${medal(i)}</span><span class="ov-name">${esc(p.name)}</span><span class="ov-wager">${fmtMetric(p)}</span></div>`).join("");
+  const tickerRows = players.map((p, i) => `<div class="ov-ticker-item" data-name="${esc(p.name)}"><span class="ov-medal">${medal(i)}</span><span class="ov-name">${esc(p.name)}</span><span class="ov-value">${fmtMetric(p)}</span></div>`).join("");
 
   return `<!DOCTYPE html>
 <html lang="en"><head>
@@ -77,7 +77,7 @@ html,body{${isTicker ? "width:100%;height:52px;" : "width:320px;"}overflow:hidde
 @keyframes ov-flash{0%{background:rgba(34,197,94,0.4);transform:scale(1.02)}100%{background:rgba(255,255,255,0.03);transform:scale(1)}}
 .ov-medal{font-size:16px;min-width:24px;text-align:center;flex-shrink:0}
 .ov-name{flex:1;font-size:13px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.6)}
-.ov-wager{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;color:${accentA};flex-shrink:0;text-shadow:0 1px 3px rgba(0,0,0,0.6)}
+.ov-value{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;color:${accentA};flex-shrink:0;text-shadow:0 1px 3px rgba(0,0,0,0.6)}
 .ov-footer{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)}
 .ov-footer .ov-count{font-size:9.5px;font-weight:600;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.08em}
 .ov-footer .ov-powered{font-size:9px;font-weight:700;color:rgba(255,255,255,0.25);letter-spacing:.04em}

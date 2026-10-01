@@ -20,7 +20,7 @@ const realAuth = await import(authUrl);
 const siteFixture = {
   id: "site-1",
   slug: "test",
-  name: "Test Casino",
+  name: "Test Community",
   user_id: "user-1",
   plan: "pro",
   suspended: false,
@@ -417,7 +417,7 @@ describe("handleCreditsActivity", () => {
     kick_username: "alice",
     kick_user_id: "kick-1",
     site_id: "site-1",
-    site_name: "Test Casino",
+    site_name: "Test Community",
   });
 
   it("requires an owned site and does not leak another user's rows", async () => {
@@ -563,7 +563,7 @@ describe("handleCreditsViewerHistory", () => {
       {
         site_id: "site-1",
         slug: "test",
-        name: "Test Casino",
+        name: "Test Community",
         site_viewer_id: "sv-1",
         balance: 30,
         total_earned: 50,

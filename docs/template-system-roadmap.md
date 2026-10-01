@@ -41,7 +41,7 @@ describe how it differs without mentioning color, it's not a new template.**
 Three radically different templates so the system demonstrably supports
 anything:
 
-- **noir** (this PR) — "old-money casino ledger": Playfair Display serif
+- **noir** (this PR) — "old-money editorial ledger": Playfair Display serif
   masthead, hairline gold rules, honour-roll podium with Roman numerals,
   ledger table, optional film grain. Knobs: accent color, grain toggle,
   podium style (roman/numbers).

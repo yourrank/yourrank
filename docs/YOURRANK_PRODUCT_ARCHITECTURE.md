@@ -175,11 +175,11 @@ Larger creator organizations may eventually need multi-person operations, multip
 
 ### 4.5 Market focus
 
-The initial beachhead can include established casino-stream communities because fragmentation, duplicate participation, identity confusion, and manual community operations are often unusually painful there.
+The initial beachhead is streamer communities where fragmented participation, identity confusion, and manual community operations are especially painful.
 
 However:
 
-> **YourRank's core architecture is community infrastructure, not gambling infrastructure.**
+> **YourRank's core architecture is community infrastructure for streamers.**
 
 ---
 
@@ -348,7 +348,7 @@ A human-decision workflow attached to an ambiguous or exceptional community oper
 
 A structured authenticated lifecycle for applicable reward/community fulfillment.
 
-A Claim does not imply cash, wagering, or gambling settlement.
+A Claim represents creator-provided reward fulfillment, not a financial service.
 
 ## 7.13 Recognition
 
@@ -571,7 +571,7 @@ Leaderboard Appearance owns only genuinely leaderboard-specific visual overrides
 
 Focus on safe generic sharing and presentation.
 
-Do not use Share redesign work to modify restricted prediction/betting mechanics or related overlays.
+Share redesign work must not introduce excluded mechanics.
 
 ### History
 
@@ -604,7 +604,7 @@ Safe activity families may include:
 
 - free community giveaways,
 - challenges,
-- tournaments without wagering/stakes,
+- tournaments for ordinary community competition,
 - free community drops/events.
 
 Common creator-facing lifecycle where appropriate:
@@ -656,53 +656,11 @@ Feature-specific behavior remains feature-owned.
 
 ---
 
-# 14. Restricted Legacy Feature Boundary
+# 14. Excluded mechanics
 
-This section is mandatory for coding agents.
-
-## 14.1 Safe/current architecture work may cover
-
-- public viewer shell/presentation,
-- leaderboard presentation and generic configuration UX,
-- free loyalty rewards/credits,
-- viewer/member identity,
-- free community giveaways,
-- challenges,
-- tournaments only where they are ordinary non-wagering community competition,
-- free community drops/events,
-- generic moderation/review/claims for safe workflows,
-- integrations for community management,
-- ordinary SaaS subscription UI.
-
-## 14.2 Legacy restricted systems are excluded
-
-Do not redesign, optimize, debug, extend, consolidate into new primitives, or use as architectural examples:
-
-- Games,
-- wagering/stake mechanics,
-- race/wager mechanics,
-- prediction mechanics,
-- paid-chance mechanics,
-- raffle mechanics involving credit-ticket purchases and random-value outcomes,
-- odds/payout/settlement calculations.
-
-## 14.3 Current Engagement route caution
-
-The existing Engagement/Giveaways area mixes safe and restricted legacy tabs.
-
-Therefore:
-
-> **Do not blindly rename the existing container to Activities and then treat every current tab as part of the new safe Activity architecture.**
-
-Safe activity convergence must be route/workflow specific.
-
-Restricted legacy routes may remain operational during migration but are not part of the new architecture initiative.
-
-## 14.4 Opaque existing display data
-
-Existing public leaderboard rows may contain legacy prize/ranking-related display values.
-
-Presentation work may preserve opaque display data as necessary, but must not inspect, optimize, recalculate, make more prominent, or build new gambling-specific semantics around it.
+YourRank has no games of chance, wagering/stakes, predictions, paid or
+credit-ticket raffles, spin wheels, or odds/payout logic, and these must not be
+added.
 
 ---
 
@@ -957,7 +915,7 @@ Migration sequence:
 4. migrate eligible Telegram operations into that generic surface deliberately,
 5. leave Telegram-specific implementation/configuration details deeper in the connection/integration context where needed.
 
-Do not create gambling-specific communication automation, wagering notifications, or other restricted mechanics as part of this architecture.
+Do not add excluded mechanics to creator or viewer communications.
 
 ---
 
@@ -1017,7 +975,7 @@ When nothing is live, this surface should not occupy permanent navigation.
 
 ## CURRENT
 
-The current real public renderer supports a creator destination with sections including Home, Leaderboard, Rewards, Games, and creator-scoped **My Community**. Global `/me` is the Viewer Account's **My communities** index.
+The current real public renderer supports a creator destination with sections including Home, Leaderboard, Rewards, and creator-scoped **My Community**. Global `/me` is the Viewer Account's **My communities** index.
 
 My Community owns membership-specific Rewards/credits, bounded safe Participation history, and canonical Claims history. My communities summarizes each membership and links to its creator-owned surface; it does not rebuild a second reward shop, Claim list, participation timeline, or creator destination.
 
@@ -1082,17 +1040,11 @@ Current creator-specific membership surface:
 
 Historical `site_viewers.created_at` is not presented as “Member since” because older rows may have been created by passive behavior and therefore do not prove an explicit join date.
 
-Participation never includes Join, visits, presence, passive credits, fuzzy name matches, Reviews, or restricted legacy activity. Claims do not infer completion/cancellation time from mutable redemption updates. Recognition and richer profile controls remain future scope; Recognition is explicitly deferred because no current safe persisted source has canonical Viewer/Membership linkage.
+Participation never includes Join, visits, presence, passive credits, fuzzy name matches, Reviews, or unsupported activity. Claims do not infer completion/cancellation time from mutable redemption updates. Recognition and richer profile controls remain future scope; Recognition is explicitly deferred because no current safe persisted source has canonical Viewer/Membership linkage.
 
 ## 23.6 Global My Communities
 
 Current global Viewer Account index showing only real persisted memberships, free-credit balance, and a controlled pending-Claims count. Each row opens the canonical creator-scoped My Community surface. An account with none says that no communities have been joined; passive visits do not populate it. It never duplicates the creator's reward catalog, full Claim history, live activity, plan data, or internal moderation context.
-
-## 23.7 Games
-
-Games is a legacy/parked destination.
-
-It may remain as an opaque existing route/nav destination during unrelated migration work, but it is not part of the new viewer architecture initiative and must not drive design decisions.
 
 ---
 
@@ -1494,7 +1446,7 @@ No fake automatic identity merge.
 - define safe activity common concepts from real existing workflows,
 - add Challenges only after shared foundations are proven,
 - converge safe free giveaway/drop/tournament UI where useful,
-- leave restricted legacy systems outside this abstraction.
+- keep unrelated workflows outside this abstraction.
 
 ## Wave F — Reviews
 
@@ -1756,7 +1708,7 @@ This architecture is working when:
 - the selected site context is always clear,
 - Community owns creator-wide public identity,
 - Leaderboard owns only leaderboard concerns,
-- safe Activities are coherent without absorbing restricted legacy mechanics,
+- safe Activities are coherent around supported community workflows,
 - People is the community-member home,
 - Rewards keeps safe free-credit/reward semantics,
 - shared Reviews and Claims exist only where they remove real duplication,

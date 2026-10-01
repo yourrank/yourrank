@@ -297,7 +297,7 @@ export async function notifyTop3Change(
     const leaseOnce = options.runOnceWithLeaseImpl ?? runOnceWithLease;
     for (const [changeIndex, change] of top3Changes.entries()) {
       const scoreRanked = change.rankBy === "score";
-      const embed = buildTop3Embed(siteName, change.name, change.rank, change.wagered, scoreRanked ? "Points" : "Wagered", scoreRanked ? Number(change.score || 0) : change.wagered);
+      const embed = buildTop3Embed(siteName, change.name, change.rank, change.wagered, scoreRanked ? "Points" : "Amount", scoreRanked ? Number(change.score || 0) : change.wagered);
       const sub = notifySubIdentity(options, `discord:${changeIndex}`);
       const sendOne = async () => requireDelivery("Discord", await sendDiscord(discordUrl, embed));
       if (sub) await leaseOnce(sub, sendOne);

@@ -116,7 +116,6 @@ describe("signed-in shell navigation", () => {
     ]) {
       expect(html).toContain(`href="${href}"`);
     }
-    expect(html).not.toContain('href="/dashboard/games"');
     expect(html).not.toContain('class="lb-site-settings"');
     expect(html).toContain('href="/help/support?area=credits');
     expect(html).toContain("Help &amp; feedback");
@@ -280,7 +279,6 @@ describe("signed-in shell navigation", () => {
       "/dashboard/analytics",
       "/dashboard/settings",
     ]) expect(html).toContain(`href="${href}"`);
-    expect(html).not.toContain('href="/dashboard/games"');
     expect(html).toContain('href="/help/support?area=account');
     expect(html).toContain("Help &amp; feedback");
     expect(html).not.toContain('data-nav="boards"');
@@ -376,7 +374,6 @@ describe("signed-in shell navigation", () => {
       ["/dashboard/leaderboard/design", { group: "design" }],
       ["/dashboard/leaderboard/share", { group: "share" }],
       ["/dashboard/analytics", { performancePanel: "activity" }],
-      ["/dashboard/games", {}],
       ["/dashboard/site", {}],
     ];
     for (const [activePath, options] of routes) {

@@ -20,9 +20,9 @@ const baseData = {
     { name: "Alice", rank: 1, wagered: 5000, prize: 100 },
     { name: "Bob", rank: 2, wagered: 3000, prize: 60 },
   ],
-  prizes: { wagerLabel: "Wagered", prizeLabel: "Prize" },
+  prizes: { prizeLabel: "Prize" },
   socials: [],
-  siteSections: { home: true, leaderboard: true, shop: true, games: false, me: true },
+  siteSections: { home: true, leaderboard: true, shop: true, me: true },
 };
 
 const opts = { slug: "toggle-board", homeUrl: "https://example.test", nonce: "fixed-nonce" };
@@ -38,22 +38,22 @@ const renderHome = (r, viewer = null) =>
 
 describe("effectivePublicSections", () => {
   it("defaults the leaderboard on and home is always available", () => {
-    expect(effectivePublicSections({})).toEqual({ home: true, leaderboard: true, shop: true, games: false, me: true });
+    expect(effectivePublicSections({})).toEqual({ home: true, leaderboard: true, shop: true, me: true });
     expect(effectivePublicSections(undefined).leaderboard).toBe(true);
   });
 
   it("derives leaderboard visibility from data.sections, not from a second siteSections flag", () => {
     // Show Leaderboard = OFF wins even over a stale siteSections.leaderboard: true.
-    expect(effectivePublicSections({ sections: { leaderboard: false }, siteSections: { leaderboard: true, shop: true, games: false, me: true } }).leaderboard).toBe(false);
+    expect(effectivePublicSections({ sections: { leaderboard: false }, siteSections: { leaderboard: true, shop: true, me: true } }).leaderboard).toBe(false);
     // A stale siteSections.leaderboard: false can never hide an enabled leaderboard.
-    expect(effectivePublicSections({ sections: { leaderboard: true }, siteSections: { leaderboard: false, shop: true, games: false, me: true } }).leaderboard).toBe(true);
+    expect(effectivePublicSections({ sections: { leaderboard: true }, siteSections: { leaderboard: false, shop: true, me: true } }).leaderboard).toBe(true);
     expect(isPublicSectionEnabled({ sections: { leaderboard: false } }, "leaderboard")).toBe(false);
     expect(isPublicSectionEnabled({ sections: { leaderboard: false } }, "home")).toBe(true);
   });
 
-  it("leaves shop, games and me under their own toggles", () => {
-    const sections = effectivePublicSections({ sections: { leaderboard: false }, siteSections: { shop: false, games: true, me: false } });
-    expect(sections).toEqual({ home: true, leaderboard: false, shop: false, games: true, me: false });
+  it("leaves shop and me under their own toggles", () => {
+    const sections = effectivePublicSections({ sections: { leaderboard: false }, siteSections: { shop: false, me: false } });
+    expect(sections).toEqual({ home: true, leaderboard: false, shop: false, me: false });
   });
 });
 
@@ -88,13 +88,13 @@ describe("public leaderboard visibility", () => {
     expect(html).toContain(">My Activity</a>");
   });
 
-  it("omits Leaderboard from the legacy top bar and drawer on the games surface", async () => {
+  it("omits Leaderboard from the shop navigation when disabled", async () => {
     const r = {
       ...withSections({ leaderboard: false }),
-      data: { ...withSections({ leaderboard: false }).data, siteSections: { home: true, leaderboard: true, shop: true, games: true, me: true } },
+      data: { ...withSections({ leaderboard: false }).data, siteSections: { home: true, leaderboard: true, shop: true, me: true } },
     };
-    const html = await renderSite({ r, section: "games", viewer: null, viewerData: null, opts });
-    expect(html).toContain("yr-drawer");
+    const html = await renderSite({ r, section: "shop", viewer: null, viewerData: null, opts });
+    expect(html).toContain("viewer-rail");
     expect(html).not.toContain(">Leaderboard</a>");
     expect(html).not.toContain('href="/toggle-board/leaderboard"');
   });

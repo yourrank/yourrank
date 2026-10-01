@@ -1,5 +1,5 @@
 // Screenshots for the Engage navigation hierarchy: the hub Overview, the
-// Giveaways subnav (Chat Giveaway, Raffle), Tournaments, and Activities at
+// Giveaways subnav (Chat Giveaway, Flash Code Drops), Tournaments, and Activities at
 // desktop and 390px. Runs against scripts/dashboard-polish-fixtures.mjs.
 //
 // Env: POLISH_ORIGIN (fixture origin), PLAYWRIGHT_MODULE_PATH,
@@ -15,7 +15,6 @@ await mkdir(output, { recursive: true });
 const pages = [
   ['overview', '/dashboard/giveaways', '#engage-hub'],
   ['chat', '/dashboard/giveaways/chat', '#pane-chat'],
-  ['raffle', '/dashboard/giveaways/raffles', '#pane-raffles'],
   ['tournaments', '/dashboard/giveaways/tournaments', '#tournament-workspace:not([hidden]), #tournament-empty:not([hidden])'],
   ['activities', '/dashboard/activities', '#act-list:not([hidden]), #act-empty:not([hidden]), #act-error:not([hidden])'],
 ];

@@ -272,7 +272,7 @@ export async function handlePublicRank(request, env, deps = {}) {
       const total = sorted.length;
       const metric = rankBy === "score"
         ? `${Number(player.score || 0).toLocaleString("en-US")} points`
-        : `$${Number(player.wagered || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })} wagered`;
+        : `Amount: $${Number(player.wagered || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
       let gap = "";
       if (rank > 1) {
         const ahead = sorted[idx - 1];
@@ -315,7 +315,7 @@ export async function handlePublicRank(request, env, deps = {}) {
     const total = sorted.length;
     const metric = rankBy === "score"
       ? `${Number(player.score || 0).toLocaleString("en-US")} points`
-      : `$${Number(player.wagered || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })} wagered`;
+      : `Amount: $${Number(player.wagered || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
     let gap = "";
     if (rank > 1) {
       const ahead = sorted[idx - 1];
