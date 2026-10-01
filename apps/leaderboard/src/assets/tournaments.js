@@ -11,7 +11,10 @@ export async function enter() {
   active = true;
   const ticket = ++generation;
   const island = await getIsland();
-  if (active && ticket === generation) island.enter();
+  if (active && ticket === generation) {
+    island.enter();
+    window.__yrBoot?.signal();
+  }
 }
 
 export function leave() {
@@ -21,7 +24,12 @@ export function leave() {
 }
 
 if (!window.__yrSpaShell) {
-  const boot = () => { enter().catch((error) => console.error("[tournaments] React island failed to mount:", error)); };
+  const boot = () => {
+    enter().catch((error) => {
+      window.__yrBoot?.fail(error instanceof Error ? error.message : "The Tournaments React page could not be loaded.");
+      console.error("[tournaments] React island failed to mount:", error);
+    });
+  };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true });
   else boot();
 }

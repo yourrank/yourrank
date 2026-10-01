@@ -18,10 +18,11 @@ const sql = DB_URL ? postgres(DB_URL, { max: 5, onnotice: () => {} }) : (null as
 
 let rollupClicks: () => Promise<void>;
 let ensureNextMonthPartition: () => Promise<void>;
+let ensureCurrentMonthPartition: () => Promise<void>;
 
 if (DB_URL) {
   process.env.DATABASE_URL = DB_URL;
-  ({ rollupClicks, ensureNextMonthPartition } = await import("../rollup.js"));
+  ({ rollupClicks, ensureNextMonthPartition, ensureCurrentMonthPartition } = await import("../rollup.js"));
 }
 
 type Fixture = {
@@ -283,6 +284,7 @@ describeDb("rollupClicks against Postgres", () => {
          VALUES ('${link}', '${iso(from)} 12:00:00+00', true)`
       );
 
+      await ensureCurrentMonthPartition();
       await rollupClicks();
 
       const [oldPartition] = await sql`

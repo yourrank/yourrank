@@ -123,7 +123,7 @@ describe("Giveaways React migration", () => {
     expect(tournaments).toContain('id="tournament-dialogs"');
     expect(tournaments).not.toContain("giveaway-root");
     expect(giveawaysConfig.styles).toContain("/assets/react/react.css");
-    expect(giveawaysConfig.scripts).toContain('<script src="/assets/tournaments.js?v=1" type="module"></script>');
+    expect(giveawaysConfig.scripts).toContain('<script src="/assets/tournaments.js?v=2" type="module"></script>');
   });
 
   it("mounts the current connected-channel surface and selected-site context", async () => {

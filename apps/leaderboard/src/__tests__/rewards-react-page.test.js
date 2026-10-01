@@ -41,6 +41,28 @@ describe("React Rewards page", () => {
     expect(container.querySelector("h1").textContent).toBe("Overview");
   });
 
+  it("signals boot completion on every Rewards page when the selected site has no data", async () => {
+    const previousBoot = window.__yrBoot;
+    let signalCount = 0;
+    const failures = [];
+    window.__yrBoot = {
+      signal: () => { signalCount += 1; },
+      fail: (message) => { failures.push(message); },
+    };
+    try {
+      for (const tab of ["channel", "overview", "rules", "shop", "redemptions"]) {
+        const signalCountBeforeEntry = signalCount;
+        await mountRewardsPage({ tab });
+        expect(signalCount - signalCountBeforeEntry).toBe(1);
+        expect(failures).toEqual([]);
+        await unmountRewardsPage();
+      }
+    } finally {
+      await unmountRewardsPage();
+      window.__yrBoot = previousBoot;
+    }
+  });
+
   it("shows an actionable load error and retries the status request", async () => {
     let statusRequests = 0;
     const { container } = await mountRewardsPage({
