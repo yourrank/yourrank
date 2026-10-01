@@ -1182,8 +1182,8 @@ function ChatGiveaway({
               <CardDescription id="gw-rules-summary">{formatRulesSummary(rules)}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <fieldset id="gw-settings" disabled={settingsLocked} className="m-0 min-w-0 border-0 p-0 space-y-5">
-                <fieldset id="gw-entry-modes" disabled={settingsLocked} hidden={manualUi} className="m-0 min-w-0 border-0 p-0 space-y-3">
+              <fieldset id="gw-settings" disabled={settingsLocked} className="mx-0 min-w-0 border-0 p-0 space-y-5">
+                <fieldset id="gw-entry-modes" disabled={settingsLocked} hidden={manualUi} className="mx-0 min-w-0 border-0 p-0 space-y-3">
                   <legend id="gw-entry-mode-legend" hidden={manualUi} className="text-sm font-semibold">Entry Mode</legend>
                   {(["chat", "members", "verified"] as const).map((mode) => (
                     <label key={mode} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm">
@@ -1215,7 +1215,7 @@ function ChatGiveaway({
                         : "Anyone who types the keyword can participate."}
                   </p>
                 </fieldset>
-                <fieldset id="gw-kick-eligibility-section" hidden={manualUi} className="m-0 min-w-0 border-0 p-0 space-y-2">
+                <fieldset id="gw-kick-eligibility-section" hidden={manualUi} className="mx-0 min-w-0 border-0 p-0 space-y-2">
                   <legend id="gw-eligibility-title" className="text-sm font-semibold">Eligibility</legend>
                   <label id="gw-kick-identity-rule" className="flex items-center gap-2 text-sm">
                     <Checkbox checked disabled aria-label="One entry per Kick account" />
@@ -1225,7 +1225,7 @@ function ChatGiveaway({
                     </span>
                   </label>
                 </fieldset>
-                <fieldset id="gw-winner-repeat-modes" disabled={settingsLocked} className="m-0 min-w-0 border-0 p-0 space-y-2">
+                <fieldset id="gw-winner-repeat-modes" disabled={settingsLocked} className="mx-0 min-w-0 border-0 p-0 space-y-2">
                   <legend id="gw-winner-repeat-title" className="text-sm font-medium">Winner repeat</legend>
                   {(["once", "again"] as const).map((value) => (
                     <label key={value} className="flex items-center gap-2 text-sm">
@@ -1247,7 +1247,7 @@ function ChatGiveaway({
                   </p>
                 </fieldset>
               </fieldset>
-              <fieldset id="gw-response-settings" className="m-0 min-w-0 border-0 p-0 space-y-4">
+              <fieldset id="gw-response-settings" className="mx-0 min-w-0 border-0 p-0 space-y-4">
                 <div id="gw-winner-verification-section" hidden={manualUi} className="space-y-3">
                   <h3 id="gw-winner-verification-title" className="text-sm font-medium">Winner verification</h3>
                   <RuleCheckbox id="gw-opt-claim-req" label="Winner must respond in chat" checked={Boolean(rules.winnerMustRespond)} disabled={savingResponseRules} onChange={(value) => setRule("winnerMustRespond", value)} />
@@ -1465,14 +1465,14 @@ function ChatGiveaway({
 
         <Card id="gw-advanced-card" className="col-span-full max-[960px]:order-4">
           <CardContent className="pt-6">
-            <fieldset id="gw-advanced-settings" disabled={settingsLocked} className="m-0 min-w-0 border-0 p-0 space-y-4">
+            <fieldset id="gw-advanced-settings" disabled={settingsLocked} className="mx-0 min-w-0 border-0 p-0 space-y-4">
               <details id="gw-advanced-options" open={advancedOpen} onToggle={(event) => updateAdvancedOpen(event.currentTarget.open)} className="rounded-lg">
                 <summary className="flex cursor-pointer items-center justify-between gap-3 text-base font-semibold">
                   <span>Advanced options</span>
                   <span id="gw-advanced-summary" className="text-xs font-normal text-muted-foreground">{formatAdvancedSummary(rules)}</span>
                 </summary>
                 <div className="mt-4 grid gap-6 md:grid-cols-3">
-                  <fieldset id="gw-advanced-eligibility-section" disabled={settingsLocked} hidden={manualUi} className="m-0 min-w-0 border-0 p-0 space-y-3">
+                  <fieldset id="gw-advanced-eligibility-section" disabled={settingsLocked} hidden={manualUi} className="mx-0 min-w-0 border-0 p-0 space-y-3">
                     <h3 id="gw-advanced-eligibility-title" className="text-sm font-semibold">Eligibility</h3>
                     <div id="gw-subscriber-rule" hidden={manualUi}>
                       <RuleCheckbox id="gw-opt-subscriber" label="Subscriber only" checked={Boolean(rules.subscriberOnly)} onChange={(value) => setRule("subscriberOnly", value)} />
@@ -1485,7 +1485,7 @@ function ChatGiveaway({
                     <p id="gw-subscriber-hint" hidden={manualUi} className="text-xs text-muted-foreground">Checked against chat badges. Both on requires both badges.</p>
                     <p id="gw-kick-history-hint" hidden={manualUi} className="text-xs text-muted-foreground">Account age and follow duration need Kick data that isn’t connected.</p>
                   </fieldset>
-                  <fieldset id="gw-anti-abuse-section" disabled={settingsLocked} hidden={manualUi} className="m-0 min-w-0 border-0 p-0 space-y-3">
+                  <fieldset id="gw-anti-abuse-section" disabled={settingsLocked} hidden={manualUi} className="mx-0 min-w-0 border-0 p-0 space-y-3">
                     <h3 id="gw-abuse-title" className="text-sm font-semibold">Anti-abuse</h3>
                     <RuleCheckbox id="gw-opt-ip" label="One account per IP" checked={Boolean(rules.onePerIp)} disabled={rules.entryMode !== "verified"} onChange={(value) => setRule("onePerIp", value)} />
                     <RuleCheckbox id="gw-opt-vpn" label="VPN / Proxy detection" checked={Boolean(rules.vpnDetection)} disabled={rules.entryMode !== "verified" || capabilities.vpnDetection !== true} onChange={(value) => setRule("vpnDetection", value)} />
@@ -1780,16 +1780,16 @@ function EntrantRow({
   return (
     <tr id={`entrant-${entrant.id}`} data-username={entrant.username.toLowerCase()} className="align-middle">
       <td className="px-3 py-3 text-muted-foreground" data-label="#">{index}</td>
-      <td className="px-3 py-3" data-label="Viewer">
+      <td className="px-3 py-3 min-[1280px]:w-full min-[1280px]:max-w-0" data-label="Viewer">
         <div className="flex items-center gap-2">
-          <img className="size-8 rounded-full bg-muted object-cover" src={manual ? DEFAULT_AVATAR : safeAvatarUrl(entrant.avatar_url)} alt="" />
-          <div className="min-w-0">
-            {manual ? <span className="gw-entrant-name font-medium">{entrant.username}</span> : <a className="gw-entrant-name font-medium underline-offset-4 hover:underline" href={safeKickProfileUrl(entrant.username)} target="_blank" rel="noopener">{entrant.username}</a>}
-            {!manual && entrant.message && <p className="gw-entrant-msg-inline hidden max-w-56 truncate text-xs text-muted-foreground min-[1280px]:block">{entrant.message}</p>}
+          <img className="size-8 shrink-0 rounded-full bg-muted object-cover" src={manual ? DEFAULT_AVATAR : safeAvatarUrl(entrant.avatar_url)} alt="" />
+          <div className="min-w-0 flex-1">
+            {manual ? <span className="gw-entrant-name font-medium min-[1280px]:block min-[1280px]:truncate">{entrant.username}</span> : <a className="gw-entrant-name font-medium underline-offset-4 hover:underline min-[1280px]:block min-[1280px]:truncate" href={safeKickProfileUrl(entrant.username)} target="_blank" rel="noopener">{entrant.username}</a>}
+            {!manual && entrant.message && <p className="gw-entrant-msg-inline hidden truncate text-xs text-muted-foreground min-[1280px]:block">{entrant.message}</p>}
           </div>
         </div>
       </td>
-      <td className="px-3 py-3" data-label="Status">
+      <td className="px-3 py-3 whitespace-nowrap" data-label="Status">
         <Badge className={cn("rounded-full", entrant.eligibility_status === "rejected" && "border-destructive/30 bg-destructive/5 text-destructive")}>{status}</Badge>
         {linked.length > 0 && entrant.eligibility_reason !== "excluded_linked_account" && (
           <Badge className="gw-linked-badge ml-1 mt-1 rounded-full border-amber-700/20 bg-amber-500/5 text-amber-900" title={linked.map((link) => `${link.username}: ${(link.reasons || []).map(linkedReasonLabel).join(", ")}`).join(" · ")}>
@@ -1799,7 +1799,7 @@ function EntrantRow({
       </td>
       <td className="gw-entrant-msg max-w-48 truncate px-3 py-3 text-muted-foreground min-[1280px]:hidden" data-label="Chat message">{manual ? "—" : entrant.message || ""}</td>
       <td className="px-3 py-3 text-muted-foreground min-[1280px]:hidden" data-label="Entered">{formatEnteredAt(entrant.entered_at)}</td>
-      <td className="px-3 py-3 text-right" data-label="Action">
+      <td className="px-3 py-3 text-right whitespace-nowrap min-[1280px]:px-2" data-label="Action">
         {entrant.eligibility_reason === "excluded_linked_account" && <Button type="button" size="sm" variant="outline" onClick={onInclude}>Include again</Button>}
         {linked.length > 0 && entrant.eligibility_reason !== "excluded_linked_account" && <Button type="button" size="sm" variant="outline" onClick={onExclude}>Exclude</Button>}
         <Button className="ml-1" type="button" size="icon" variant="ghost" title="Remove entrant" aria-label={`Remove ${entrant.username}`} onClick={onRemove}><X /></Button>

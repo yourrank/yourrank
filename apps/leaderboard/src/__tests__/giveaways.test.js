@@ -299,7 +299,7 @@ describe("Giveaways React migration", () => {
     expect(giveawaysPageSource).not.toContain("min-[961px]:sticky");
     expect(giveawaysPageSource).toContain("overflow-x-auto rounded-lg border min-[1280px]:max-h-[70vh] min-[1280px]:overflow-y-auto");
     expect(giveawaysPageSource).toContain("w-full min-w-[560px] min-[1280px]:min-w-0 text-left text-sm");
-    expect(giveawaysPageSource).toContain("gw-entrant-msg-inline hidden max-w-56 truncate text-xs text-muted-foreground min-[1280px]:block");
+    expect(giveawaysPageSource).toContain("gw-entrant-msg-inline hidden truncate text-xs text-muted-foreground min-[1280px]:block");
     expect(giveawaysPageSource).toContain("min-[1280px]:hidden");
     expect(giveawaysPageSource).not.toContain("min-w-[680px]");
     expect(giveawaysPageSource).toContain("mt-4 grid gap-6 md:grid-cols-3");
@@ -341,7 +341,7 @@ describe("Giveaways React migration", () => {
       "gw-advanced-eligibility-section",
       "gw-anti-abuse-section",
     ]) {
-      expect($id(id).className).toContain("m-0 min-w-0 border-0 p-0");
+      expect($id(id).className).toContain("mx-0 min-w-0 border-0 p-0");
     }
     expect($id("gw-advanced-options").className).toBe("rounded-lg");
     expect($id("gw-advanced-options").querySelector("summary").className).toContain("text-base font-semibold");
@@ -384,7 +384,15 @@ describe("Giveaways React migration", () => {
       }],
     });
     const row = $id("gw-entrants-list").querySelector("tr");
+    const viewerCell = row.querySelector('[data-label="Viewer"]');
+    const viewerName = row.querySelector(".gw-entrant-name");
     expect(row.querySelector(".gw-entrant-name").textContent).toBe(username);
+    expect(viewerCell.className).toContain("min-[1280px]:w-full min-[1280px]:max-w-0");
+    expect(row.querySelector("img").className).toContain("shrink-0");
+    expect(viewerName.parentElement.className).toBe("min-w-0 flex-1");
+    expect(viewerName.className).toContain("min-[1280px]:block min-[1280px]:truncate");
+    expect(row.querySelector('[data-label="Status"]').className).toContain("whitespace-nowrap");
+    expect(row.querySelector('[data-label="Action"]').className).toContain("whitespace-nowrap min-[1280px]:px-2");
     expect(row.querySelector(".gw-entrant-name img")).toBeNull();
     expect(row.querySelector(".gw-entrant-msg").textContent).toBe(message);
     const inlineMessage = row.querySelector(".gw-entrant-msg-inline");
