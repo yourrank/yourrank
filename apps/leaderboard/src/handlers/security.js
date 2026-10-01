@@ -1,6 +1,7 @@
 // Security center handlers: password change, active sessions, and GDPR/CCPA export.
 import { one, exec, query } from "@yourrank/shared/db";
 import { hashToken } from "@yourrank/shared/crypto";
+import { readArchiveSnapshot } from "@yourrank/shared/legacy-schema";
 import { SESSION_ROTATE_GRACE_S } from "@yourrank/shared/session";
 import {
   currentUser, createSession, readToken, cookieSet, destroyAllUserSessions,
@@ -147,7 +148,7 @@ async function* exportJsonChunks(userId, exportId, { oneImpl = one, queryImpl = 
   user = null;
 
   let sites = await query(
-    `SELECT id, slug, name, tagline, casino, code, cta_url, prize_pool, period, ends_at,
+    `SELECT id, slug, name, tagline, sponsor, code, cta_url, prize_pool, period, ends_at,
             reset_note, blurb, extra_json, published, theme_json, updated_at, custom_domain,
             domain_status, suspended, telegram_chat_id, telegram_notify
        FROM sites WHERE user_id=$1`,
@@ -158,14 +159,24 @@ async function* exportJsonChunks(userId, exportId, { oneImpl = one, queryImpl = 
   const siteIds = sites.map((s) => s.id);
   sites = null;
   let players = siteIds.length
-    ? await query("SELECT * FROM players WHERE site_id = ANY($1)", [siteIds])
+    ? await query(
+      "SELECT id, site_id, name, normalized_name, amount, prize, score, sort, change, updated_at, version FROM players WHERE site_id = ANY($1)",
+      [siteIds]
+    )
     : [];
   yield* field("players", players);
   players = null;
 
   let archives = siteIds.length
-    ? await query("SELECT * FROM archives WHERE site_id = ANY($1)", [siteIds])
+    ? await query(
+      "SELECT id, site_id, label, snapshot_json, created_at FROM archives WHERE site_id = ANY($1)",
+      [siteIds]
+    )
     : [];
+  archives = archives.map((archive) => ({
+    ...archive,
+    snapshot_json: readArchiveSnapshot(archive.snapshot_json),
+  }));
   yield* field("archives", archives);
   archives = null;
 
@@ -178,7 +189,7 @@ async function* exportJsonChunks(userId, exportId, { oneImpl = one, queryImpl = 
   let sessions = await query("SELECT created_at, expires_at, twofa_verified FROM sessions WHERE user_id=$1", [userId]);
   yield* field("sessions", sessions);
   sessions = null;
-  let offers = await query("SELECT id, casino_id, label, referral_url, promo_code, bonus_text, priority, is_active, created_at, updated_at FROM offers WHERE owner_id=$1", [userId]);
+  let offers = await query("SELECT id, partner_id, label, referral_url, promo_code, bonus_text, priority, is_active, created_at, updated_at FROM offers WHERE owner_id=$1", [userId]);
   yield* field("offers", offers);
   const offerIds = offers.map((o) => o.id);
   offers = null;

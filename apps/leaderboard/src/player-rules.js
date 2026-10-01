@@ -1,9 +1,10 @@
+import { rankByFromDb } from "@yourrank/shared/legacy-schema";
+
 export const PLAYER_NAME_MAX = 80;
 export const SCORE_MAX = 9_999_999_999_999.99;
-export const WIN_RATE_MAX = 999.99;
 export const INT32_MAX = 2147483647;
 export const INT32_MIN = -2147483648;
-export const RANK_FIELDS = Object.freeze({ wagered: "wagered", score: "score" });
+export const RANK_FIELDS = Object.freeze({ amount: "amount", score: "score" });
 
 export function normalizePlayerName(name) {
   return String(name ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -43,32 +44,26 @@ export function validateAndNormalizePlayers(players) {
     if (seen.has(identity)) return { error: `Duplicate player name: ${name}`, code: "duplicate_player" };
     seen.add(identity);
 
-    const wagered = numberField(player.wagered, { field: `${name}'s amount`, min: 0, max: SCORE_MAX, fallback: 0 });
+    const amount = numberField(player.amount, { field: `${name}'s amount`, min: 0, max: SCORE_MAX, fallback: 0 });
     const prize = numberField(player.prize, { field: `${name}'s prize`, min: 0, max: SCORE_MAX, fallback: 0 });
     const score = numberField(player.score, { field: `${name}'s score`, min: 0, max: SCORE_MAX, fallback: 0 });
-    const hands = numberField(player.hands, { field: `${name}'s hands`, min: 0, max: INT32_MAX, integer: true, fallback: 0 });
-    const netProfit = numberField(player.netProfit ?? player.net_profit, { field: `${name}'s net amount`, min: -SCORE_MAX, max: SCORE_MAX, fallback: (prize.value ?? 0) - (wagered.value ?? 0) });
-    const winRate = numberField(player.winRate ?? player.win_rate, { field: `${name}'s win rate`, min: -WIN_RATE_MAX, max: WIN_RATE_MAX, fallback: 0 });
     const change = numberField(player.change, { field: `${name}'s change`, min: INT32_MIN, max: INT32_MAX, integer: true, fallback: 0 });
-    const invalid = [wagered, prize, score, hands, netProfit, winRate, change].find((result) => result.error);
+    const invalid = [amount, prize, score, change].find((result) => result.error);
     if (invalid) return { error: invalid.error, code: "invalid_player_number", index };
 
     normalized.push({
       name,
       normalizedName: identity,
-      wagered: wagered.value,
+      amount: amount.value,
       prize: prize.value,
       score: score.value,
-      hands: hands.value,
-      netProfit: netProfit.value,
-      winRate: winRate.value,
       change: change.value,
     });
   }
   return { players: normalized };
 }
 
-const PATCH_FIELDS = ["wagered", "prize", "score", "hands", "netProfit", "winRate", "change"];
+const PATCH_FIELDS = ["amount", "prize", "score", "change"];
 
 // Incremental score merge: patch players match existing rows by normalized
 // name and overlay only the fields they explicitly provide; unmatched patch
@@ -103,7 +98,7 @@ export function validateIncrementAmount(value) {
 }
 
 export function rankField(value) {
-  return RANK_FIELDS[value] || RANK_FIELDS.score;
+  return RANK_FIELDS[rankByFromDb(value)] || RANK_FIELDS.score;
 }
 
 export function sortPlayersForRanking(players, field = "score") {

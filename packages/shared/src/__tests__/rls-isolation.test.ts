@@ -29,7 +29,7 @@ const TABLES = [
   "bot_subscribers",
   "bot_commands",
   "offers",
-  "casinos",
+  "partners",
   "short_links",
   "clicks",
   "click_daily",

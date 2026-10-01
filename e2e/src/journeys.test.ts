@@ -256,31 +256,31 @@ describe("release-gate journeys", () => {
 
     const negative = await client.put("/api/site", {
       siteId,
-      players: [{ name: "Valid Player", wagered: -5 }],
+      players: [{ name: "Valid Player", amount: -5 }],
     });
     // PUT /api/site validates the payload through its schema layer, which answers
     // with a field-scoped message (`players.<i>.<field>: ...`) and no `code`.
     expect(negative.status).toBe(400);
     expect(negative.json?.ok).toBe(false);
-    expect(negative.json?.error).toContain("players.0.wagered");
+    expect(negative.json?.error).toContain("players.0.amount");
 
     const notFinite = await client.put("/api/site", {
       siteId,
-      players: [{ name: "Valid Player", wagered: "not-a-number" }],
+      players: [{ name: "Valid Player", amount: "not-a-number" }],
     });
     expect(notFinite.status).toBe(400);
     expect(notFinite.json?.ok).toBe(false);
-    expect(notFinite.json?.error).toContain("players.0.wagered");
+    expect(notFinite.json?.error).toContain("players.0.amount");
 
     const duplicate = await client.put("/api/site", {
       siteId,
-      players: [{ name: "Same Name", wagered: 10 }, { name: "same name", wagered: 20 }],
+      players: [{ name: "Same Name", amount: 10 }, { name: "same name", amount: 20 }],
     });
     expect(duplicate.status).toBe(400);
     expect(duplicate.json?.ok).toBe(false);
     expect(duplicate.json?.error).toContain("Duplicate player name");
 
-    const nameless = await client.put("/api/site", { siteId, players: [{ name: "   ", wagered: 10 }] });
+    const nameless = await client.put("/api/site", { siteId, players: [{ name: "   ", amount: 10 }] });
     expect(nameless.status).toBe(400);
     expect(nameless.json?.ok).toBe(false);
     expect(nameless.json?.error).toContain("players.0.name");
@@ -292,7 +292,7 @@ describe("release-gate journeys", () => {
 
     const valid = await client.put("/api/site", {
       siteId,
-      players: [{ name: "Gate Player One", wagered: 120 }, { name: "Gate Player Two", wagered: 60 }],
+      players: [{ name: "Gate Player One", amount: 120 }, { name: "Gate Player Two", amount: 60 }],
     });
     expect(valid.status).toBe(200);
     expect(valid.json?.ok).toBe(true);

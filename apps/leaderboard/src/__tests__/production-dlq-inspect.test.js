@@ -22,7 +22,7 @@ const top3Payload = (changes) => ({
 });
 
 const tiedChanges = (n) => Array.from({ length: n }, (_, i) => ({
-  name: `SENTINEL_PLAYER_${i}`, rank: 1, wagered: 0, score: 0, rankBy: "score",
+  name: `SENTINEL_PLAYER_${i}`, rank: 1, amount: 0, score: 0, rankBy: "score",
 }));
 
 const bumpEnvelope = () => envelope("bump", {
@@ -59,7 +59,7 @@ export const fixture = {
       body: {
         type: "notify", kind: "top3", siteId: "SECRET_SITE_ID",
         siteName: "SENTINEL_SITE_NAME",
-        changes: tiedChanges(11).map(({ name, rank, wagered }) => ({ name, rank, wagered })),
+        changes: tiedChanges(11).map(({ name, rank, amount }) => ({ name, rank, amount })),
       },
     },
     {
@@ -126,8 +126,8 @@ describe("production DLQ inspect sanitizer", () => {
     expect(output.top3_notify.with_score).toBe(2);
     expect(output.top3_notify.with_rankBy).toBe(2);
     expect(output.top3_notify.change_item_key_sets).toEqual(expect.arrayContaining([
-      { keys: "name,rank,rankBy,score,wagered", count: 2 },
-      { keys: "name,rank,wagered", count: 1 },
+      { keys: "amount,name,rank,rankBy,score", count: 2 },
+      { keys: "amount,name,rank", count: 1 },
     ]));
   });
 

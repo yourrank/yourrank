@@ -14,12 +14,29 @@ const sites = [
   { id: "site-2", slug: "second", name: "Second", published: false },
 ];
 const players = [
-  { id: "player-1", site_id: "site-1", name: "Alice", wagered: "10.00" },
-  { id: "player-2", site_id: "site-2", name: "Bob", wagered: "20.00" },
+  { id: "player-1", site_id: "site-1", name: "Alice", amount: "10.00" },
+  { id: "player-2", site_id: "site-2", name: "Bob", amount: "20.00" },
 ];
 const archives = [
-  { id: "archive-1", site_id: "site-1", snapshot_json: [{ name: "Alice", wagered: "10.00" }] },
-  { id: "archive-2", site_id: "site-2", snapshot_json: [] },
+  { id: "archive-1", site_id: "site-1", label: "First", snapshot_json: [{ name: "Alice", amount: "10.00" }], created_at: "2024-07-02T12:00:00.000Z" },
+  { id: "archive-2", site_id: "site-2", label: "Second", snapshot_json: [], created_at: "2024-07-01T12:00:00.000Z" },
+];
+const archiveRows = [
+  {
+    id: "archive-1",
+    site_id: "site-1",
+    label: "First",
+    snapshot_json: [{
+      name: "Alice",
+      amount: "10.00",
+      wagered: "10.00",
+      hands: 6,
+      net_profit: "4.00",
+      win_rate: "0.50",
+    }],
+    created_at: "2024-07-02T12:00:00.000Z",
+  },
+  { id: "archive-2", site_id: "site-2", label: "Second", snapshot_json: [], created_at: "2024-07-01T12:00:00.000Z" },
 ];
 
 const mockOne = mock(() => Promise.resolve(USER));
@@ -27,7 +44,7 @@ const mockQuery = mock((sql) => {
   const text = String(sql);
   if (text.includes("FROM sites")) return Promise.resolve(sites);
   if (text.includes("FROM players")) return Promise.resolve(players);
-  if (text.includes("FROM archives")) return Promise.resolve(archives);
+  if (text.includes("FROM archives")) return Promise.resolve(archiveRows);
   return Promise.resolve([]);
 });
 const mockRateLimit = mock(() => Promise.resolve({
@@ -81,6 +98,14 @@ describe("handleExportData", () => {
       expect(userSql).toContain("telegram_user_id");
       expect(userSql).toContain("telegram_username");
       expect(userSql).not.toContain("telegram_id");
+      const playerSql = mockQuery.mock.calls.find(([sql]) => String(sql).includes("FROM players"))?.[0] || "";
+      const playerColumns = playerSql.match(/SELECT\s+([\s\S]+?)\s+FROM\s+players/i)?.[1]
+        .split(",")
+        .map((column) => column.trim());
+      expect(playerColumns).toEqual([
+        "id", "site_id", "name", "normalized_name", "amount", "prize",
+        "score", "sort", "change", "updated_at", "version",
+      ]);
       const expected = JSON.stringify({
         ok: true,
         exportId: "1720000000000-user-1",

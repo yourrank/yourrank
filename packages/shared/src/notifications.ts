@@ -70,7 +70,7 @@ export async function sendDiscordWebhook(
  */
 export function buildResetEmbed(
   siteName: string,
-  players: Array<{ name: string; wagered: number; prize?: number }>,
+  players: Array<{ name: string; amount: number; prize?: number }>,
   period: string
 ): Record<string, unknown> {
   const top3 = players.slice(0, 3);
@@ -78,7 +78,7 @@ export function buildResetEmbed(
     const medal = ["🥇", "🥈", "🥉"][i];
     return {
       name: `${medal} #${i + 1} — ${p.name}`,
-      value: `$${Number(p.wagered).toLocaleString("en-US", { maximumFractionDigits: 0 })}${p.prize ? ` (prize: $${Number(p.prize).toLocaleString()})` : ""}`,
+      value: `$${Number(p.amount).toLocaleString("en-US", { maximumFractionDigits: 0 })}${p.prize ? ` (prize: $${Number(p.prize).toLocaleString()})` : ""}`,
       inline: false,
     };
   });
@@ -99,9 +99,9 @@ export function buildTop3Embed(
   siteName: string,
   playerName: string,
   rank: number,
-  wagered: number,
+  amount: number,
   metricLabel = "Points",
-  metricValue: number = wagered
+  metricValue: number = amount
 ): Record<string, unknown> {
   const medal = ["🥇", "🥈", "🥉"][rank - 1] || "🏆";
   return {
@@ -208,17 +208,17 @@ function requireDelivery(channel: string, result: DeliveryResult): void {
  * Compare old and new player lists and return any new top-3 entries.
  * Competition ranking (1,2,2,4): ties within rank <=3 all count; the output
  * is bounded to TOP3_CHANGES_MAX in ranking order (value desc, name asc).
- * @param oldPlayers — previous players (sorted by wagered desc)
- * @param newPlayers — new players (sorted by wagered desc)
+ * @param oldPlayers — previous players (sorted by amount desc)
+ * @param newPlayers — new players (sorted by amount desc)
  * @returns Array of top-3 changes
  */
 export function detectTop3Changes(
-  oldPlayers: Array<{ name: string; wagered: number; score?: number }>,
-  newPlayers: Array<{ name: string; wagered: number; score?: number }>,
-  rankBy: "wagered" | "score" = "score"
-): Array<{ name: string; rank: number; wagered: number; score?: number; rankBy: "wagered" | "score" }> {
+  oldPlayers: Array<{ name: string; amount: number; score?: number }>,
+  newPlayers: Array<{ name: string; amount: number; score?: number }>,
+  rankBy: "amount" | "score" = "score"
+): Array<{ name: string; rank: number; amount: number; score?: number; rankBy: "amount" | "score" }> {
   const oldTop3Names = new Set((oldPlayers || []).slice(0, 3).map((p) => p.name));
-  const changes: Array<{ name: string; rank: number; wagered: number; score?: number; rankBy: "wagered" | "score" }> = [];
+  const changes: Array<{ name: string; rank: number; amount: number; score?: number; rankBy: "amount" | "score" }> = [];
   const sorted = (newPlayers || []).slice().sort((a, b) => Number(b[rankBy] || 0) - Number(a[rankBy] || 0) || a.name.localeCompare(b.name));
   let previousValue: number | null = null;
   let competitionRank = 0;
@@ -229,7 +229,7 @@ export function detectTop3Changes(
     previousValue = value;
     if (competitionRank > 3) break;
     if (!oldTop3Names.has(p.name)) {
-      changes.push({ name: p.name, rank: competitionRank, wagered: p.wagered, score: p.score, rankBy });
+      changes.push({ name: p.name, rank: competitionRank, amount: p.amount, score: p.score, rankBy });
     }
   }
   return changes.slice(0, TOP3_CHANGES_MAX);
@@ -274,7 +274,7 @@ export async function notifyTop3Change(
   env: any,
   siteId: string,
   siteName: string,
-  top3Changes: Array<{ name: string; rank: number; wagered: number; score?: number; rankBy?: "wagered" | "score" }>,
+  top3Changes: Array<{ name: string; rank: number; amount: number; score?: number; rankBy?: "amount" | "score" }>,
   options: NotifyDeliveryOptions = {},
 ): Promise<void> {
   if (!top3Changes.length) return;
@@ -297,7 +297,7 @@ export async function notifyTop3Change(
     const leaseOnce = options.runOnceWithLeaseImpl ?? runOnceWithLease;
     for (const [changeIndex, change] of top3Changes.entries()) {
       const scoreRanked = change.rankBy === "score";
-      const embed = buildTop3Embed(siteName, change.name, change.rank, change.wagered, scoreRanked ? "Points" : "Amount", scoreRanked ? Number(change.score || 0) : change.wagered);
+      const embed = buildTop3Embed(siteName, change.name, change.rank, change.amount, scoreRanked ? "Points" : "Amount", scoreRanked ? Number(change.score || 0) : change.amount);
       const sub = notifySubIdentity(options, `discord:${changeIndex}`);
       const sendOne = async () => requireDelivery("Discord", await sendDiscord(discordUrl, embed));
       if (sub) await leaseOnce(sub, sendOne);
@@ -324,7 +324,7 @@ export async function notifyTop3Change(
         const medal = ["🥇", "🥈", "🥉"][c.rank - 1] || "🏆";
         const metric = c.rankBy === "score"
           ? `${Number(c.score || 0).toLocaleString("en-US")} pts`
-          : `$${Number(c.wagered).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+          : `$${Number(c.amount).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
         return `${medal} *${escapeTgMarkdown(c.name)}* entered #${c.rank} — ${metric}`;
       });
       const text = `⚡ *${escapeTgMarkdown(siteName)}* — New Top 3!\n\n${lines.join("\n")}`;
@@ -348,7 +348,7 @@ export async function notifyReset(
   env: any,
   siteId: string,
   siteName: string,
-  players: Array<{ name: string; wagered: number; prize?: number }>,
+  players: Array<{ name: string; amount: number; prize?: number }>,
   period: string
 ): Promise<void> {
   // H-25: Discord webhook URL now lives in a dedicated encrypted column.
@@ -368,8 +368,8 @@ export async function notifyReset(
  * @param env — Worker env (for DB access)
  * @param siteId
  * @param siteName
- * @param oldPlayers — previous players sorted by wagered desc
- * @param newPlayers — new players sorted by wagered desc
+ * @param oldPlayers — previous players sorted by amount desc
+ * @param newPlayers — new players sorted by amount desc
  */
 export interface PlayerRankMessage {
   siteId: string;
@@ -396,9 +396,9 @@ function buildPlayerRankText(siteName: string, playerName: string, oldRank: numb
 }
 
 export function getRankChangedPlayerNames(
-  oldPlayers: Array<{ name: string; wagered: number; score?: number; rank?: number }>,
-  newPlayers: Array<{ name: string; wagered: number; score?: number }>,
-  rankBy: "wagered" | "score" = "score"
+  oldPlayers: Array<{ name: string; amount: number; score?: number; rank?: number }>,
+  newPlayers: Array<{ name: string; amount: number; score?: number }>,
+  rankBy: "amount" | "score" = "score"
 ): string[] {
   const oldRankMap = new Map<string, number>();
   (oldPlayers || []).forEach((p, i) => oldRankMap.set(p.name, p.rank || i + 1));
@@ -464,9 +464,9 @@ export async function notifySubscribedPlayers(
   env: any,
   siteId: string,
   siteName: string,
-  oldPlayers: Array<{ name: string; wagered: number; score?: number }>,
-  newPlayers: Array<{ name: string; wagered: number; score?: number }>,
-  rankBy: "wagered" | "score" = "score",
+  oldPlayers: Array<{ name: string; amount: number; score?: number }>,
+  newPlayers: Array<{ name: string; amount: number; score?: number }>,
+  rankBy: "amount" | "score" = "score",
   sendNotification: typeof sendPlayerRankNotification = sendPlayerRankNotification
 ): Promise<void> {
   const oldRankMap = new Map<string, number>();

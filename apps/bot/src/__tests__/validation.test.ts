@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import { offerCreateSchema } from "../validation.js";
+import { adminOfferSchema, offerCreateSchema } from "../validation.js";
 
 describe("bot API validation", () => {
   it("accepts the documented offer contract", () => {
     expect(offerCreateSchema.parse({
-      casino: "Example Sponsor",
+      partner: "Example Sponsor",
       label: "Welcome offer",
       referral_url: "https://example.com/ref",
       promo_code: "RANK",
     })).toEqual({
-      casino: "Example Sponsor",
+      partner: "Example Sponsor",
       label: "Welcome offer",
       referral_url: "https://example.com/ref",
       promo_code: "RANK",
@@ -18,10 +18,24 @@ describe("bot API validation", () => {
 
   it("rejects unknown fields", () => {
     expect(() => offerCreateSchema.parse({
-      casino: "Example Sponsor",
+      partner: "Example Sponsor",
       label: "Welcome offer",
       referral_url: "https://example.com/ref",
       owner_id: "unexpected",
     })).toThrow("Unrecognized key");
+  });
+
+  it("normalizes the legacy partner field at the admin boundary", () => {
+    expect(adminOfferSchema.parse({
+      owner_id: "f95c4682-36ab-40e8-81fd-1013ce321cdc",
+      casino: "Legacy Partner",
+      label: "Welcome offer",
+      referral_url: "https://example.com/ref",
+    })).toEqual({
+      owner_id: "f95c4682-36ab-40e8-81fd-1013ce321cdc",
+      partner: "Legacy Partner",
+      label: "Welcome offer",
+      referral_url: "https://example.com/ref",
+    });
   });
 });

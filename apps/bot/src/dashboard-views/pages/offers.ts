@@ -9,8 +9,8 @@ export function offersPanel(publicBaseUrl: string): string {
         <h3>Create an offer</h3>
         <div class="d-flex gap-12 flex-wrap">
           <div class="flex-1 offer-form-field">
-            <label class="text-sm font-600" for="oCasino">Brand or partner</label>
-            <input class="v3-input w-full" id="oCasino" placeholder="e.g. Acme VPN">
+            <label class="text-sm font-600" for="oPartner">Brand or partner</label>
+            <input class="v3-input w-full" id="oPartner" placeholder="e.g. Acme VPN">
           </div>
           <div class="flex-1 offer-form-field">
             <label class="text-sm font-600" for="oLabel">Offer name</label>

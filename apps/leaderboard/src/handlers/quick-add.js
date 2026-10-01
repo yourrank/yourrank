@@ -42,12 +42,9 @@ export async function handleQuickAdd(request, env) {
   const rows = await getPlayers(env, site.id, { rankBy: site.rank_by });
   const players = (rows || []).map((p) => ({
     name: p.name,
-    wagered: p.wagered,
+    amount: p.amount,
     prize: p.prize,
     score: p.score,
-    hands: p.hands,
-    netProfit: p.net_profit,
-    winRate: p.win_rate,
     change: p.change,
   }));
   
@@ -63,7 +60,7 @@ export async function handleQuickAdd(request, env) {
     // Create new
     players.push({
       name: playerName,
-      wagered: metric === "wagered" ? amount : 0,
+      amount: metric === "amount" ? amount : 0,
       score: metric === "score" ? amount : 0,
       prize: 0,
     });

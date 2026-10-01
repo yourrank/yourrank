@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { DB_RANK_BY_AMOUNT } from "@yourrank/shared/legacy-schema";
 import { createBoard } from "../site.js";
 
 describe("neutral site creation", () => {
@@ -37,24 +38,24 @@ describe("neutral site creation", () => {
     ), "utf8");
     expect(migration).toContain("ALTER COLUMN rank_by SET DEFAULT 'score'");
     expect(migration).not.toMatch(/UPDATE\s+public\.sites/i);
-    expect(migration).toContain("WHEN NEW.rank_by = 'wagered'");
+    expect(migration).toContain(`WHEN NEW.rank_by = '${DB_RANK_BY_AMOUNT}'`);
     expect(migration).toContain("ELSE (elements.elem->>'score')::numeric");
   });
 
-  it("makes score the creator editor's normal path while retaining labeled legacy compatibility", () => {
+  it("makes score the creator editor's normal path and uses canonical amount fields", () => {
     const dashboard = readFileSync(join(import.meta.dir, "../pages/dashboard.jsx"), "utf8");
     const state = readFileSync(join(import.meta.dir, "../assets/dashboard/state.js"), "utf8");
     const players = readFileSync(join(import.meta.dir, "../assets/dashboard/players.js"), "utf8");
 
     expect(state).toContain('RANK_BY: "score"');
     expect(dashboard.indexOf('<option value="score">Points / score</option>'))
-      .toBeLessThan(dashboard.indexOf('<option value="wagered">Amount</option>'));
+      .toBeLessThan(dashboard.indexOf('<option value="amount">Amount</option>'));
     expect(dashboard).toContain('id="qa_score"');
     expect(dashboard).toContain("For a normal leaderboard, use <strong>Name</strong> and <strong>Score</strong>");
-    expect(players).toContain('const scoreMode = state.RANK_BY !== "wagered"');
+    expect(players).toContain('const scoreMode = state.RANK_BY !== "amount"');
     expect(players).toContain('const csv = "name,score\\nAvery,120\\nBlair,80\\nCasey,45\\n"');
     expect(players).not.toContain("CryptoKing");
-    expect(players).not.toContain('const csv = "name,wagered,prize');
-    expect(players).toContain('table?.querySelectorAll(".col-legacy")');
+    expect(players).not.toContain('const csv = "name,amount,prize');
+    expect(players).toContain('const rankSelector = state.RANK_BY === "score" ? ".p-score" : ".p-amount"');
   });
 });

@@ -3,6 +3,7 @@
 // can validate request bodies without touching every handler.
 
 import { z, type ZodSchema, type ZodError } from "zod";
+import { normalizeLegacyLeadInput, normalizeLegacyPublicInput } from "./legacy-schema.js";
 
 const MAX_SHORT_TEXT = 200;
 const MAX_MEDIUM_TEXT = 500;
@@ -50,12 +51,9 @@ const positiveInt = (max = Number.MAX_SAFE_INTEGER) =>
 const playerItemSchema = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
-    wagered: optionalNumber(1e15),
+    amount: optionalNumber(1e15),
     prize: optionalNumber(1e15),
     score: optionalNumber(1e15),
-    hands: optionalNumber(1e15),
-    netProfit: optionalSignedNumber(1e15),
-    winRate: optionalNumber(1e15),
     change: optionalSignedNumber(1e15),
   })
   .strict();
@@ -89,7 +87,7 @@ const brandSchema = z
   .object({
     name: z.string().max(80).optional(),
     tagline: z.string().max(200).optional(),
-    casino: z.string().max(100).optional(),
+    sponsor: z.string().max(100).optional(),
     code: z.string().max(100).optional(),
     ctaUrl: z.string().max(500).optional(),
     prizePool: z.string().max(100).optional(),
@@ -206,22 +204,21 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
     })
     .strict(),
 
-  handleCreateBoard: z
+  handleCreateBoard: z.preprocess(normalizeLegacyPublicInput, z
     .object({
       slug: z.string().trim().max(80),
       name: z.string().trim().max(80).optional().or(z.literal("").optional()),
-      casino: optionalTrimmedString(100),
+      sponsor: optionalTrimmedString(100),
       code: optionalTrimmedString(100),
     })
-    .strict(),
+    .strict()),
 
   handleArchive: z
-    .object({
+    .preprocess(normalizeLegacyPublicInput, z.object({
       label: optionalTrimmedString(200),
-      clear: z.enum(["wagers", "players", "none"]).optional().or(z.literal("").optional()),
+      clear: z.enum(["amount", "players", "none"]).optional().or(z.literal("").optional()),
       siteId: optionalUuid(),
-    })
-    .strict(),
+    }).strict()),
 
   handleArchiveDelete: z
     .object({
@@ -230,7 +227,7 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
     })
     .strict(),
 
-  handlePutSite: z
+  handlePutSite: z.preprocess(normalizeLegacyPublicInput, z
     .object({
       siteId: optionalUuid(),
       slug: z.string().trim().max(80).optional(),
@@ -240,7 +237,7 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
       startsAt: optionalDateString(),
       endsAt: optionalDateString(),
       expectedUpdatedAt: optionalDateString(),
-      rankBy: z.enum(["wagered", "score"]).optional(),
+      rankBy: z.enum(["amount", "score"]).optional(),
       customDomain: z.string().max(253).optional().or(z.literal("").optional()),
       removeLogo: z.boolean().optional(),
       brand: brandSchema.optional(),
@@ -288,13 +285,13 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
       autoReset: z
         .object({
           enabled: z.boolean().optional(),
-          clear: z.enum(["wagers", "players", "none"]).optional(),
+          clear: z.enum(["amount", "players", "none"]).optional(),
         })
         .optional(),
       extraJson: jsonbLike,
       themeJson: jsonbLike,
     })
-    .strict(),
+    .strict()),
 
   handlePutTheme: z
     .object({
@@ -339,14 +336,14 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
     })
     .strict(),
 
-  handleLead: z
+  handleLead: z.preprocess(normalizeLegacyLeadInput, z
     .object({
       handle: z.string().max(120).optional().or(z.literal("").optional()),
-      casino: z.string().max(60).optional().or(z.literal("").optional()),
+      brand: z.string().max(60).optional().or(z.literal("").optional()),
       contact: z.string().max(160).optional().or(z.literal("").optional()),
       note: z.string().max(MAX_MEDIUM_TEXT).optional().or(z.literal("").optional()),
     })
-    .strict(),
+    .strict()),
 
   handleContact: z
     .object({

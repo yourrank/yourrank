@@ -11,7 +11,7 @@ const clampNum = (v, min, max, dflt) => {
 export const overlayPage = (data, opts = {}) => {
   const b = data.brand || {};
   const br = data.branding || {};
-  const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
+  const rankBy = data.rankBy === "amount" ? "amount" : "score";
   const players = (data.players || []).slice().sort((a, c) => Number(c[rankBy] || 0) - Number(a[rankBy] || 0)).slice(0, 5);
   const endsAt = data.endsAt || null;
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -20,7 +20,7 @@ export const overlayPage = (data, opts = {}) => {
     if (n >= 1e3) return "$" + (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k";
     return "$" + (n || 0).toLocaleString("en-US");
   };
-  const fmtMetric = (player) => rankBy === "score" ? `${Number(player.score || 0).toLocaleString("en-US")} pts` : fmt(player.wagered);
+  const fmtMetric = (player) => rankBy === "score" ? `${Number(player.score || 0).toLocaleString("en-US")} pts` : fmt(player.amount);
   const medal = (i) => i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "#" + (i + 1);
   const rows = players.map((p, i) => `<div class="ov-row" data-name="${esc(p.name)}"><span class="ov-medal">${medal(i)}</span><span class="ov-name">${esc(p.name)}</span><span class="ov-value">${fmtMetric(p)}</span></div>`).join("");
   const empty = 5 - players.length;
@@ -115,7 +115,7 @@ ${isTicker ? `
 <div class="ov-head">
 <div class="ov-brand">
 <span class="ov-brand-name">${esc(b.name)}</span>
-<span class="ov-brand-sub">${rankBy === "wagered" ? `${esc(b.casino || "")}${b.casino && b.period ? " · " : ""}` : ""}${esc(b.period || "Monthly")}</span>
+<span class="ov-brand-sub">${rankBy === "amount" ? `${esc(b.sponsor || "")}${b.sponsor && b.period ? " · " : ""}` : ""}${esc(b.period || "Monthly")}</span>
 </div>
 <span class="ov-live"><span class="ov-live-dot"></span>LIVE</span>
 </div>

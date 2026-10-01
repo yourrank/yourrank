@@ -73,7 +73,7 @@ describe("validateJson", () => {
         brand: {
           name: "Board",
           tagline: "Monthly race",
-          casino: "Example",
+          sponsor: "Example",
           code: "RANK",
           ctaUrl: "https://example.com/ref",
           prizePool: "$1,000",
@@ -92,7 +92,7 @@ describe("validateJson", () => {
           url: "https://discord.example/invite",
           brand: "discord",
         }],
-        players: [{ name: "Player", wagered: 10, prize: 1 }],
+        players: [{ name: "Player", amount: 10, prize: 1 }],
         branding: { template: "classic", accentA: "#123456", accentB: "#abcdef" },
         notify: {
           discord_webhook_url: null,

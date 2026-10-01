@@ -428,7 +428,7 @@ export function currentPlayers() {
   if (!rows) return Array.isArray(state.PLAYERS) ? state.PLAYERS : [];
   return [...rows.children].map((tr) => ({
     name: tr.querySelector(".p-name").value.trim(),
-    wagered: parseAmount(tr.querySelector(".p-wager").value),
+    amount: parseAmount(tr.querySelector(".p-amount").value),
     prize: parseAmount(tr.querySelector(".p-prize").value),
     score: parseAmount(tr.querySelector(".p-score")?.value || ""),
   })).filter((p) => p.name);

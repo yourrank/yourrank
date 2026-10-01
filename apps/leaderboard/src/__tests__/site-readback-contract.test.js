@@ -78,7 +78,7 @@ describe("GET /api/site readback contract", () => {
     const site = normalizedSite();
     delete site.autoReset;
     const { body } = await getSite(site);
-    expect(body.autoReset).toEqual({ enabled: false, clear: "wagers" });
+    expect(body.autoReset).toEqual({ enabled: false, clear: "amount" });
   });
 
   it("reads the same fields for a specific board", async () => {

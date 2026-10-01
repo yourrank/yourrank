@@ -15,7 +15,7 @@ function makeState() {
   };
 }
 
-function siteSnapshot(players = [{ name: "Alice", wagered: 10 }]) {
+function siteSnapshot(players = [{ name: "Alice", amount: 10 }]) {
   return {
     id: "site-1",
     data: { players, playerCount: players.length },

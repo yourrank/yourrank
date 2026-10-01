@@ -128,7 +128,7 @@ describe('verifyHmacSha256Hex', () => {
       false,
       ['sign'],
     );
-    const payload = 'event=deposit&amount=50&click_ref=abc123';
+    const payload = 'event=conversion&amount=50&click_ref=abc123';
     const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
     const sigHex = Buffer.from(mac as ArrayBuffer).toString('hex');
 
@@ -137,7 +137,7 @@ describe('verifyHmacSha256Hex', () => {
   });
 
   it('rejects an incorrect signature', async () => {
-    const payload = 'event=deposit&amount=50';
+    const payload = 'event=conversion&amount=50';
     const badSig = 'a'.repeat(64);
     const result = await verifyHmacSha256Hex(secret, payload, badSig);
     expect(result).toBe(false);

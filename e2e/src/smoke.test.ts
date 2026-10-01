@@ -373,8 +373,8 @@ describe("YourRank E2E smoke", () => {
       const payload = JSON.stringify({
         slug: primarySlug,
         players: [
-          { name: "Alice", wagered: 12345, prize: 100 },
-          { name: "Bob", wagered: 9000, prize: 50 },
+          { name: "Alice", amount: 12345, prize: 100 },
+          { name: "Bob", amount: 9000, prize: 50 },
         ],
       });
       const signature = await hmacSha256(postbackKey, payload);
@@ -445,7 +445,7 @@ describe("YourRank E2E smoke", () => {
 
     it("POST /bot/dash/api/offers creates a tracked offer", async () => {
       const res = await client.post("/bot/dash/api/offers", {
-        casino: "E2E Sponsor",
+        partner: "E2E Partner",
         label: "E2E Offer",
         referral_url: "https://example.com/?ref={click_ref}",
         promo_code: "E2E2025",

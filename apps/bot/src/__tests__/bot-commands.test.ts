@@ -131,7 +131,7 @@ describe("bot commands", () => {
       calls.push([sql, params]);
       if (/FROM sites/.test(sql)) return Promise.resolve({ id: "s-1", name: "My Board", slug: "my-board" });
       if (/FROM players ahead/.test(sql)) {
-        return Promise.resolve({ name: "Player1501", wagered: 100, rank: 1501, total: 1502 });
+        return Promise.resolve({ name: "Player1501", amount: 100, rank: 1501, total: 1502 });
       }
       return Promise.resolve(null);
     });

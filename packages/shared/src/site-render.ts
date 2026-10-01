@@ -638,12 +638,12 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const articleLayout = viewerShell && section == null && opts.layout === "article";
   const viewerTemplate = resolveViewerTemplate(viewerShell && canRemoveBranding ? br.template : undefined);
 
-  const casino = String(b.casino || "").trim();
+  const sponsor = String(b.sponsor || "").trim();
   const pool = String(b.prizePool || "").trim();
   const period = String(b.period || "Monthly");
   const ctaDest = b.ctaUrl;
   const ctaHref = slug ? esc(`/go/${slug}`) : safeUrl(ctaDest);
-  const hasCta = !!(ctaDest || casino);
+  const hasCta = !!(ctaDest || sponsor);
   const accent = accentColor(br, br.options);
 
   const viewerOnSite = viewerData?.viewerOnSite || null;
@@ -681,7 +681,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 
   const ctx = {
     r, data, b, br, section, siteSections, slug, isCustomDomain, homeUrl, logoUrl, bannerUrl,
-    viewer, viewerData, viewerOnSite, membershipStatus, isMember, balance, casino, pool, period, ctaHref, hasCta, socialLinks,
+    viewer, viewerData, viewerOnSite, membershipStatus, isMember, balance, sponsor, pool, period, ctaHref, hasCta, socialLinks,
     returnTo, nonce, watermark, isDemo: !!opts.isDemo,
     viewerAuthError: typeof opts.viewerAuthError === "string" ? opts.viewerAuthError : "",
     viewerIntent: opts.viewerIntent && typeof opts.viewerIntent === "object" ? opts.viewerIntent : { intent: "signin", rewardId: "" },
@@ -704,7 +704,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 
   const darkShell = viewerShell && (section === "home" || section === "leaderboard" || section === "me" || section === "shop");
   const footerLead = darkShell ? `<p class="yr-foot-lead">${viewerIcon('shield')}<span>Your credits and claims stay with this community.</span> <a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : '','help'))}">How YourRank works ${viewerIcon('arrow')}</a></p>` : "";
-  const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl: kickUrl ? safeUrl(kickUrl) : null, shareUrl: articleLayout ? null : sectionUrl, shareTitle: rawTitleBase, lead: footerLead });
+  const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, sponsor, ctaHref, hasCta, kickUrl: kickUrl ? safeUrl(kickUrl) : null, shareUrl: articleLayout ? null : sectionUrl, shareTitle: rawTitleBase, lead: footerLead });
 
   // B-01: Dynamic font URL based on board's active font.
   const font = resolveFont(data);
@@ -749,7 +749,7 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
     title: section === "me" ? SECTION_LABELS.me : "",
     links: sectionList(siteSections).filter(key => key !== "me" || viewer).map(key => ({ label: SECTION_LABELS[key], href: siteSectionHref(key, slug, isCustomDomain), active: key === section })),
   }) : '';
-  const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}${articleLayout ? " viewer-article-page" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${detailRewardId ? " data-reward-detail" : ""}${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-creator-contact="${hasCreatorContactMethod(data) ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
+  const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}${articleLayout ? " viewer-article-page" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${detailRewardId ? " data-reward-detail" : ""}${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-creator-contact="${hasCreatorContactMethod(data) ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "amount" ? "amount" : "score"}">
 ${viewerShell ? VIEWER_DESIGN_CONTRACT : ""}
 <a class="yr-sr" href="#main-content">Skip to content</a>
 ${viewerShell ? `<div class="viewer-layout">${navigation}${section === 'home' ? viewerCommunityHeading(ctx) : ''}` : topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember })}
@@ -809,7 +809,7 @@ function rulesBlock(data, payoutNote = "") {
   return `<details class="viewer-card viewer-rules" aria-labelledby="viewer-rules-title"><summary class="viewer-card-head"><h2 id="viewer-rules-title">${viewerIcon('shield')}Rules</h2><span class="viewer-fine">${rules.length} ${rules.length === 1 ? "rule" : "rules"}</span></summary>${payoutNote ? `<p class="viewer-rules-payout">${payoutNote}</p>` : ""}<ol class="viewer-rules-list">${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}</ol></details>`;
 }
 
-function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl, shareUrl, shareTitle, lead = "" }) {
+function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, sponsor, ctaHref, hasCta, kickUrl, shareUrl, shareTitle, lead = "" }) {
   const enabled = sectionList(siteSections);
   const legalHref = (page) => `${homeUrl}${siteSectionHref(page, slug, isCustomDomain)}`;
   const legalItems = renderLegalSidebar(data, legalHref).split("\n").filter(Boolean);
@@ -817,7 +817,7 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
   const legalLinks = legalItems.filter((x) => !x.includes(">Contact Us<")).join("");
   const secondary = [
     kickUrl && kickUrl !== "#" ? `<a href="${kickUrl}" target="_blank" rel="noopener noreferrer">Watch on Kick<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
-    hasCta && casino ? `<a href="${ctaHref}" target="_blank" rel="noopener noreferrer">Join ${esc(casino)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
+    hasCta && sponsor ? `<a href="${ctaHref}" target="_blank" rel="noopener noreferrer">Join ${esc(sponsor)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
     viewer ? `<a href="${globalViewerAccountHref(isCustomDomain, slug)}">My communities</a>` : "",
   ].filter(Boolean).join("");
   // What a viewer normally reads at the bottom is the creator's sign-off in
@@ -958,7 +958,7 @@ function leaderboardPreview(ctx) {
   const home = section === 'home';
   const players = (data.players || []).slice().sort((a,b) => (a.rank || 0) - (b.rank || 0)).slice(0, home ? 10 : 3);
   const podium = home && players.length >= 3;
-  const rows = players.map((player, i) => `<div class="viewer-board-row"${podium && i < 3 ? ` data-home-slot="${i + 1}"` : ''}><span class="viewer-rank">${player.rank || i + 1}</span><span class="viewer-avatar">${esc(Array.from(String(player.name || '?')).slice(0,2).join('').toUpperCase())}</span><span class="viewer-player-name">${esc(player.name)}</span><span class="viewer-board-score">${esc(data.rankBy === 'wagered' ? formatMoney(prizeCurrency(data), player.wagered) : formatNumber(player.score || 0))}</span></div>`).join('');
+  const rows = players.map((player, i) => `<div class="viewer-board-row"${podium && i < 3 ? ` data-home-slot="${i + 1}"` : ''}><span class="viewer-rank">${player.rank || i + 1}</span><span class="viewer-avatar">${esc(Array.from(String(player.name || '?')).slice(0,2).join('').toUpperCase())}</span><span class="viewer-player-name">${esc(player.name)}</span><span class="viewer-board-score">${esc(data.rankBy === 'amount' ? formatMoney(prizeCurrency(data), player.amount) : formatNumber(player.score || 0))}</span></div>`).join('');
   const homeEmpty = `<div class="viewer-home-empty viewer-home-empty--podium"><div>${viewerIcon('leaderboard')}<p><strong>No standings yet.</strong> The creator publishes leaderboard scores; the first three places take the podium here.</p></div></div>`;
   return `<section class="viewer-card${home ? ' viewer-home-board' : ''}"><div class="viewer-card-head"><h2>${viewerIcon(home ? 'crown' : 'leaderboard')}${home ? `${esc(b.period || 'Current')} leaderboard` : 'Leaderboard'}</h2><a href="${siteSectionHref('leaderboard', slug, isCustomDomain)}">View all ${viewerIcon('arrow')}</a></div><p${home ? ' class="yr-sr"' : ''}>${esc(b.period || 'Current')} standings</p><div class="viewer-board-list"${podium ? ' data-home-podium="3"' : ''}>${rows || (home ? homeEmpty : '<p>No standings yet. The creator publishes leaderboard scores.</p>')}</div></section>`;
 }
@@ -1019,14 +1019,14 @@ function boardMain(ctx) {
   const pageSize = Number.isInteger(ctx.pageSize) && ctx.pageSize > 0 ? ctx.pageSize : PUBLIC_BOARD_PAGE_SIZE;
   const totalPages = Math.max(1, Math.ceil(playerCount / pageSize));
   const page = Number.isInteger(ctx.page) && ctx.page > 0 ? Math.min(ctx.page, totalPages) : 1;
-  const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
+  const rankBy = data.rankBy === "amount" ? "amount" : "score";
   const amountLabel = esc(rankBy === "score" ? "Points" : "Amount");
-  const rankValue = (player) => rankBy === "score" ? `${formatNumber(player.score || 0)} pts` : formatMoney(currency, player.wagered);
+  const rankValue = (player) => rankBy === "score" ? `${formatNumber(player.score || 0)} pts` : formatMoney(currency, player.amount);
   const prizeLabel = esc(data.prizes?.prizeLabel || "Prize");
   const poolLabel = esc(data.prizes?.prizePoolLabel || b.prizePoolLabel || "Prize pool");
   const showPool = data.sections?.payouts !== false && hasConfiguredPrizePool(pool) && !hidePrizes;
   const showPrizes = data.sections?.payouts !== false && !hidePrizes && (hasConfiguredPrizePool(pool) || players.some((player) => Number(player.prize) > 0));
-  const sponsor = String(b.casino || "").trim();
+  const sponsor = String(b.sponsor || "").trim();
   const hasRules = data.sections?.rules !== false && (Array.isArray(data.rules) ? data.rules : []).some((rule) => typeof rule === "string" && rule.trim());
   const playerHref = (name) => isCustomDomain ? `/player/${encodeURIComponent(name)}` : `/${encodeURIComponent(slug)}/player/${encodeURIComponent(name)}`;
 

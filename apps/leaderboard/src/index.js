@@ -12,6 +12,7 @@ import { LiveBoard } from "./live-board.js";
 import { populateEnv } from "@yourrank/shared/env";
 import { getPublicSite, getBySlug, getClickRedirectSite, getArchiveSnapshots, ARCHIVE_LIMITS, PUBLIC_ARCHIVE_LIMIT } from "./site.js";
 import { fromJsonb } from "@yourrank/shared/jsonb";
+import { readArchiveAmount } from "@yourrank/shared/legacy-schema";
 import { getPlanLimit, canUseFeature, effectivePlan } from "@yourrank/shared/plans";
 import { parseSitePath, renderSiteRoute } from "./site-routes.js";
 import { renderSite } from "@yourrank/shared/site-render";
@@ -250,7 +251,7 @@ export async function renderFragmentPayload(pageObj, { user, tab } = {}) {
 
 function findProfilePlayer(data, rawName) {
   const name = decodeURIComponent(rawName).trim();
-  const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
+  const rankBy = data.rankBy === "amount" ? "amount" : "score";
   const players = (data.players || []).slice().sort((a, b) => (Number(b[rankBy]) || 0) - (Number(a[rankBy]) || 0));
   const idx = players.findIndex((p) => String(p.name || "").toLowerCase() === name.toLowerCase());
   if (idx === -1) return null;
@@ -259,7 +260,7 @@ function findProfilePlayer(data, rawName) {
 
 async function buildPlayerHistory(env, siteId, rawName, plan, rankByValue) {
   const name = decodeURIComponent(rawName).trim().toLowerCase();
-  const rankBy = rankByValue === "wagered" ? "wagered" : "score";
+  const rankBy = rankByValue === "amount" ? "amount" : "score";
   const archives = await getArchiveSnapshots(
     env,
     siteId,
@@ -269,12 +270,12 @@ async function buildPlayerHistory(env, siteId, rawName, plan, rankByValue) {
   const out = [];
   for (const a of archives) {
     const parsed = fromJsonb(a.snapshot_json);
-    const snap = Array.isArray(parsed) ? parsed : [];
+    const snap = Array.isArray(parsed) ? parsed.map((player) => ({ ...player, amount: readArchiveAmount(player) })) : [];
     const sorted = snap.slice().sort((x, y) => (Number(y[rankBy]) || 0) - (Number(x[rankBy]) || 0));
     const idx = sorted.findIndex((p) => String(p.name || "").toLowerCase() === name);
     if (idx !== -1) {
       const p = sorted[idx];
-      out.push({ label: a.label || "Archived", at: a.created_at, rank: idx + 1, wagered: p.wagered || 0, score: p.score || 0, prize: p.prize || 0 });
+      out.push({ label: a.label || "Archived", at: a.created_at, rank: idx + 1, amount: Number(p.amount) || 0, score: p.score || 0, prize: p.prize || 0 });
     }
   }
   return out;

@@ -34,7 +34,7 @@ const AUDIT_SAFE_KEYS = new Set([
   "board_name",
   "board_slug",
   "boards",
-  "casino",
+  "sponsor",
   "changes",
   "clear",
   "code",

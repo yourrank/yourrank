@@ -23,7 +23,7 @@ const DEFAULT_EXTRA = {
     partner: true, socials: true, share: true, pastWinners: true, countdown: true,
     cta: true, payouts: true, poweredBy: false,
   },
-  playerFields: { score: true, hands: true, netProfit: true, winRate: true, change: true },
+  playerFields: { score: true, change: true },
   legal: {
     terms: "", termsEnabled: true, privacy: "", privacyEnabled: true,
     cookies: "", cookiesEnabled: true,
@@ -48,7 +48,7 @@ function baseSiteData(siteSections = { home: true, leaderboard: true, shop: true
   return {
     brand: {
       name: "TestStreamer",
-      casino: "",
+      sponsor: "",
       code: "",
       prizePool: "$1,000",
       period: "Monthly",
@@ -56,8 +56,8 @@ function baseSiteData(siteSections = { home: true, leaderboard: true, shop: true
     },
     branding: { template: "classic", font: "Inter", options: {} },
     players: [
-      { name: "Alice", wagered: 5000, prize: "$100" },
-      { name: "Bob", wagered: 3000, prize: "$60" },
+      { name: "Alice", amount: 5000, prize: "$100" },
+      { name: "Bob", amount: 3000, prize: "$60" },
     ],
     prizes: { prizePoolLabel: "Prize pool" },
     partner: { chips: [], blurb: "" },

@@ -165,7 +165,7 @@ describe("authenticated editor body", () => {
     expect(html).toContain("Leaderboard basics");
     expect(html).toMatch(/<details class="editor-more editor-more--standalone"[^>]*data-editor-more="setup-sponsor">/);
     expect(html).toMatch(/<details class="editor-more" data-editor-more="setup-schedule">/);
-    for (const id of ["f_casino", "f_code", "f_cta", "f_blurb", "f_starts", "f_auto_reset", "f_password_enabled"]) {
+    for (const id of ["f_sponsor", "f_code", "f_cta", "f_blurb", "f_starts", "f_auto_reset", "f_password_enabled"]) {
       expect(html).toContain(`id="${id}"`);
     }
     expect(dashboardCss).toContain("details.editor-more summary");
@@ -201,7 +201,7 @@ describe("authenticated editor body", () => {
     expect(html).toContain('id="emptyAddBtn" type="button">Add first player');
     expect(html).not.toContain('id="emptyPasteBtn"');
     expect(playersJs).toContain("const DEFAULT_EDITOR_PLAYER_FIELDS = Object.freeze({");
-    for (const field of ["score", "hands", "netProfit", "winRate", "change"]) {
+    for (const field of ["score", "change"]) {
       expect(playersJs).toContain(`${field}: false`);
     }
     expect(playersJs).toContain('data-label="Player"');

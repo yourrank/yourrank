@@ -278,7 +278,7 @@
   var searchRequest = 0;
   var searchController = null;
   var currency = document.body.dataset.currency || "$";
-  var rankBy = document.body.dataset.rankBy === "wagered" ? "wagered" : "score";
+  var rankBy = document.body.dataset.rankBy === "amount" ? "amount" : "score";
   var valueLabel = (rowsRoot && rowsRoot.dataset.valueLabel) || "Amount";
   var prizeLabel = (rowsRoot && rowsRoot.dataset.prizeLabel) || "Prize";
   var hidePrizes = !!rowsRoot && rowsRoot.dataset.hidePrizes === "true";
@@ -301,7 +301,7 @@
   };
   var rowHtml = function (p, rank) {
     var name = esc(String(p.name || "").toLowerCase());
-    var value = esc(rankBy === "score" ? Number(p.score || 0).toLocaleString("en-US") + " pts" : money(p.wagered));
+    var value = esc(rankBy === "score" ? Number(p.score || 0).toLocaleString("en-US") + " pts" : money(p.amount));
     var prize = !hidePrizes && p.prize ? esc(money(p.prize)) : "";
     var identity = spotlight
       ? '<span class="yr-player-mark" aria-hidden="true">' + esc(Array.from(String(p.name || "?")).slice(0, 2).join("").toUpperCase()) + '</span><span class="yr-player-name">' + esc(p.name) + '</span>'

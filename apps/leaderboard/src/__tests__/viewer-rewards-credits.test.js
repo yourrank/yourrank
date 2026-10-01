@@ -22,7 +22,7 @@ const record = {
   data: {
     brand: { name: "A Creator With A Very Long Channel Name Indeed", tagline: "Tag" },
     prizes: {},
-    players: [{ name: "Alex", wagered: 100, prize: 25 }],
+    players: [{ name: "Alex", amount: 100, prize: 25 }],
     socials: [],
     siteSections: { home: true, leaderboard: true, shop: true, me: true },
   },

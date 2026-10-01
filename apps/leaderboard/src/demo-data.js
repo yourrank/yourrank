@@ -4,7 +4,7 @@ export function demoLeaderboardData() {
   return {
     brand: {
       name: "Demo Challenge",
-      casino: "",
+      sponsor: "",
       code: "",
       ctaUrl: "",
       prizePool: "",
@@ -22,11 +22,11 @@ export function demoLeaderboardData() {
     branding: { hasLogo: false },
     rankBy: "score",
     players: [
-      { name: "Alex", score: 9500, wagered: 0, prize: 0 },
-      { name: "Bree", score: 7200, wagered: 0, prize: 0 },
-      { name: "Casey", score: 5400, wagered: 0, prize: 0 },
-      { name: "Drew", score: 3100, wagered: 0, prize: 0 },
-      { name: "Ellis", score: 1800, wagered: 0, prize: 0 },
+      { name: "Alex", score: 9500, amount: 0, prize: 0 },
+      { name: "Bree", score: 7200, amount: 0, prize: 0 },
+      { name: "Casey", score: 5400, amount: 0, prize: 0 },
+      { name: "Drew", score: 3100, amount: 0, prize: 0 },
+      { name: "Ellis", score: 1800, amount: 0, prize: 0 },
     ],
     shopItems: [
       { id: "demo-vip", name: "VIP chat badge", description: "Stand out in chat for one stream.", cost: 250, stock: null, active: true },

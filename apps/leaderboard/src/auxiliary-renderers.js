@@ -150,7 +150,7 @@ export function renderNewPlayerProfile(data, player, history, opts) {
   const p = player || {};
   const currency = prizeCurrency(r.data);
   const hidePrizes = r.data.prizes?.hidePrizeAmounts === true;
-  const rankBy = r.data.rankBy === "wagered" ? "wagered" : "score";
+  const rankBy = r.data.rankBy === "amount" ? "amount" : "score";
   const prizePool = String(r.data.brand?.prizePool || "").trim();
   const hasPrizePool = !!prizePool && !/^\D*0(?:\.0+)?\D*$/.test(prizePool);
   const showPrizes = !hidePrizes && (hasPrizePool || Number(p.prize) > 0 || (history || []).some((row) => Number(row.prize) > 0));
@@ -170,7 +170,7 @@ export function renderNewPlayerProfile(data, player, history, opts) {
     { label: "Current rank", value: rank },
     rankBy === "score"
       ? { label: "Score", value: `${Number(p.score || 0).toLocaleString("en-US")} points` }
-      : { label: "Amount", value: formatMoney(currency, p.wagered) },
+      : { label: "Amount", value: formatMoney(currency, p.amount) },
     ...(showPrizes ? [{ label: "Prize", value: formatMoney(currency, p.prize) }] : []),
   ]
     .map((s) => `<li class="yr-hist"><div class="yr-hist-main"><p class="yr-hist-n">${esc(s.label)}</p></div><div class="yr-hist-side"><p class="yr-hist-amt">${esc(s.value)}</p></div></li>`)
@@ -181,7 +181,7 @@ export function renderNewPlayerProfile(data, player, history, opts) {
       const prize = showPrizes ? `<p class="yr-hist-d">Prize ${esc(formatMoney(currency, h.prize))}</p>` : "";
       const metric = rankBy === "score"
         ? `<span class="yr-hist-lbl">Score</span>${esc(`${Number(h.score || 0).toLocaleString("en-US")} points`)}`
-        : `<span class="yr-hist-lbl">Amount</span>${esc(formatMoney(currency, h.wagered))}`;
+        : `<span class="yr-hist-lbl">Amount</span>${esc(formatMoney(currency, h.amount))}`;
       return `<li class="yr-hist"><div class="yr-hist-main"><p class="yr-hist-n">${esc(h.label || "Archived")}</p><p class="yr-hist-p">${place}</p></div><div class="yr-hist-side"><p class="yr-hist-amt">${metric}</p>${prize}</div></li>`;
     }).join("")}</ul>`
     : `<p class="yr-note">No archived results yet. Past ${period ? `${esc(period.toLowerCase())} ` : ""}boards appear here once ${esc(brandName)} archives one.</p>`;
@@ -221,7 +221,7 @@ export function renderNewStreamerProfile(data, opts) {
 export function renderNewEmbed(data, opts) {
   const b = data.brand || {};
   const hidePrizes = data.prizes?.hidePrizeAmounts === true;
-  const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
+  const rankBy = data.rankBy === "amount" ? "amount" : "score";
   const players = Array.isArray(data.players) ? data.players.slice().sort((a, z) => (Number(z[rankBy]) || 0) - (Number(a[rankBy]) || 0)) : [];
   // The embed keeps its table: it is a chrome-less widget inside someone
   // else's page, not a viewer surface of ours. Its empty state uses the public
@@ -229,7 +229,7 @@ export function renderNewEmbed(data, opts) {
   const currency = prizeCurrency(data);
   const hasPrizes = !hidePrizes && players.some((player) => Number(player.prize) > 0);
   const metricLabel = rankBy === "score" ? "Score" : "Amount";
-  const metricValue = (player) => rankBy === "score" ? `${Number(player.score || 0).toLocaleString("en-US")} pts` : formatMoney(currency, player.wagered);
+  const metricValue = (player) => rankBy === "score" ? `${Number(player.score || 0).toLocaleString("en-US")} pts` : formatMoney(currency, player.amount);
   const columnCount = hasPrizes ? 4 : 3;
   const rows = players.length ? players.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${esc(metricValue(p))}</td>${hasPrizes ? `<td>${esc(formatMoney(currency, p.prize))}</td>` : ""}</tr>`).join("") : `<tr><td colspan="${columnCount}"><p class="yr-empty">No players yet.</p></td></tr>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(b.name || opts.slug)}</title><link rel="stylesheet" href="/assets/site-shell.css"><link rel="stylesheet" href="/assets/devin-system.css"><style nonce="${esc(opts.nonce)}">body{margin:0;background:transparent}.yr-embed{max-width:680px;margin:0 auto;padding:12px}.yr-embed .yr-card{padding:18px}.yr-embed table{width:100%}</style></head><body class="yr-site"><main class="yr-embed"><section class="yr-card yr-lb"><p class="yr-cue">${esc(b.period || "Current board")}</p><h1 class="yr-h1">${esc(b.name || opts.slug)}</h1><p class="yr-lede">${esc(b.prizePool || "")}</p><div class="yr-table-wrap"><table class="yr-table"><thead><tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">${metricLabel}</th>${hasPrizes ? '<th scope="col">Prize</th>' : ""}</tr></thead><tbody>${rows}</tbody></table></div></section></main></body></html>`;

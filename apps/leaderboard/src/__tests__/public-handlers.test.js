@@ -6,17 +6,18 @@
 //   or: bun test   (from apps/leaderboard/)
 
 import { describe, it, expect, mock } from "bun:test";
+import { addLegacyPublicOutputAliases } from "@yourrank/shared/legacy-schema";
 
 const dbOne = mock(() => Promise.resolve(null));
 
 const mockSiteData = {
-  rankBy: "wagered",
-  brand: { name: "Test Community", casino: "Acme Sponsor", period: "Monthly", prizePool: "$10,000" },
+  rankBy: "amount",
+  brand: { name: "Test Community", sponsor: "Acme Sponsor", period: "Monthly", prizePool: "$10,000" },
   playerCount: 3,
   players: [
-    { name: "Alice", wagered: 50000, prize: "$5,000", rank: 1 },
-    { name: "Bob", wagered: 30000, prize: "$3,000", rank: 2 },
-    { name: "Charlie", wagered: 10000, prize: "$1,000", rank: 3 },
+    { name: "Alice", amount: 50000, prize: "$5,000", rank: 1 },
+    { name: "Bob", amount: 30000, prize: "$3,000", rank: 2 },
+    { name: "Charlie", amount: 10000, prize: "$1,000", rank: 3 },
   ],
   endsAt: new Date(Date.now() + 86400000).toISOString(),
 };
@@ -86,17 +87,17 @@ describe("handlePublicStandings", () => {
     const body = await res.json();
     expect(body).toHaveProperty("slug", "testboard");
     expect(body).toHaveProperty("name", "Test Community");
-    expect(body).toHaveProperty("casino", "Acme Sponsor");
+    expect(body).toHaveProperty("sponsor", "Acme Sponsor");
     expect(body).toHaveProperty("period", "Monthly");
     expect(body).toHaveProperty("prizePool", "$10,000");
     expect(body).toHaveProperty("players");
     expect(Array.isArray(body.players)).toBe(true);
     expect(body.players).toHaveLength(3);
-    // Players should be sorted by wagered descending
-    expect(body.players[0].wagered).toBeGreaterThanOrEqual(body.players[1].wagered);
-    // Each player should have name, wagered, prize, position
+    // Players should be sorted by amount descending
+    expect(body.players[0].amount).toBeGreaterThanOrEqual(body.players[1].amount);
+    // Each player should have name, amount, prize, position
     expect(body.players[0]).toHaveProperty("name");
-    expect(body.players[0]).toHaveProperty("wagered");
+    expect(body.players[0]).toHaveProperty("amount");
     expect(body.players[0]).toHaveProperty("prize");
     expect(body.players[0]).toHaveProperty("position");
     // Countdown should exist when endsAt is set
@@ -128,8 +129,8 @@ describe("handlePublicPlayers", () => {
     expect(body).toHaveProperty("players");
     expect(Array.isArray(body.players)).toBe(true);
     expect(body.players).toHaveLength(3);
-    // Sorted by wagered descending
-    expect(body.players[0].wagered).toBeGreaterThanOrEqual(body.players[1].wagered);
+    // Sorted by amount descending
+    expect(body.players[0].amount).toBeGreaterThanOrEqual(body.players[1].amount);
   });
 
   it("returns truthful pagination metadata and global ranks", async () => {
@@ -177,8 +178,8 @@ describe("handlePublicRank", () => {
     const env = mockEnv({
       brand: { name: "Community Board", period: "Monthly", prizePool: "" },
       players: [
-        { name: "Score Leader", score: 80, wagered: 1, prize: 0, rank: 1 },
-        { name: "Amount Leader", score: 20, wagered: 999, prize: 0, rank: 2 },
+        { name: "Score Leader", score: 80, amount: 1, prize: 0, rank: 1 },
+        { name: "Amount Leader", score: 20, amount: 999, prize: 0, rank: 2 },
       ],
     });
     const response = await handlePublicRank(
@@ -250,7 +251,7 @@ describe("handlePublicStream", () => {
     await reader.cancel();
     const payload = JSON.parse(new TextDecoder().decode(first.value).replace(/^data: |\n\n$/g, ""));
     expect(payload.updatedAt).toBe("2026-01-01T00:00:00.000Z");
-    expect(payload.players).toEqual(mockSiteData.players);
+    expect(payload.players).toEqual(addLegacyPublicOutputAliases({ players: mockSiteData.players }).players);
   });
 });
 
@@ -263,6 +264,17 @@ describe("handlePublicData", () => {
     const body = await res.json();
     expect(body).toHaveProperty("brand");
     expect(body).toHaveProperty("players");
+  });
+
+  it("returns canonical fields with silent legacy JSON aliases", async () => {
+    const env = mockEnv();
+    const res = await handlePublicData(req("https://test.com/api/public/testboard"), env, { slug: "testboard" });
+    const body = await res.json();
+    expect(body.rankBy).toBe("amount");
+    expect(body.brand.sponsor).toBeTruthy();
+    expect(body.brand.casino).toBe(body.brand.sponsor);
+    expect(body.players[0].amount).toBeGreaterThan(0);
+    expect(body.players[0].wagered).toBe(body.players[0].amount);
   });
 
   it("returns 404 for nonexistent slug", async () => {

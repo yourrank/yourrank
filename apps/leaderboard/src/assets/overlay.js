@@ -73,7 +73,7 @@
 
   // --- Render top N players with FLIP animation ---
   let prevRanks = {};
-  let prevWagers = {};
+  let prevMetricValues = {};
 
   function renderPlayers(players) {
     const sorted = players.slice().sort((a, b) => Number(b[rankBy] || 0) - Number(a[rankBy] || 0)).slice(0, TOP_N);
@@ -94,7 +94,7 @@
       const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "#" + rank;
       const isNew = !prevRanks[p.name];
       const metricValue = Number(p[rankBy] || 0);
-      const scoreChanged = prevWagers[p.name] !== undefined && prevWagers[p.name] !== metricValue;
+      const scoreChanged = prevMetricValues[p.name] !== undefined && prevMetricValues[p.name] !== metricValue;
       const movedUp = prevRanks[p.name] && prevRanks[p.name] > rank;
       const movedDown = prevRanks[p.name] && prevRanks[p.name] < rank;
       const dirClass = ANIMATE && movedUp ? "ov-moved-up" : ANIMATE && movedDown ? "ov-moved-down" : "";
@@ -103,7 +103,7 @@
       return `<div class="ov-row ${dirClass} ${flashClass} ${entryClass}" data-name="${esc(p.name)}">
         <span class="ov-medal">${medal}</span>
         <span class="ov-name">${esc(p.name)}</span>
-        <span class="ov-wager">${rankBy === "score" ? metricValue.toLocaleString("en-US") + " pts" : fmtMoney(metricValue)}</span>
+        <span class="ov-metric">${rankBy === "score" ? metricValue.toLocaleString("en-US") + " pts" : fmtMoney(metricValue)}</span>
       </div>`;
     }).join("");
 
@@ -111,7 +111,7 @@
     const empty = TOP_N - sorted.length;
     const emptyHtml = empty > 0
       ? Array.from({ length: empty }, (_, i) =>
-        `<div class="ov-row ov-empty"><span class="ov-medal">#${sorted.length + i + 1}</span><span class="ov-name">—</span><span class="ov-wager">—</span></div>`
+        `<div class="ov-row ov-empty"><span class="ov-medal">#${sorted.length + i + 1}</span><span class="ov-name">—</span><span class="ov-metric">—</span></div>`
       ).join("")
       : "";
 
@@ -134,12 +134,12 @@
       }
     });
 
-    // Track previous ranks and the active score/legacy metric.
+    // Track previous ranks and the active ranking metric.
     prevRanks = {};
-    prevWagers = {};
+    prevMetricValues = {};
     sorted.forEach((p, i) => {
       prevRanks[p.name] = i + 1;
-      prevWagers[p.name] = Number(p[rankBy] || 0);
+      prevMetricValues[p.name] = Number(p[rankBy] || 0);
     });
 
     // Update count
@@ -215,7 +215,7 @@
     if (!ssr && _cfg?.dataset?.json) { try { ssr = JSON.parse(_cfg.dataset.json); } catch { /* JSON parse */ } }
     if (ssr) {
       endsAt = ssr.endsAt || null;
-      rankBy = ssr.rankBy === "wagered" ? "wagered" : "score";
+      rankBy = ssr.rankBy === "amount" ? "amount" : "score";
       renderPlayers(ssr.players || []);
     }
 

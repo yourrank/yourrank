@@ -350,7 +350,7 @@ function renderTopOffers(offers){
     oo.innerHTML = top.length
       ? top.map(o=>{
           const on = o.is_active;
-          return '<tr><td><strong>'+esc(o.casino)+'</strong>'+
+          return '<tr><td><strong>'+esc(o.partner)+'</strong>'+
             (o.label ? '<span class="tg-overview-offer-label">'+esc(o.label)+'</span>' : '')+'</td>'+
             '<td class="num" data-label="Clicks">'+esc(String(o.clicks||0))+'</td>'+
             '<td class="num" data-label="Conversions">'+esc(String(o.conversions||0))+'</td>'+
@@ -470,7 +470,7 @@ function offerRow(o){
       }).join('<br>')
     : '—';
   if (o.id === __editingOfferId) return offerEditRow(o);
-  return '<td><b>'+esc(o.casino)+'</b><br><span class="muted">'+esc(o.label)+'</span></td>'+
+  return '<td><b>'+esc(o.partner)+'</b><br><span class="muted">'+esc(o.label)+'</span></td>'+
   '<td>'+esc(String(o.clicks))+'</td><td>'+esc(String(o.conversions||0))+'</td>'+
   '<td>'+revenue+'</td>'+
   '<td class="'+(o.is_active?'ok':'off')+'">'+(o.is_active?'active':'off')+'</td>'+
@@ -483,9 +483,9 @@ function viewOfferDetails(target){
   const o = __offers.find(item => item.id === target.dataset.id);
   const wrap = $('offerDetails'), title = $('offerDetailsTitle'), body = $('offerDetailsBody');
   if (!o || !wrap || !body) return;
-  if (title) title.textContent = o.label || o.casino;
+  if (title) title.textContent = o.label || o.partner;
   body.innerHTML = '<dl class="tg-detail-grid">'+
-    '<div><dt>Partner</dt><dd>'+esc(o.casino)+'</dd></div>'+
+    '<div><dt>Partner</dt><dd>'+esc(o.partner)+'</dd></div>'+
     '<div><dt>Share link</dt><dd>'+esc(o.slug ? '/r/'+o.slug : '—')+'</dd></div>'+
     '<div><dt>Clicks</dt><dd>'+esc(String(o.clicks || 0))+'</dd></div>'+
     '<div><dt>People reached</dt><dd>'+esc(String(o.unique_clicks || 0))+'</dd></div>'+
@@ -506,7 +506,7 @@ function offerEditRow(o){
   };
   return '<td colspan="6"><div class="offer-edit">'+
     '<div class="offer-edit-grid">'+
-      fld('eCasino','Brand or partner',o.casino)+
+      fld('ePartner','Brand or partner',o.partner)+
       fld('eLabel','Offer name',o.label)+
       fld('eUrl','Partner link',o.referral_url,{wide:true,type:'url'})+
       fld('eCode','Promo code <span class="muted font-400">(optional)</span>',o.promo_code)+
@@ -614,7 +614,7 @@ function renderOffers(){
   if (!__offersCtrl) {
     __offersCtrl = new ListController({
       tbody: 'offers', items: __offers || [], perPage: 10,
-      searchFn: function(o){ return [o.casino, o.label, o.slug, o.code].filter(Boolean).join(' '); },
+      searchFn: function(o){ return [o.partner, o.label, o.slug, o.code].filter(Boolean).join(' '); },
       sortOptions: [
           { key: 'clicks', label: 'Clicks', fn: function(a,b){ return (b.clicks||0) - (a.clicks||0); } },
           { key: 'conversions', label: 'Reported conversions', fn: function(a,b){ return (b.conversions||0) - (a.conversions||0); } },
@@ -765,10 +765,10 @@ function cancelOfferEdit(){
   renderOffers();
 }
 async function saveOfferEdit(target){
-  ['eCasino','eLabel','eUrl','eCode','eBonus'].forEach(id => clearFieldErr(id));
-  const body = { casino:$('eCasino').value.trim(), label:$('eLabel').value.trim(), referral_url:$('eUrl').value.trim(),
+  ['ePartner','eLabel','eUrl','eCode','eBonus'].forEach(id => clearFieldErr(id));
+  const body = { partner:$('ePartner').value.trim(), label:$('eLabel').value.trim(), referral_url:$('eUrl').value.trim(),
                  promo_code:$('eCode').value.trim()||undefined, bonus_text:$('eBonus').value.trim()||undefined };
-  if (!body.casino) { setFieldErr('eCasino','Enter a brand or partner name'); return; }
+  if (!body.partner) { setFieldErr('ePartner','Enter a brand or partner name'); return; }
   if (!body.label) { setFieldErr('eLabel','Enter an offer name'); return; }
   if (!body.referral_url) { setFieldErr('eUrl','Enter a partner link'); return; }
   if (!body.referral_url.startsWith('http://') && !body.referral_url.startsWith('https://')) { setFieldErr('eUrl','URL must start with http:// or https://'); return; }
@@ -776,26 +776,26 @@ async function saveOfferEdit(target){
   const r = await api('/offers/'+target.dataset.id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
   if (r.error) { restoreBtn(target); return setFieldErr('eLabel', r.error); }
   const o = __offers.find(x => x.id === target.dataset.id);
-  if (o) { o.casino = body.casino; o.label = body.label; o.referral_url = body.referral_url; o.promo_code = body.promo_code || ''; o.bonus_text = body.bonus_text || ''; }
+  if (o) { o.partner = body.partner; o.label = body.label; o.referral_url = body.referral_url; o.promo_code = body.promo_code || ''; o.bonus_text = body.bonus_text || ''; }
   __editingOfferId = null;
   renderOffers();
   restoreBtn(target);
   toast('Offer updated');
 }
 function updateOfferPreview(){
-  const casino = ($('oCasino')?.value || '').trim();
+  const partner = ($('oPartner')?.value || '').trim();
   const label = ($('oLabel')?.value || '').trim();
   const url = ($('oUrl')?.value || '').trim();
   const code = ($('oCode')?.value || '').trim();
   const bonus = ($('oBonus')?.value || '').trim();
   const wrap = $('offerPreview');
   if (!wrap) return;
-  if (!casino && !label && !url) { wrap.hidden = true; return; }
+  if (!partner && !label && !url) { wrap.hidden = true; return; }
   const title = $('offerPreviewTitle'); if (title) title.textContent = 'Link preview';
   const actions = $('offerCreatedActions'); if (actions) actions.hidden = true;
   const parts = [];
   if (label) parts.push(label);
-  if (casino) parts.push('at ' + casino);
+  if (partner) parts.push('at ' + partner);
   if (bonus) parts.push('— ' + bonus);
   if (code) parts.push('Code: ' + code);
   const line = parts.join(' ');
@@ -809,10 +809,10 @@ function updateOfferPreview(){
   wrap.hidden = false;
 }
 async function createOffer(btn){
-  ['oCasino','oLabel','oUrl','oCode','oBonus'].forEach(id => clearFieldErr(id));
-  const body = { casino:$('oCasino').value.trim(), label:$('oLabel').value.trim(), referral_url:$('oUrl').value.trim(),
+  ['oPartner','oLabel','oUrl','oCode','oBonus'].forEach(id => clearFieldErr(id));
+  const body = { partner:$('oPartner').value.trim(), label:$('oLabel').value.trim(), referral_url:$('oUrl').value.trim(),
                  promo_code:$('oCode').value.trim()||undefined, bonus_text:$('oBonus').value.trim()||undefined };
-  if (!body.casino) { setFieldErr('oCasino','Enter a brand or partner name'); return; }
+  if (!body.partner) { setFieldErr('oPartner','Enter a brand or partner name'); return; }
   if (!body.label) { setFieldErr('oLabel','Enter an offer label'); return; }
   if (!body.referral_url) { setFieldErr('oUrl','Enter a referral URL'); return; }
   if (!body.referral_url.startsWith('http://') && !body.referral_url.startsWith('https://')) { setFieldErr('oUrl','URL must start with http:// or https://'); return; }
@@ -820,8 +820,8 @@ async function createOffer(btn){
   const r = await api('/offers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
   if (r.error) { restoreBtn(btn); setFieldErr('oLabel', r.error + ' — click Create again to retry.'); return; }
   const trackedLink = String(r.tracked_link || '');
-  const summary = [body.label, body.casino ? 'at '+body.casino : ''].filter(Boolean).join(' ');
-  ['oCasino','oLabel','oUrl','oCode','oBonus'].forEach(id=>$(id).value='');
+  const summary = [body.label, body.partner ? 'at '+body.partner : ''].filter(Boolean).join(' ');
+  ['oPartner','oLabel','oUrl','oCode','oBonus'].forEach(id=>$(id).value='');
   const wrap = $('offerPreview'); if (wrap) wrap.hidden = false;
   const title = $('offerPreviewTitle'); if (title) title.textContent = 'Tracked link ready';
   const urlEl = $('offerPreviewUrl');
@@ -1664,7 +1664,7 @@ window.addEventListener('beforeunload', (e) => {
   e.preventDefault();
   e.returnValue = '';
 });
-['oCasino','oLabel','oUrl','oCode','oBonus'].forEach(id => {
+['oPartner','oLabel','oUrl','oCode','oBonus'].forEach(id => {
   const el = $(id);
   if (el) el.addEventListener('input', updateOfferPreview);
 });

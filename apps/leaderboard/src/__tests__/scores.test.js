@@ -142,7 +142,7 @@ const proOwner    = () => ({ plan: "pro", plan_expires_at: Date.now() + 86_400_0
 const agencyOwner = () => ({ plan: "agency", plan_expires_at: Date.now() + 86_400_000 * 30, status: "active" });
 const site        = () => ({ id: "site-1", user_id: "user-1" });
 const existingSite = () => ({
-  id: "site-1", slug: "testslug", name: "Test", tagline: "", casino: "Example Sponsor",
+  id: "site-1", slug: "testslug", name: "Test", tagline: "", sponsor: "Example Sponsor",
   code: "CODE", cta_url: "", prize_pool: "", period: "Monthly", ends_at: null,
   reset_note: null, blurb: "", extra_json: null, published: true, theme_json: null,
   updated_at: new Date().toISOString(),
@@ -246,7 +246,7 @@ describe("handleScores — plan gate", () => {
 });
 
 describe("handleScores — players_per_site allowance", () => {
-  const players = (count) => Array.from({ length: count }, (_, index) => ({ name: `Player ${index + 1}`, wagered: count - index }));
+  const players = (count) => Array.from({ length: count }, (_, index) => ({ name: `Player ${index + 1}`, amount: count - index }));
   beforeEach(() => {
     _siteRow = site();
     _ownerRow = proOwner();
@@ -303,7 +303,7 @@ describe("handleScores — payload validation", () => {
 
   test("too many players for plan returns 400", async () => {
     _ownerRow = agencyOwner();
-    const players = Array.from({ length: 10000 }, (_, i) => ({ name: `Player${i}`, wagered: 100 }));
+    const players = Array.from({ length: 10000 }, (_, i) => ({ name: `Player${i}`, amount: 100 }));
     const req = makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players } });
     const res = await invokeScores(req, makeEnv());
     expect(res.status).toBe(400);
@@ -313,8 +313,8 @@ describe("handleScores — payload validation", () => {
 
   test("valid pro request returns 200 with player count", async () => {
     const players = [
-      { name: "Alice", wagered: 5000, prize: 100 },
-      { name: "Bob",   wagered: 3000, prize: 50  },
+      { name: "Alice", amount: 5000, prize: 100 },
+      { name: "Bob",   amount: 3000, prize: 50  },
     ];
     const req = makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players } });
     const res = await invokeScores(req, makeEnv());
@@ -326,7 +326,7 @@ describe("handleScores — payload validation", () => {
 
   test("valid team request returns 200 with player count", async () => {
     _ownerRow = { plan: "team", plan_expires_at: Date.now() + 86_400_000 * 30, status: "active" };
-    const players = [{ name: "Alice", wagered: 5000, prize: 100 }];
+    const players = [{ name: "Alice", amount: 5000, prize: 100 }];
     const req = makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players } });
     const res = await invokeScores(req, makeEnv());
     expect(res.status).toBe(200);
@@ -335,20 +335,50 @@ describe("handleScores — payload validation", () => {
     expect(body.players).toBe(1);
   });
 
-  test("accepts name and score without requiring wagered", async () => {
+  test("accepts name and score without requiring amount", async () => {
     const req = makeRequest({
       headers: { "x-postback-key": "key" },
       body: { slug: "test", players: [{ name: "Score Player", score: 88 }] },
     });
     const res = await invokeScores(req, makeEnv());
     expect(res.status).toBe(200);
-    expect(_savedPayload.players[0]).toMatchObject({ name: "Score Player", score: 88, wagered: 0 });
+    expect(_savedPayload.players[0]).toMatchObject({ name: "Score Player", score: 88, amount: 0 });
+  });
+
+  test("accepts legacy player aliases and stores only the canonical fields", async () => {
+    const req = makeRequest({
+      headers: { "x-postback-key": "key" },
+      body: {
+        slug: "test",
+        players: [{ name: "Legacy Player", wagered: 42, hands: 6, netProfit: -3, winRate: 0.75 }],
+      },
+    });
+    const res = await invokeScores(req, makeEnv());
+    expect(res.status).toBe(200);
+    expect(_savedPayload.players[0]).toEqual({
+      name: "Legacy Player",
+      normalizedName: "legacy player",
+      amount: 42,
+      prize: 0,
+      score: 0,
+      change: 0,
+    });
+  });
+
+  test("canonical amount takes precedence over the legacy player alias", async () => {
+    const req = makeRequest({
+      headers: { "x-postback-key": "key" },
+      body: { slug: "test", players: [{ name: "Priority Player", amount: 75, wagered: 42 }] },
+    });
+    const res = await invokeScores(req, makeEnv());
+    expect(res.status).toBe(200);
+    expect(_savedPayload.players[0].amount).toBe(75);
   });
 
   test("players without a name are rejected", async () => {
     const players = [
-      { name: "Alice", wagered: 1000 },
-      { wagered: 500 },
+      { name: "Alice", amount: 1000 },
+      { amount: 500 },
     ];
     const req = makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players } });
     const res = await invokeScores(req, makeEnv());
@@ -367,7 +397,7 @@ describe("handleScores — payload validation", () => {
   test("unknown player fields are rejected", async () => {
     const req = makeRequest({
       headers: { "x-postback-key": "key" },
-      body: { slug: "test", players: [{ name: "Player", wagered: 100, admin: true }] },
+      body: { slug: "test", players: [{ name: "Player", amount: 100, admin: true }] },
     });
     const res = await invokeScores(req, makeEnv());
     expect(res.status).toBe(400);
@@ -379,8 +409,8 @@ describe("handleScores — payload validation", () => {
       body: {
         slug: "test",
         players: [
-          { name: "Player One", wagered: 100 },
-          { name: " player   one ", wagered: 50 },
+          { name: "Player One", amount: 100 },
+          { name: " player   one ", amount: 50 },
         ],
       },
     });
@@ -406,7 +436,7 @@ describe("handleScores — payload validation", () => {
 
   test("saveSite error is surfaced as 400", async () => {
     _saveSiteResult = { error: "slug already taken" };
-    const req = makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players: [{ name: "Alice", wagered: 100 }] } });
+    const req = makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players: [{ name: "Alice", amount: 100 }] } });
     const res = await invokeScores(req, makeEnv());
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -507,9 +537,9 @@ describe("PATCH /api/scores", () => {
   });
 
   test("passes the submitted players to the server-side merge and returns counts", async () => {
-    const res = await invokeUpsert(makePatchRequest({ body: { slug: "test", players: [{ name: "Alice", score: 50 }, { name: "New", wagered: 5 }] } }), makeEnv());
+    const res = await invokeUpsert(makePatchRequest({ body: { slug: "test", players: [{ name: "Alice", score: 50 }, { name: "New", amount: 5 }] } }), makeEnv());
     expect(res.status).toBe(200);
-    expect(_saveOptions.scorePatch).toEqual([{ name: "Alice", score: 50 }, { name: "New", wagered: 5 }]);
+    expect(_saveOptions.scorePatch).toEqual([{ name: "Alice", score: 50 }, { name: "New", amount: 5 }]);
     expect(_savedPayload.players).toBeUndefined();
     const body = await res.json();
     expect(body).toEqual({ ok: true, players: 4, updated: 1, created: 1 });
@@ -567,7 +597,7 @@ describe("Idempotency-Key", () => {
 
   test("releases the reservation on a 4xx so the key can be retried", async () => {
     _saveSiteResult = { error: "slug already taken" };
-    const res = await invokeScores(makeRequest({ headers: { "x-postback-key": "key", "idempotency-key": "abc" }, body: { slug: "test", players: [{ name: "A", wagered: 1 }] } }), makeEnv());
+    const res = await invokeScores(makeRequest({ headers: { "x-postback-key": "key", "idempotency-key": "abc" }, body: { slug: "test", players: [{ name: "A", amount: 1 }] } }), makeEnv());
     expect(res.status).toBe(400);
     expect(_idem.released).toHaveLength(1);
     expect(_idem.completed).toHaveLength(0);

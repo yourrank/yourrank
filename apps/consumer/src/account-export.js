@@ -250,12 +250,12 @@ export async function processAccountExport(event, env, {
       },
     }) + "\n");
     for (const row of userRows) await writer.write(JSON.stringify({ table: "user", row }) + "\n");
-    actualCounts.sites = await emitPages(writer, "sites", `SELECT id, slug, name, tagline, casino, code, cta_url, prize_pool, period, ends_at,
+    actualCounts.sites = await emitPages(writer, "sites", `SELECT id, slug, name, tagline, sponsor, code, cta_url, prize_pool, period, ends_at,
       reset_note, blurb, extra_json, published, theme_json, updated_at, custom_domain,
       domain_status, suspended, telegram_chat_id, telegram_notify
       FROM sites WHERE user_id=$1`, [userId], "id", read);
 
-    actualCounts.players = await emitPages(writer, "players", "SELECT id, site_id, name, normalized_name, wagered, prize, sort, updated_at, version, score, hands, net_profit, win_rate, change FROM players WHERE " + siteFilter, [siteIds], "id", read);
+    actualCounts.players = await emitPages(writer, "players", "SELECT id, site_id, name, normalized_name, amount, prize, sort, updated_at, version, score, change FROM players WHERE " + siteFilter, [siteIds], "id", read);
     actualCounts.archives = await emitPages(writer, "archives", "SELECT id, site_id, label, snapshot_json, top3_json, winner_name, created_at FROM archives WHERE " + siteFilter, [siteIds], "id", read);
 
     /** @type {Array<[string, string, string, ((row: any) => any)?]>} */
@@ -264,7 +264,7 @@ export async function processAccountExport(event, env, {
       ["payments", "SELECT id, subscription_id, provider, invoice_id, amount, currency, tx_ref, status, created_at, updated_at, plan_tier FROM payments WHERE user_id=$1", "id"],
       ["sessions", "SELECT token, created_at, expires_at, twofa_verified FROM sessions WHERE user_id=$1", "token",
         ({ token: _token, ...row }) => row],
-      ["offers", "SELECT id, casino_id, label, referral_url, promo_code, bonus_text, priority, is_active, created_at, updated_at FROM offers WHERE owner_id=$1", "id"],
+      ["offers", "SELECT id, partner_id, label, referral_url, promo_code, bonus_text, priority, is_active, created_at, updated_at FROM offers WHERE owner_id=$1", "id"],
       ["conversions", "SELECT id, offer_id, click_ref, event, amount, currency, raw, ts FROM conversions WHERE owner_id=$1", "id"],
       ["bots", "SELECT id, tg_bot_id, username, token_hint, status, welcome_message, created_at, updated_at FROM bots WHERE owner_id=$1", "id"],
       ["postbackKeys", "SELECT id, label, created_at, revoked_at, expires_at, last_used_at FROM postback_keys WHERE user_id=$1", "id"],

@@ -8,10 +8,10 @@ const assets = join(root, "apps/leaderboard/src/assets");
 const css = readFileSync(join(assets, "site-shell.css"), "utf8");
 const shell = readFileSync(join(assets, "site-shell.js"), "utf8");
 
-const player = (name, rank, wagered, prize) => ({ name, rank, wagered, prize });
+const player = (name, rank, amount, prize) => ({ name, rank, amount, prize });
 
 const baseData = {
-  rankBy: "wagered",
+  rankBy: "amount",
   brand: { name: "Creator Name", tagline: "Weekly board", period: "Monthly", prizePool: "$500" },
   branding: { template: "cyber_arcade", font: "Inter", options: {} },
   players: [player("Alice", 1, 5000, 300), player("Bob", 2, 3000, 150), player("Cara", 3, 1000, 50)],
@@ -43,8 +43,8 @@ describe("public leaderboard standings", () => {
       brand: { name: "Neutral Creator", tagline: "Community standings", period: "Monthly", prizePool: "" },
       prizes: {},
       players: [
-        { name: "High score", rank: 1, score: 42, wagered: 0, prize: 0 },
-        { name: "Second", rank: 2, score: 20, wagered: 900, prize: 0 },
+        { name: "High score", rank: 1, score: 42, amount: 0, prize: 0 },
+        { name: "Second", rank: 2, score: 20, amount: 900, prize: 0 },
       ],
     };
     const home = await render("home", { data: neutral });
@@ -58,8 +58,8 @@ describe("public leaderboard standings", () => {
     expect(leaderboard).not.toContain(">Prize</span>");
   });
 
-  it("keeps explicitly wager-ranked historical boards contained", async () => {
-    const html = await render("leaderboard", { data: { ...baseData, rankBy: "wagered" } });
+  it("keeps explicitly amount-ranked historical boards contained", async () => {
+    const html = await render("leaderboard", { data: { ...baseData, rankBy: "amount" } });
     expect(html).toContain("Ranked by amount");
     expect(html).toContain('<span class="yr-sr">Amount: </span>');
     expect(html).toContain("$5,000");
@@ -142,7 +142,7 @@ describe("public leaderboard standings", () => {
     expect(plain).not.toContain('href="#viewer-rules-title"');
 
     const sponsored = await render("leaderboard", {
-      data: { ...baseData, brand: { ...baseData.brand, casino: "Acme Sponsor" }, rules: ["Participants must meet local age requirements.", "Rewards within 7 days."] },
+      data: { ...baseData, brand: { ...baseData.brand, sponsor: "Acme Sponsor" }, rules: ["Participants must meet local age requirements.", "Rewards within 7 days."] },
     });
     expect(sponsored).toContain('<p class="viewer-rules-payout">$500 prize pool, awarded by Acme Sponsor to the top-ranked players under these rules.');
     expect(sponsored).not.toContain('yr-note yr-note--w');

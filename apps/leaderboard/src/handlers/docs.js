@@ -3,7 +3,7 @@
 import { json } from "../auth.js";
 import { SECURE_HTML } from "../middleware/headers.js";
 import { getPlanLimit } from "@yourrank/shared/plans";
-import { SCORE_MAX, WIN_RATE_MAX, INT32_MAX, INT32_MIN } from "../player-rules.js";
+import { SCORE_MAX, INT32_MAX, INT32_MIN } from "../player-rules.js";
 import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@yourrank/shared/api-idempotency";
 
 export const DOCS_PATH = "/docs/api";
@@ -35,7 +35,7 @@ const publicBoardResponses = (okResponse) => ({
 const writeErrorResponses = {
   400: {
     description: "Validation error. The `error` string names the first failing field (`players.0.name: …`) or the missing board reference.",
-    content: errorContent("players.0.wagered: Number must be greater than or equal to 0"),
+    content: errorContent("players.0.amount: Number must be greater than or equal to 0"),
   },
   401: {
     description: "Missing `X-Postback-Key` / `X-Postback-Signature`, signature does not match the raw body, or the key is unknown, revoked, expired, or does not own the referenced board.",
@@ -78,12 +78,9 @@ const playerWriteSchema = {
   required: ["name"],
   properties: {
     name: { type: "string", minLength: 1, maxLength: 80, description: "Display name. Names are matched case-insensitively with whitespace collapsed; two players in one request may not normalise to the same name." },
-    wagered: { type: ["number", "string"], minimum: 0, maximum: SCORE_MAX, description: "Amount. Numeric strings are accepted." },
+    amount: { type: ["number", "string"], minimum: 0, maximum: SCORE_MAX, description: "Amount. Numeric strings are accepted." },
     prize: { type: ["number", "string"], minimum: 0, maximum: SCORE_MAX, description: "Prize amount." },
     score: { type: ["number", "string"], minimum: 0, maximum: SCORE_MAX, description: "Points. Used for ranking when the board ranks by score." },
-    hands: { type: ["integer", "string"], minimum: 0, maximum: INT32_MAX, description: "Rounds / hands played." },
-    netProfit: { type: ["number", "string"], minimum: -SCORE_MAX, maximum: SCORE_MAX, description: "Net amount. Defaults to `prize - wagered` for players created without it." },
-    winRate: { type: ["number", "string"], minimum: -WIN_RATE_MAX, maximum: WIN_RATE_MAX, description: "Win rate percentage." },
     change: { type: ["integer", "string"], minimum: INT32_MIN, maximum: INT32_MAX, description: "Rank movement indicator (positive = moved up)." },
   },
 };
@@ -96,15 +93,15 @@ const boardSelectionProps = {
 const bulkBodyExample = {
   slug: "your-board",
   players: [
-    { name: "Alex", wagered: 12500.5, prize: 1000, score: 4820, hands: 312, netProfit: -11500.5, winRate: 48.2, change: 1 },
-    { name: "Sam", wagered: 9800, prize: 500, score: 4100 },
+    { name: "Alex", amount: 12500.5, prize: 1000, score: 4820, change: 1 },
+    { name: "Sam", amount: 9800, prize: 500, score: 4100 },
   ],
 };
 const patchBodyExample = {
   slug: "your-board",
   players: [
     { name: "Alex", score: 5100 },
-    { name: "Jordan", wagered: 300, score: 120 },
+    { name: "Jordan", amount: 300, score: 120 },
   ],
 };
 
@@ -237,7 +234,7 @@ The read endpoints under \`/api/public/{slug}\` return the published board. Pass
 \`PATCH /api/scores\` upserts the submitted players and leaves everyone else untouched:
 
 - a player whose name already exists on the board → only the fields you send are updated; omitted fields keep their stored values;
-- a new name → the player is created; omitted numeric fields default to \`0\` (\`netProfit\` defaults to \`prize - wagered\`);
+- a new name → the player is created; omitted numeric fields default to \`0\`;
 - players you do not mention are not modified or removed.
 
 The merged board still has to respect your plan's player limit (Pro ${getPlanLimit("pro","players_per_site").toLocaleString("en-US")}, Team ${getPlanLimit("team","players_per_site").toLocaleString("en-US")}).
@@ -330,7 +327,7 @@ export const spec = {
         tags: ["Leaderboards"],
         operationId: "getStandings",
         summary: "Sorted player standings",
-        description: "Players sorted by the board's ranking metric (`rankBy`: `score` or `wagered`) with 1-based positions and, when the board has an end date, a countdown. Cached for 30 seconds.",
+        description: "Players sorted by the board's ranking metric (`rankBy`: `score` or `amount`) with 1-based positions and, when the board has an end date, a countdown. Cached for 30 seconds.",
         parameters: [{ $ref: "#/components/parameters/Slug" }],
         responses: publicBoardResponses({
           description: "Standings",
@@ -339,8 +336,8 @@ export const spec = {
             "application/json": {
               schema: { $ref: "#/components/schemas/Standings" },
               example: {
-                slug: "demo", name: "Demo Leaderboard", casino: "Example Sponsor", period: "Monthly", prizePool: "$5,000", rankBy: "score",
-                players: [{ name: "Alex", score: 4820, wagered: 12500.5, prize: 1000, position: 1 }],
+                slug: "demo", name: "Demo Leaderboard", sponsor: "Example Sponsor", period: "Monthly", prizePool: "$5,000", rankBy: "score",
+                players: [{ name: "Alex", score: 4820, amount: 12500.5, prize: 1000, position: 1 }],
                 countdown: { endsAt: "2026-10-31T23:59:59.000Z", remaining: 3372800000 },
               },
             },
@@ -353,7 +350,7 @@ export const spec = {
         tags: ["Leaderboards"],
         operationId: "listPlayers",
         summary: "Paginated players",
-        description: "A page of players sorted by the board's ranking metric, with every stored metric and the board-wide `rank`. Supports `limit`/`offset` pagination and a case-insensitive `search` on the name. Cached for 10 seconds and served with a weak `ETag`; send `If-None-Match` to receive `304 Not Modified`.",
+        description: "A page of players sorted by the board's ranking metric, with amount, prize, score, change, and the board-wide `rank`. Supports `limit`/`offset` pagination and a case-insensitive `search` on the name. Cached for 10 seconds and served with a weak `ETag`; send `If-None-Match` to receive `304 Not Modified`.",
         parameters: [
           { $ref: "#/components/parameters/Slug" },
           { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 100 }, description: "Page size. Values outside 1–100 are clamped." },
@@ -369,7 +366,7 @@ export const spec = {
               "application/json": {
                 schema: { $ref: "#/components/schemas/PlayersPage" },
                 example: {
-                  players: [{ name: "Alex", wagered: 12500.5, prize: 1000, score: 4820, hands: 312, netProfit: -11500.5, winRate: 48.2, change: 1, rank: 1 }],
+                  players: [{ name: "Alex", amount: 12500.5, prize: 1000, score: 4820, change: 1, rank: 1 }],
                   total: 2, offset: 0, limit: 100, hasMore: false,
                 },
               },
@@ -440,7 +437,7 @@ export const spec = {
         tags: ["Scores"],
         operationId: "replaceScores",
         summary: "Replace the board's player list",
-        description: `**This endpoint replaces the board's current player list.** Players missing from \`players\` are deleted; players present are created or overwritten with the submitted values (omitted numeric fields become \`0\`, \`netProfit\` defaults to \`prize - wagered\`). Use \`PATCH /api/scores\` to update individual players instead.
+        description: `**This endpoint replaces the board's current player list.** Players missing from \`players\` are deleted; players present are created or overwritten with the submitted values (omitted numeric fields become \`0\`). Use \`PATCH /api/scores\` to update individual players instead.
 
 Requires Pro or Team, a board reference, and a valid signature. Rejected with \`409\` while the leaderboard has not started or after it has ended. Rate limit: 10 requests / minute per key.`,
         security: [{ ApiSigningKey: [] }],
@@ -481,7 +478,7 @@ Requires Pro or Team, a board reference, and a valid signature. Rejected with \`
         tags: ["Scores"],
         operationId: "upsertScores",
         summary: "Update or create individual players",
-        description: `Upserts the submitted players and leaves every other player untouched. For an existing name only the fields you include are changed; omitted fields keep their stored values. Unknown names are created (omitted numeric fields default to \`0\`, \`netProfit\` to \`prize - wagered\`). The merge is applied atomically under a board lock, so concurrent updates cannot overwrite each other.
+        description: `Upserts the submitted players and leaves every other player untouched. For an existing name only the fields you include are changed; omitted fields keep their stored values. Unknown names are created (omitted numeric fields default to \`0\`). The merge is applied atomically under a board lock, so concurrent updates cannot overwrite each other.
 
 Requires Pro or Team, a board reference, and a valid signature. Rejected with \`409\` while the leaderboard has not started or after it has ended. The merged board must stay within your plan's player limit. Rate limit: 60 requests / minute per key.`,
         security: [{ ApiSigningKey: [] }],
@@ -507,9 +504,9 @@ Requires Pro or Team, a board reference, and a valid signature. Rejected with \`
               },
               examples: {
                 updateOne: { summary: "Update one existing player", value: { slug: "your-board", players: [{ name: "Alex", score: 5100 }] } },
-                createOne: { summary: "Create a new player", value: { slug: "your-board", players: [{ name: "Jordan", wagered: 300, prize: 0, score: 120 }] } },
+                createOne: { summary: "Create a new player", value: { slug: "your-board", players: [{ name: "Jordan", amount: 300, prize: 0, score: 120 }] } },
                 updateMany: { summary: "Update several players", value: patchBodyExample },
-                partialFields: { summary: "Omitted fields stay unchanged", description: "Only `wagered` changes for Alex; score, prize, hands, netProfit, winRate and change keep their stored values.", value: { siteId: "3fa85f64-5717-4562-b3fc-2c963f66afa6", players: [{ name: "Alex", wagered: 13000 }] } },
+                partialFields: { summary: "Omitted fields stay unchanged", description: "Only `amount` changes for Alex; score, prize and change keep their stored values.", value: { siteId: "3fa85f64-5717-4562-b3fc-2c963f66afa6", players: [{ name: "Alex", amount: 13000 }] } },
               },
             },
           },
@@ -541,12 +538,9 @@ Requires Pro or Team, a board reference, and a valid signature. Rejected with \`
         type: "object",
         properties: {
           name: { type: "string" },
-          wagered: { type: "number" },
+          amount: { type: "number" },
           prize: { type: "number" },
           score: { type: "number" },
-          hands: { type: "integer" },
-          netProfit: { type: "number" },
-          winRate: { type: "number" },
           change: { type: "integer" },
           rank: { type: "integer", description: "1-based rank across the whole board (not just this page)." },
         },
@@ -556,7 +550,7 @@ Requires Pro or Team, a board reference, and a valid signature. Rejected with \`
         properties: {
           name: { type: "string" },
           score: { type: "number" },
-          wagered: { type: "number" },
+          amount: { type: "number" },
           prize: { type: "number" },
           position: { type: "integer", description: "1-based position." },
         },
@@ -577,10 +571,10 @@ Requires Pro or Team, a board reference, and a valid signature. Rejected with \`
         properties: {
           slug: { type: "string" },
           name: { type: "string" },
-          casino: { type: "string" },
+          sponsor: { type: "string" },
           period: { type: "string" },
           prizePool: { type: "string" },
-          rankBy: { type: "string", enum: ["score", "wagered"] },
+          rankBy: { type: "string", enum: ["score", "amount"] },
           players: { type: "array", items: { $ref: "#/components/schemas/StandingsPlayer" } },
           countdown: {
             type: ["object", "null"],
@@ -593,10 +587,10 @@ Requires Pro or Team, a board reference, and a valid signature. Rejected with \`
         description: "The renderer's data object. Only the stable top-level keys are listed; additional presentation keys may appear.",
         additionalProperties: true,
         properties: {
-          brand: { type: "object", properties: { name: { type: "string" }, casino: { type: "string" }, code: { type: "string" }, ctaUrl: { type: "string" }, prizePool: { type: "string" }, period: { type: "string" }, tagline: { type: "string" }, resetNote: { type: "string" }, blurb: { type: "string" } } },
+          brand: { type: "object", properties: { name: { type: "string" }, sponsor: { type: "string" }, code: { type: "string" }, ctaUrl: { type: "string" }, prizePool: { type: "string" }, period: { type: "string" }, tagline: { type: "string" }, resetNote: { type: "string" }, blurb: { type: "string" } } },
           prizes: { type: "object" },
           branding: { type: "object" },
-          rankBy: { type: "string", enum: ["score", "wagered"] },
+          rankBy: { type: "string", enum: ["score", "amount"] },
           players: { type: "array", items: { $ref: "#/components/schemas/PlayerRead" } },
           playerCount: { type: "integer" },
           startsAt: { type: ["string", "null"], format: "date-time" },

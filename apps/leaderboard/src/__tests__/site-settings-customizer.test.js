@@ -653,7 +653,7 @@ describe("behavior: the chosen accent is the only accent", () => {
 // collect() reads the whole editor form, so a payload assertion needs the
 // fields it reads to exist. Values are irrelevant to the accent question.
 const COLLECT_FIELDS = [
-  "f_name", "f_tagline", "f_casino", "f_code", "f_cta", "f_pool", "f_period",
+  "f_name", "f_tagline", "f_sponsor", "f_code", "f_cta", "f_pool", "f_period",
   "f_starts", "f_ends", "f_rank_by", "f_blurb", "f_font",
   "f_prizePoolLabel", "f_payoutsLabel", "f_countdownLabel", "f_currency", "f_hidePrizeAmounts",
   "f_legal_privacy", "f_legal_terms", "f_legal_cookies", "f_legal_refund", "f_legal_contact",
@@ -673,10 +673,10 @@ it("preserves editor scores in the Home player summary", async () => {
   elements.clear();
   const rows = register("rows");
   const row = new FakeElement();
-  row.querySelector = (selector) => ({ value: ({ ".p-name": "Alex", ".p-score": "9500", ".p-wager": "0", ".p-prize": "0" })[selector] });
+  row.querySelector = (selector) => ({ value: ({ ".p-name": "Alex", ".p-score": "9500", ".p-amount": "0", ".p-prize": "0" })[selector] });
   rows.children = [row];
   const { currentPlayers } = await import("../assets/dashboard/utils.js");
-  expect(currentPlayers()).toEqual([{ name: "Alex", score: 9500, wagered: 0, prize: 0 }]);
+  expect(currentPlayers()).toEqual([{ name: "Alex", score: 9500, amount: 0, prize: 0 }]);
   elements.clear();
 });
 

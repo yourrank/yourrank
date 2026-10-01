@@ -14,6 +14,7 @@ import {
   liveBoardRetryAfter,
   liveBoardStreamDisabled,
 } from "../live-board-config.js";
+import { addLegacyPublicOutputAliases, rankByFromDb } from "@yourrank/shared/legacy-schema";
 
 /**
  * Handle GET /api/public/:slug/standings
@@ -30,23 +31,24 @@ export async function handlePublicStandings(request, env, deps = {}) {
     if (slug === "demo") {
       const d = demoLeaderboardData();
       const sorted = (d.players || []).slice().sort((a, b) => (a.rank || 0) - (b.rank || 0));
-      const players = sorted.map((p, i) => ({ name: p.name, score: p.score, wagered: p.wagered, prize: p.prize, position: Number(p.rank) || i + 1 }));
+      const players = sorted.map((p, i) => ({ name: p.name, score: p.score, amount: p.amount, prize: p.prize, position: Number(p.rank) || i + 1 }));
       const endsAt = d.endsAt || null;
       let countdown = null;
       if (endsAt) {
         const remaining = Math.max(0, new Date(endsAt).getTime() - Date.now());
         countdown = { endsAt, remaining };
       }
-      return json({
+      return json(addLegacyPublicOutputAliases({
         slug,
         name: d.brand?.name || slug,
-        casino: d.brand?.casino || "",
+        sponsor: d.brand?.sponsor || "",
+        brand: d.brand,
         period: d.brand?.period || "Monthly",
         prizePool: d.brand?.prizePool || "$0",
-        rankBy: d.rankBy === "wagered" ? "wagered" : "score",
+        rankBy: rankByFromDb(d.rankBy),
         players,
         countdown,
-      }, 200, { "cache-control": "public, max-age=30", ...rateLimitHeaders(rl) });
+      }), 200, { "cache-control": "public, max-age=30", ...rateLimitHeaders(rl) });
     }
 
     const r = await getPublicSite(env, slug, request);
@@ -54,23 +56,24 @@ export async function handlePublicStandings(request, env, deps = {}) {
     if (!r || r.suspended) return bad("not found", 404);
     const d = r.data;
     const sorted = (d.players || []).slice().sort((a, b) => (a.rank || 0) - (b.rank || 0));
-    const players = sorted.map((p, i) => ({ name: p.name, score: p.score, wagered: p.wagered, prize: p.prize, position: Number(p.rank) || i + 1 }));
+    const players = sorted.map((p, i) => ({ name: p.name, score: p.score, amount: p.amount, prize: p.prize, position: Number(p.rank) || i + 1 }));
     const endsAt = d.endsAt || null;
     let countdown = null;
     if (endsAt) {
       const remaining = Math.max(0, new Date(endsAt).getTime() - Date.now());
       countdown = { endsAt, remaining };
     }
-    return json({
+    return json(addLegacyPublicOutputAliases({
       slug,
       name: d.brand?.name || slug,
-      casino: d.brand?.casino || "",
+      sponsor: d.brand?.sponsor || "",
+      brand: d.brand,
       period: d.brand?.period || "Monthly",
       prizePool: d.brand?.prizePool || "$0",
-      rankBy: d.rankBy === "wagered" ? "wagered" : "score",
+      rankBy: rankByFromDb(d.rankBy),
       players,
       countdown,
-    }, 200, { "cache-control": "public, max-age=30", ...rateLimitHeaders(rl) });
+    }), 200, { "cache-control": "public, max-age=30", ...rateLimitHeaders(rl) });
   } catch (e) {
     console.error("[public/standings]", String(e?.message || e));
     return bad("Something went wrong. Try again.", 500);
@@ -102,11 +105,11 @@ export async function handlePublicPlayers(request, env, deps = {}) {
     // Demo board has no DB row — serve static demo data.
     if (slug === "demo") {
       const d = demoLeaderboardData();
-      const rankBy = d.rankBy === "wagered" ? "wagered" : "score";
+      const rankBy = rankByFromDb(d.rankBy);
       const all = (d.players || []).slice().sort((a, b) => Number(b[rankBy] || 0) - Number(a[rankBy] || 0));
       const filtered = search ? all.filter((p) => String(p.name || "").toLowerCase().includes(search)) : all;
       const players = filtered.slice(offset, offset + limit).map((p) => ({ ...p, rank: all.indexOf(p) + 1 }));
-      return json({ players, total: all.length, offset, limit, hasMore: offset + players.length < filtered.length },
+      return json(addLegacyPublicOutputAliases({ players, total: all.length, offset, limit, hasMore: offset + players.length < filtered.length }),
         200, { "cache-control": "public, max-age=10", ...rateLimitHeaders(effectiveRl) });
     }
 
@@ -128,22 +131,19 @@ export async function handlePublicPlayers(request, env, deps = {}) {
 
     const players = (r.data.players || []).map((p) => ({
       name: p.name,
-      wagered: p.wagered,
+      amount: p.amount,
       prize: p.prize,
       score: p.score,
-      hands: p.hands,
-      netProfit: p.netProfit,
-      winRate: p.winRate,
       change: p.change,
       rank: p.rank,
     }));
-    return json({
+    return json(addLegacyPublicOutputAliases({
       players,
       total: r.data.playerCount,
       offset,
       limit,
       hasMore: offset + players.length < (r.data.playerMatchCount ?? r.data.playerCount),
-    }, 200, { "cache-control": "public, max-age=10", etag, ...rateLimitHeaders(effectiveRl) });
+    }), 200, { "cache-control": "public, max-age=10", etag, ...rateLimitHeaders(effectiveRl) });
   } catch (e) {
     console.error("[public/players]", String(e?.message || e));
     return bad("Something went wrong. Try again.", 500);
@@ -192,7 +192,7 @@ export async function handlePublicStream(request, env, deps = {}) {
             controller.close();
             return;
           }
-          const payload = JSON.stringify({ players: data.data.players, total: data.data.playerCount, updatedAt: newTs });
+          const payload = JSON.stringify(addLegacyPublicOutputAliases({ players: data.data.players, total: data.data.playerCount, updatedAt: newTs }));
           controller.enqueue(enc.encode(`data: ${payload}\n\n`));
         }
       } catch (e) {
@@ -257,7 +257,7 @@ export async function handlePublicRank(request, env, deps = {}) {
     // Demo board has no DB row — serve static demo data.
     if (slug === "demo") {
       const d = demoLeaderboardData();
-      const rankBy = d.rankBy === "wagered" ? "wagered" : "score";
+      const rankBy = rankByFromDb(d.rankBy);
       const sorted = (d.players || []).slice().sort((a, b) => (b[rankBy] || 0) - (a[rankBy] || 0));
       const matchUser = userParam.toLowerCase().replace(/^@/, "").replace(/\s+/g, " ").trim();
       const normalizeForRank = (n) => String(n || "").toLowerCase().replace(/^\*+/, "").replace(/\s+/g, " ").trim();
@@ -272,7 +272,7 @@ export async function handlePublicRank(request, env, deps = {}) {
       const total = sorted.length;
       const metric = rankBy === "score"
         ? `${Number(player.score || 0).toLocaleString("en-US")} points`
-        : `Amount: $${Number(player.wagered || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+        : `Amount: $${Number(player.amount || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
       let gap = "";
       if (rank > 1) {
         const ahead = sorted[idx - 1];
@@ -300,7 +300,7 @@ export async function handlePublicRank(request, env, deps = {}) {
         headers: { ...rankHeaders, "cache-control": "public, max-age=30" }
       });
     }
-    const rankBy = r.data.rankBy === "wagered" ? "wagered" : "score";
+    const rankBy = rankByFromDb(r.data.rankBy);
     const sorted = (r.data.players || []).slice().sort((a, b) => (b[rankBy] || 0) - (a[rankBy] || 0));
     const matchUser = userParam.toLowerCase().replace(/^@/, "").replace(/\s+/g, " ").trim();
     const normalizeForRank = (n) => String(n || "").toLowerCase().replace(/^\*+/, "").replace(/\s+/g, " ").trim();
@@ -315,7 +315,7 @@ export async function handlePublicRank(request, env, deps = {}) {
     const total = sorted.length;
     const metric = rankBy === "score"
       ? `${Number(player.score || 0).toLocaleString("en-US")} points`
-      : `Amount: $${Number(player.wagered || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+      : `Amount: $${Number(player.amount || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
     let gap = "";
     if (rank > 1) {
       const ahead = sorted[idx - 1];
@@ -353,12 +353,12 @@ export async function handlePublicData(request, env, deps = {}) {
 
     // Demo board has no DB row — serve static demo data.
     if (slug === "demo") {
-      return json(demoLeaderboardData(), 200, { "cache-control": "public, max-age=30", ...rateLimitHeaders(rl) });
+      return json(addLegacyPublicOutputAliases(demoLeaderboardData()), 200, { "cache-control": "public, max-age=30", ...rateLimitHeaders(rl) });
     }
 
     const r = await getPublicSite(env, slug, request);
     if (r && r.requiresPassword) return bad("Password required.", 401);
-    return r && !r.suspended ? json(r.data, 200, { "cache-control": "public, max-age=30", ...rateLimitHeaders(rl) }) : bad("not found", 404);
+    return r && !r.suspended ? json(addLegacyPublicOutputAliases(r.data), 200, { "cache-control": "public, max-age=30", ...rateLimitHeaders(rl) }) : bad("not found", 404);
   } catch (e) {
     console.error("[public/data]", String(e?.message || e));
     return bad("Something went wrong. Try again.", 500);

@@ -6,8 +6,7 @@ import { notifyReset } from "@yourrank/shared/notifications";
 import { mapWithConcurrency, SHARED_WORK_CONCURRENCY_LIMIT } from "@yourrank/shared/work-concurrency";
 import { restoreAutoResetMarker } from "./auto-reset-claim.js";
 import { notifyLiveBoard } from "./live-board-config.js";
-
-const CLEAR_OPTIONS = new Set(["wagers", "players", "none"]);
+import { autoResetClearFromDb, rankByFromDb } from "@yourrank/shared/legacy-schema";
 
 function nextEndsAt(period, currentEndsAt) {
   const d = currentEndsAt ? new Date(currentEndsAt) : new Date();
@@ -66,10 +65,10 @@ export async function processAutoResetSite(env, site) {
     );
     if (!claimed) return;
 
-    const players = await getPlayers(env, site.id, { rankBy: site.rank_by });
+    const players = await getPlayers(env, site.id, { rankBy: rankByFromDb(site.rank_by) });
     const top3 = players.slice(0, 3);
     const label = `Auto-reset · ${new Date().toLocaleString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}`;
-    const clear = CLEAR_OPTIONS.has(site.auto_reset_clear) ? site.auto_reset_clear : "wagers";
+    const clear = autoResetClearFromDb(site.auto_reset_clear);
 
     const result = await createArchive(env, site.user_id, { label, clear, siteId: site.id });
     if (result.error) {

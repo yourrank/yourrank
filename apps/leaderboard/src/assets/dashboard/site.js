@@ -721,7 +721,7 @@ export function collect({ reportPlayerErrors = true } = {}) {
     brand: {
       name: brandName,
       tagline: $("f_tagline").value.trim(),
-      casino: $("f_casino").value.trim(),
+      sponsor: $("f_sponsor").value.trim(),
       code: $("f_code").value.trim(),
       ctaUrl: $("f_cta").value.trim(),
       prizePool: $("f_pool").value.trim(),
@@ -729,7 +729,7 @@ export function collect({ reportPlayerErrors = true } = {}) {
     },
     startsAt: scheduleResult.startsAt,
     endsAt: scheduleResult.endsAt,
-    rankBy: $("f_rank_by")?.value === "wagered" ? "wagered" : "score",
+    rankBy: $("f_rank_by")?.value === "amount" ? "amount" : "score",
     partner: { blurb: $("f_blurb").value.trim(), chips: state.EXTRA.chips },
     whyStats: state.EXTRA.whyStats,
     rules: collectRules(),
@@ -805,7 +805,7 @@ export function collect({ reportPlayerErrors = true } = {}) {
   const arClear = $("f_auto_reset_clear");
   out.autoReset = {
     enabled: !!(arToggle && arToggle.checked),
-    clear: arClear && !arClear.disabled ? arClear.value : "wagers",
+    clear: arClear && !arClear.disabled ? arClear.value : "amount",
   };
   return { payload: out, invalid: [...brandInvalid(), ...scheduleResult.invalid, ...playerResult.invalid] };
 }
@@ -2819,7 +2819,7 @@ export async function closeOutPeriod({
   };
   if (![...$("rows").children].length) { setStatusText("The board is empty — nothing to close out.", "info"); return; }
   const clear = $("a_clear").value;
-  const warn = clear === "players" ? "save the current board as past winners, then CLEAR the player list" : clear === "wagers" ? "save the current board as past winners, then reset every amount to 0" : "save the current board as past winners";
+  const warn = clear === "players" ? "save the current board as past winners, then CLEAR the player list" : clear === "amount" ? "save the current board as past winners, then reset every amount to 0" : "save the current board as past winners";
   if (!await confirmImpl("Close out period", `This will ${warn}. Continue?`, "Close out", true)) return;
   btn.disabled = true; btn.textContent = "Closing out…";
   try {
@@ -2973,7 +2973,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     if (!newerChanges) clearPlayersDraft();
     const restoredNotice = $("playersDraftNotice");
     if (restoredNotice && !newerChanges) restoredNotice.hidden = true;
-    setState({ _dirty: newerChanges, PUBLISHED: !!payload.published, RANK_BY: payload.rankBy === "wagered" ? "wagered" : "score" });
+    setState({ _dirty: newerChanges, PUBLISHED: !!payload.published, RANK_BY: payload.rankBy === "amount" ? "amount" : "score" });
     const savedMessage = newerChanges
       ? "Saved the earlier changes. Your newer changes are still unsaved — save again before leaving."
       : justPublished && !boardStatus().emailVerified
@@ -2989,7 +2989,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     renderBoardStatus();
     renderOverviewSummary();
     const active = state.BOARDS.find((b) => b.id === state.ACTIVE_SITE_ID);
-    if (active) { active.name = payload.name; active.casino = payload.brand?.casino || active.casino; active.code = payload.brand?.code || active.code; active.published = !!payload.published; }
+    if (active) { active.name = payload.name; active.sponsor = payload.brand?.sponsor || active.sponsor; active.code = payload.brand?.code || active.code; active.published = !!payload.published; }
     renderBoardSwitcher();
     renderBoardSelect();
     renderBoardsPage();

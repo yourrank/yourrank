@@ -104,10 +104,10 @@ describe("createQueueProducer", () => {
 
     it("carries score and rankBy through the envelope and back through parseQueueMessage", async () => {
       const changes = detectTop3Changes(
-        [{ name: "A", wagered: 10, score: 5 }],
+        [{ name: "A", amount: 10, score: 5 }],
         [
-          { name: "B", wagered: 20, score: 42 },
-          { name: "C", wagered: 15, score: 11 },
+          { name: "B", amount: 20, score: 42 },
+          { name: "C", amount: 15, score: 11 },
         ],
         "score",
       );
@@ -126,16 +126,21 @@ describe("createQueueProducer", () => {
       expect((parsed.event as { changes: unknown[] }).changes).toEqual(changes);
     });
 
-    it("accepts rankBy wagered changes without a score key", async () => {
+    it("accepts rankBy amount changes without a score key", async () => {
       const changes = detectTop3Changes(
         [],
-        [{ name: "A", wagered: 99 }],
-        "wagered",
+        [{ name: "A", amount: 99 }],
+        "amount",
       );
-      expect(changes).toEqual([{ name: "A", rank: 1, wagered: 99, score: undefined, rankBy: "wagered" }]);
+      expect(changes).toEqual([{ name: "A", rank: 1, amount: 99, score: undefined, rankBy: "amount" }]);
       const queue = fakeQueue();
       const producer = createQueueProducer(queue, noFallback);
       await producer.send({ type: "notify", kind: "top3", siteId: "site-1", siteName: "Arena", changes });
+      expect((queue.sent[0] as { payload: { changes: unknown[] } }).payload.changes[0]).toMatchObject({
+        amount: 99,
+        wagered: 99,
+        rankBy: "wagered",
+      });
       const parsed = parseQueueMessage(queue.sent[0]);
       expect(parsed.legacy).toBe(false);
       expect((parsed.event as { changes: unknown[] }).changes).toEqual(changes);
@@ -154,7 +159,7 @@ describe("createQueueProducer", () => {
     it("honors a four-way tie at rank 1 (competition ranking)", async () => {
       const changes = detectTop3Changes(
         [],
-        ["A", "B", "C", "D"].map((name) => ({ name, wagered: 1, score: 7 })),
+        ["A", "B", "C", "D"].map((name) => ({ name, amount: 1, score: 7 })),
         "score",
       );
       expect(changes).toHaveLength(4);
@@ -166,11 +171,11 @@ describe("createQueueProducer", () => {
       const changes = detectTop3Changes(
         [],
         [
-          { name: "leader", wagered: 1, score: 100 },
-          { name: "tied-a", wagered: 1, score: 50 },
-          { name: "tied-b", wagered: 1, score: 50 },
-          { name: "tied-c", wagered: 1, score: 50 },
-          { name: "below", wagered: 1, score: 10 },
+          { name: "leader", amount: 1, score: 100 },
+          { name: "tied-a", amount: 1, score: 50 },
+          { name: "tied-b", amount: 1, score: 50 },
+          { name: "tied-c", amount: 1, score: 50 },
+          { name: "below", amount: 1, score: 10 },
         ],
         "score",
       );
@@ -180,9 +185,9 @@ describe("createQueueProducer", () => {
 
     it("bounds a mass tie to TOP3_CHANGES_MAX in name order", async () => {
       const players = Array.from({ length: 25 }, (_, i) => ({
-        name: `p${String(i).padStart(2, "0")}`, wagered: 0,
+        name: `p${String(i).padStart(2, "0")}`, amount: 0,
       }));
-      const changes = detectTop3Changes([], players, "wagered");
+      const changes = detectTop3Changes([], players, "amount");
       expect(changes).toHaveLength(TOP3_CHANGES_MAX);
       expect(changes.map((c) => c.name)).toEqual(
         players.slice(0, TOP3_CHANGES_MAX).map((p) => p.name),
@@ -192,8 +197,8 @@ describe("createQueueProducer", () => {
 
     it("never exceeds TOP3_CHANGES_MAX or throws at the envelope for n tied players", async () => {
       for (let n = 1; n <= 30; n++) {
-        const players = Array.from({ length: n }, (_, i) => ({ name: `p${i}`, wagered: 0 }));
-        const changes = detectTop3Changes([], players, "wagered");
+        const players = Array.from({ length: n }, (_, i) => ({ name: `p${i}`, amount: 0 }));
+        const changes = detectTop3Changes([], players, "amount");
         expect(changes.length).toBeLessThanOrEqual(TOP3_CHANGES_MAX);
         await roundTrip(changes);
       }
@@ -201,7 +206,7 @@ describe("createQueueProducer", () => {
 
     it("still rejects change arrays beyond the shared contract bound", () => {
       const changes = Array.from({ length: TOP3_CHANGES_MAX + 1 }, (_, i) => ({
-        name: `p${i}`, rank: 1, wagered: 0,
+        name: `p${i}`, rank: 1, amount: 0,
       }));
       expect(() => parseQueueMessage({
         v: 1, eventId: crypto.randomUUID(), eventType: "notify",
@@ -217,7 +222,7 @@ describe("createQueueProducer", () => {
       kind: "top3",
       siteId: "site-1",
       siteName: "Arena",
-      changes: [{ name: "A", rank: 1, wagered: 5, bogus: "SENTINEL_VALUE" }],
+      changes: [{ name: "A", rank: 1, amount: 5, bogus: "SENTINEL_VALUE" }],
     } as unknown as QueueEvent;
 
     it("exports QueueEventValidationError from the package entry point", () => {

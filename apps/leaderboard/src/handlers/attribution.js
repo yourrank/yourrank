@@ -30,7 +30,7 @@ async function getAttributionRows(env, userId, days) {
     `SELECT
        o.id,
        o.label,
-       COALESCE(c.name, '–') AS casino,
+       COALESCE(p.name, '–') AS partner_name,
        o.is_active,
        COALESCE(ca.clicks, 0) AS clicks,
        COALESCE(ca.unique_visitors, 0) AS unique_visitors,
@@ -38,7 +38,7 @@ async function getAttributionRows(env, userId, days) {
        COALESCE(co.revenue, 0) AS revenue,
        COALESCE(co.converted_visitors, 0) AS converted_visitors
      FROM offers o
-     LEFT JOIN casinos c ON c.id = o.casino_id
+     LEFT JOIN partners p ON p.id = o.partner_id
      LEFT JOIN (
        SELECT sl.offer_id,
               COUNT(*) AS clicks,
@@ -65,7 +65,7 @@ async function getAttributionRows(env, userId, days) {
   return rows.map((r) => ({
     id: r.id,
     label: r.label,
-    casino: r.casino,
+    partner_name: r.partner_name,
     isActive: r.is_active,
     clicks: Number(r.clicks) || 0,
     uniqueVisitors: Number(r.unique_visitors) || 0,
@@ -132,7 +132,7 @@ export async function handleAttributionExport(request, env) {
   for (const o of offers) {
     lines.push([
       escapeCsv(o.label),
-      escapeCsv(o.casino),
+      escapeCsv(o.partner_name),
       escapeCsv(o.clicks),
       escapeCsv(o.uniqueVisitors),
       escapeCsv(o.conversions),

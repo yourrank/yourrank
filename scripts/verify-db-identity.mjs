@@ -214,7 +214,7 @@ async function backendOperations(sql, label, tag) {
 
   const [site] = await sql`
     INSERT INTO sites (user_id, slug, name, published) VALUES (${user.id}, ${tag}, ${tag}, true) RETURNING id`;
-  await sql`INSERT INTO players (site_id, name, normalized_name, wagered) VALUES (${site.id}, ${tag}, ${tag}, 10)`;
+  await sql`INSERT INTO players (site_id, name, normalized_name, amount) VALUES (${site.id}, ${tag}, ${tag}, 10)`;
   const [board] = await sql`
     SELECT s.id, count(p.id)::int AS players FROM sites s LEFT JOIN players p ON p.site_id = s.id
      WHERE s.slug = ${tag} AND s.published GROUP BY s.id`;

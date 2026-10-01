@@ -104,7 +104,7 @@ describe("dashboard save handler", () => {
     const requests = [];
     await site.saveEditorDraft({
       collectImpl: () => ({
-        payload: { siteId: "site-test", players: [{ name: "Alice", wagered: 123, prize: 4 }] },
+        payload: { siteId: "site-test", players: [{ name: "Alice", amount: 123, prize: 4 }] },
         invalid: [],
       }),
       fetchImpl: async (url, options) => {
@@ -120,13 +120,13 @@ describe("dashboard save handler", () => {
     expect(requests[0].url).toBe("/api/site");
     expect(JSON.parse(requests[0].options.body)).toEqual({
       siteId: "site-test",
-      players: [{ name: "Alice", wagered: 123, prize: 4 }],
+      players: [{ name: "Alice", amount: 123, prize: 4 }],
     });
     expect(save.disabled).toBe(false);
     expect(save.textContent).toBe("Save changes");
     expect(publishAction.disabled).toBe(false);
     expect(status.textContent).toBe("Saved");
-    expect(state.SAVED_PLAYERS).toEqual([{ name: "Alice", wagered: 123, prize: 4 }]);
+    expect(state.SAVED_PLAYERS).toEqual([{ name: "Alice", amount: 123, prize: 4 }]);
     expect(state.SITE_UPDATED_AT).toBe("after");
   });
 
@@ -139,7 +139,7 @@ describe("dashboard save handler", () => {
     expect(state._dirty).toBe(false);
   });
 
-  const editorBasePayload = { siteId: "site-test", players: [{ name: "Alice", wagered: 123, prize: 4 }] };
+  const editorBasePayload = { siteId: "site-test", players: [{ name: "Alice", amount: 123, prize: 4 }] };
   const collectImpl = () => ({ payload: editorBasePayload, invalid: [] });
 
   function saveResponse(status, body, code) {

@@ -23,7 +23,7 @@ export type AdminUser = {
 export type AdminLead = {
   id?: string;
   handle?: string | null;
-  casino?: string | null;
+  brand?: string | null;
   contact?: string | null;
   note?: string | null;
   created_at?: number | string | null;
