@@ -42,6 +42,71 @@ function deps({ rows = [], oneError = null } = {}) {
 }
 
 describe("viewer board membership tracking", () => {
+  it("loads bounded active raffles for guests without exposing member ticket counts", async () => {
+    const injected = deps();
+    injected.queryImpl = async (sql, params) => {
+      injected.calls.query.push({ sql, params });
+      return [{
+        id: "raffle-1",
+        title: "Prize",
+        description: "A community prize",
+        ticket_cost: "25",
+        max_tickets_per_viewer: "5",
+        total_tickets: "9",
+        ends_at: "2030-01-01T00:00:00Z",
+        my_tickets: "4",
+      }];
+    };
+    const result = await getViewerSiteData("site-1", null, { raffles: true }, injected);
+
+    expect(result.raffles).toEqual([{
+      id: "raffle-1",
+      title: "Prize",
+      description: "A community prize",
+      ticket_cost: 25,
+      max_tickets_per_viewer: 5,
+      total_tickets: 9,
+      ends_at: "2030-01-01T00:00:00Z",
+      my_tickets: 0,
+    }]);
+    expect(injected.calls.query[0].params).toEqual(["site-1", null]);
+    expect(injected.calls.query[0].sql).toContain("r.status = 'active'");
+    expect(injected.calls.query[0].sql).toContain("r.ends_at > now()");
+    expect(injected.calls.query[0].sql).toContain("ORDER BY r.created_at DESC");
+    expect(injected.calls.query[0].sql).toContain("LIMIT 20");
+  });
+
+  it("returns zero raffle tickets for a signed-in non-member", async () => {
+    const injected = deps({ rows: [null] });
+    injected.queryImpl = async (sql, params) => {
+      injected.calls.query.push({ sql, params });
+      return [{
+        id: "raffle-1",
+        ticket_cost: 0,
+        max_tickets_per_viewer: 5,
+        total_tickets: 2,
+        my_tickets: 3,
+      }];
+    };
+    const result = await getViewerSiteData("site-1", "viewer-1", { raffles: true }, injected);
+
+    expect(result.membershipStatus).toBe("absent");
+    expect(result.raffles[0].my_tickets).toBe(0);
+    expect(injected.calls.query[0].params).toEqual(["site-1", null]);
+  });
+
+  it("loads the member's raffle ticket count from the site membership", async () => {
+    const injected = deps({ rows: [membershipRow()] });
+    injected.queryImpl = async (sql, params) => {
+      injected.calls.query.push({ sql, params });
+      return [{ id: "raffle-1", ticket_cost: 25, max_tickets_per_viewer: 5, total_tickets: 4, my_tickets: 2 }];
+    };
+    const result = await getViewerSiteData("site-1", "viewer-1", { raffles: true }, injected);
+
+    expect(result.raffles[0].my_tickets).toBe(2);
+    expect(injected.calls.query[0].params).toEqual(["site-1", "sv-1"]);
+  });
+
   it("falls back to null when the daily check-in query is unavailable", async () => {
     const injected = deps();
     let calls = 0;

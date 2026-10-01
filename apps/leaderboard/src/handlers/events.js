@@ -115,9 +115,92 @@ export async function handleCreateRaffle(request, env, deps = {}) {
 export async function handleDrawRaffle(request, env, deps = {}) {
   const {
     requireUser = defaultRequireUser,
-    one = defaultOne,
-    query = defaultQuery,
-    exec = defaultExec,
+    withTransaction = defaultWithTransaction,
+    logAudit = defaultLogAudit,
+    getCryptoRandomInt: randomInt = getCryptoRandomInt,
+  } = deps;
+
+  const { user, res } = await requireUser(request, env);
+  if (res) return res;
+
+  const body = await readJson(request);
+  const raffleId = String(body?.raffleId || "").trim();
+  if (!raffleId) return bad("Raffle ID is required.");
+
+  const outcome = await withTransaction(async (tx) => {
+    const raffle = await tx.one(
+      `SELECT r.id, r.site_id, r.title, r.status, r.total_tickets
+         FROM raffles r
+         JOIN sites s ON s.id = r.site_id
+        WHERE r.id=$1 AND s.user_id=$2
+        FOR UPDATE OF r`,
+      [raffleId, user.id],
+    );
+    if (!raffle) return { error: "Raffle not found or you do not have permission.", status: 404 };
+    if (raffle.status !== "active") {
+      return { error: "This raffle has already been drawn or closed.", status: 400 };
+    }
+
+    const tickets = await tx.unsafe(
+      `SELECT t.id, t.ticket_number, t.viewer_id, t.site_viewer_id,
+              COALESCE(v.kick_username, 'Viewer') AS viewer_name
+         FROM raffle_tickets t
+         LEFT JOIN viewers v ON v.id = t.viewer_id
+        WHERE t.raffle_id=$1
+        ORDER BY t.ticket_number ASC`,
+      [raffleId],
+    );
+    if (!tickets || tickets.length === 0) {
+      return { error: "No tickets were sold yet, so there is nothing to draw.", status: 400 };
+    }
+
+    const winningTicket = tickets[randomInt(tickets.length)];
+    const updated = await tx.one(
+      `UPDATE raffles
+          SET status='drawn',
+              winner_viewer_id=$1,
+              winner_name=$2,
+              winner_ticket_number=$3,
+              drawn_at=now(),
+              updated_at=now()
+        WHERE id=$4 AND status='active'
+        RETURNING id`,
+      [winningTicket.viewer_id, winningTicket.viewer_name, winningTicket.ticket_number, raffleId],
+    );
+    if (!updated) return { error: "This raffle has already been drawn or closed.", status: 400 };
+
+    return { winningTicket, totalTickets: tickets.length };
+  });
+
+  if (outcome.error) return bad(outcome.error, outcome.status);
+
+  await logAudit({
+    actorId: user.id,
+    action: "raffle_draw",
+    entityType: "raffle",
+    entityId: raffleId,
+    request,
+    details: {
+      winnerName: outcome.winningTicket.viewer_name,
+      ticketNumber: outcome.winningTicket.ticket_number,
+      totalTickets: outcome.totalTickets,
+    },
+  });
+
+  return ok({
+    raffleId,
+    status: "drawn",
+    winnerName: outcome.winningTicket.viewer_name,
+    winnerTicketNumber: outcome.winningTicket.ticket_number,
+    totalTickets: outcome.totalTickets,
+    message: `🎉 Winner drawn: ${outcome.winningTicket.viewer_name} (Ticket #${outcome.winningTicket.ticket_number})!`,
+  });
+}
+
+export async function handleCancelRaffle(request, env, deps = {}) {
+  const {
+    requireUser = defaultRequireUser,
+    withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
   } = deps;
 
@@ -128,69 +211,98 @@ export async function handleDrawRaffle(request, env, deps = {}) {
   const raffleId = String(body?.raffleId || "").trim();
   if (!raffleId) return bad("Raffle ID is required.");
 
-  const raffle = await one(
-    `SELECT r.id, r.site_id, r.title, r.status, r.total_tickets
-       FROM raffles r
-       JOIN sites s ON s.id = r.site_id
-      WHERE r.id=$1 AND s.user_id=$2`,
-    [raffleId, user.id]
-  );
+  const outcome = await withTransaction(async (tx) => {
+    const raffle = await tx.one(
+      `SELECT r.id, r.site_id, r.title, r.status
+         FROM raffles r
+         JOIN sites s ON s.id = r.site_id
+        WHERE r.id=$1 AND s.user_id=$2
+        FOR UPDATE OF r`,
+      [raffleId, user.id],
+    );
+    if (!raffle) return { error: "Raffle not found or you do not have permission.", status: 404 };
+    if (raffle.status !== "active") {
+      return { error: "This raffle has already been drawn or closed.", status: 400 };
+    }
 
-  if (!raffle) return bad("Raffle not found or you do not have permission.", 404);
-  if (raffle.status !== "active") return bad("This raffle has already been drawn or closed.", 400);
+    const purchases = await tx.unsafe(
+      `SELECT id, site_viewer_id, cost
+         FROM raffle_ticket_purchases
+        WHERE raffle_id=$1 AND refunded_at IS NULL AND cost > 0
+        ORDER BY id
+        FOR UPDATE`,
+      [raffle.id],
+    );
+    const refundedViewers = new Set();
+    let refundedCredits = 0;
+    for (const purchase of purchases || []) {
+      const viewer = await tx.one(
+        `UPDATE site_viewers
+            SET balance = balance + $1,
+                total_spent = GREATEST(total_spent - $1, 0),
+                updated_at = now()
+          WHERE id=$2
+          RETURNING id`,
+        [purchase.cost, purchase.site_viewer_id],
+      );
+      if (!viewer) throw new Error("raffle purchase membership disappeared during refund");
+      await tx.unsafe(
+        `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
+         VALUES ($1, 'revoke', $2, $3, $4)`,
+        [
+          purchase.site_viewer_id,
+          purchase.cost,
+          `Raffle cancelled refund: ${raffle.title}`,
+          { raffle_id: raffle.id, purchase_id: purchase.id },
+        ],
+      );
+      refundedViewers.add(purchase.site_viewer_id);
+      refundedCredits += Number(purchase.cost);
+    }
 
-  const tickets = await query(
-    `SELECT t.id, t.ticket_number, t.viewer_id, t.site_viewer_id,
-            COALESCE(v.kick_username, 'Viewer') AS viewer_name
-       FROM raffle_tickets t
-       LEFT JOIN viewers v ON v.id = t.viewer_id
-      WHERE t.raffle_id=$1
-      ORDER BY t.ticket_number ASC`,
-    [raffleId]
-  );
+    await tx.unsafe(
+      `UPDATE raffle_ticket_purchases
+          SET refunded_at=now()
+        WHERE raffle_id=$1 AND refunded_at IS NULL`,
+      [raffle.id],
+    );
+    const cancelled = await tx.one(
+      `UPDATE raffles
+          SET status='cancelled', updated_at=now()
+        WHERE id=$1 AND site_id=$2 AND status='active'
+        RETURNING id`,
+      [raffle.id, raffle.site_id],
+    );
+    if (!cancelled) throw new Error("raffle became unavailable while its row was locked");
 
-  // A draw needs at least one entrant: the server owns this precondition so a
-  // raffle can never reach a "drawn" state without a real winning ticket.
-  if (!tickets || tickets.length === 0) {
-    return bad("No tickets were sold yet, so there is nothing to draw.", 400);
-  }
+    return {
+      refundedViewers: refundedViewers.size,
+      refundedCredits,
+      title: raffle.title,
+    };
+  });
 
-  // Provably fair random draw
-  const winningIndex = getCryptoRandomInt(tickets.length);
-  const winningTicket = tickets[winningIndex];
+  if (outcome.error) return bad(outcome.error, outcome.status);
 
-  await exec(
-    `UPDATE raffles
-        SET status='drawn',
-            winner_viewer_id=$1,
-            winner_name=$2,
-            winner_ticket_number=$3,
-            drawn_at=now(),
-            updated_at=now()
-      WHERE id=$4`,
-    [winningTicket.viewer_id, winningTicket.viewer_name, winningTicket.ticket_number, raffleId]
-  );
-
+  const message = outcome.refundedCredits > 0
+    ? `Raffle cancelled. Refunded ${outcome.refundedCredits} Credits to ${outcome.refundedViewers} viewers.`
+    : "Raffle cancelled.";
   await logAudit({
     actorId: user.id,
-    action: "raffle_draw",
+    action: "raffle_cancel",
     entityType: "raffle",
     entityId: raffleId,
     request,
     details: {
-      winnerName: winningTicket.viewer_name,
-      ticketNumber: winningTicket.ticket_number,
-      totalTickets: tickets.length,
+      refundedViewers: outcome.refundedViewers,
+      refundedCredits: outcome.refundedCredits,
     },
   });
 
   return ok({
-    raffleId,
-    status: "drawn",
-    winnerName: winningTicket.viewer_name,
-    winnerTicketNumber: winningTicket.ticket_number,
-    totalTickets: tickets.length,
-    message: `🎉 Winner drawn: ${winningTicket.viewer_name} (Ticket #${winningTicket.ticket_number})!`,
+    refundedViewers: outcome.refundedViewers,
+    refundedCredits: outcome.refundedCredits,
+    message,
   });
 }
 

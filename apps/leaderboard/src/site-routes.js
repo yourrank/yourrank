@@ -209,7 +209,7 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
       const opts = section === "home"
         ? { shop: true, claims: !!viewer, ledger: !!viewer }
         : section === "shop"
-          ? { shop: true, claims: !!viewer }
+          ? { shop: true, raffles: true, claims: !!viewer }
           : { shop: siteSections.shop !== false, claims: !!viewer, ledger: !!viewer, participation: !!viewer, checkin: !!viewer };
       viewerData = await getViewerSiteData(r.id, viewer?.id || null, opts);
     } else if (viewer) {

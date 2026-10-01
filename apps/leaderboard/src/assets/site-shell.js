@@ -753,6 +753,191 @@
     });
   }
 
+  // Raffle purchases share the reward review pattern, but ticket quantity is
+  // explicit and the same idempotency key stays on the button after failures.
+  var raffleDialog = document.getElementById("yr-raffle-confirm");
+  var raffleDetail = raffleDialog && raffleDialog.querySelector("[data-raffle-detail]");
+  var raffleConfirm = raffleDialog && raffleDialog.querySelector("[data-raffle-confirm]");
+  var raffleCancel = raffleDialog && raffleDialog.querySelector("[data-raffle-cancel]");
+  var raffleStatus = document.getElementById("yr-raffle-status");
+  var pendingRaffleConfirm = null;
+  function setRaffleStatus(message, isError) {
+    if (!raffleStatus) return;
+    raffleStatus.textContent = message || "";
+    raffleStatus.classList.toggle("is-error", !!isError);
+  }
+  var RAFFLE_ERRORS = {
+    "join this community first.": "Join this community before buying raffle tickets.",
+    "viewer blocked": "Ticket purchases are unavailable for this membership. Ask the streamer.",
+    "this raffle is closed.": "This raffle is closed.",
+    "this raffle has ended.": "This raffle has ended.",
+    "insufficient balance": "You don’t have enough credits for that yet.",
+    "idempotency key already used for a different raffle": "Please refresh the page before trying again.",
+    "raffle not found": "This raffle is no longer available.",
+    "rate limited": "Too many attempts. Wait a moment and try again.",
+    "invalid csrf": "Your session expired. Reload the page and try again.",
+    unauthorized: "Sign in again to buy raffle tickets.",
+  };
+  function raffleErrorText(message) {
+    if (!message) return "Couldn’t buy those tickets. Please try again.";
+    var known = RAFFLE_ERRORS[String(message).toLowerCase()];
+    if (known) return known;
+    return /^[A-Z].*[.!?]$/.test(message) && !/^HTTP /.test(message)
+      ? message
+      : "Couldn’t buy those tickets. Please try again.";
+  }
+  function raffleQuantityInput(button) {
+    var card = button.closest("[data-raffle-card]");
+    return card && card.querySelector("[data-raffle-quantity]");
+  }
+  function clampRaffleQuantity(input) {
+    var max = Math.max(1, Math.min(100, Math.floor(Number(input.max) || 1)));
+    var value = Math.floor(Number(input.value));
+    if (!Number.isFinite(value)) value = 1;
+    value = Math.max(1, Math.min(max, value));
+    input.value = String(value);
+    return value;
+  }
+  function syncRaffleStepper(input) {
+    var card = input.closest("[data-raffle-card]");
+    var value = clampRaffleQuantity(input);
+    if (!card) return;
+    card.querySelectorAll("[data-raffle-step]").forEach(function (step) {
+      var delta = Number(step.dataset.raffleStep);
+      step.disabled = delta < 0 ? value <= 1 : value >= Math.max(1, Number(input.max) || 1);
+    });
+  }
+  if (raffleDialog) {
+    raffleDialog.addEventListener("close", function () {
+      var resolve = pendingRaffleConfirm;
+      pendingRaffleConfirm = null;
+      if (resolve) resolve(raffleDialog.returnValue === "buy");
+    });
+    if (raffleCancel) raffleCancel.addEventListener("click", function () { raffleDialog.close("cancel"); });
+    if (raffleConfirm) raffleConfirm.addEventListener("click", function () { raffleDialog.close("buy"); });
+  }
+  function askToBuyRaffle(button, quantity) {
+    if (!raffleDialog || !raffleDialog.showModal) {
+      setRaffleStatus("Ticket purchases are unavailable right now. Reload the page and try again.", true);
+      return Promise.resolve(false);
+    }
+    var name = button.dataset.raffleTitle || "this raffle";
+    var ticketCost = Number(button.dataset.raffleCost) || 0;
+    var cost = ticketCost * quantity;
+    var detail = "Buy " + quantity + (quantity === 1 ? " ticket" : " tickets") + " for “" + name + "” for " + cost.toLocaleString("en-US") + " free credits.";
+    var balance = creditBalance();
+    if (balance !== null && balance >= cost) {
+      detail += " You’d have " + (balance - cost).toLocaleString("en-US") + " credits left.";
+    }
+    if (raffleDetail) raffleDetail.textContent = detail;
+    return new Promise(function (resolve) {
+      pendingRaffleConfirm = resolve;
+      raffleDialog.returnValue = "";
+      raffleDialog.showModal();
+      if (raffleCancel) raffleCancel.focus();
+      else if (raffleConfirm) raffleConfirm.focus();
+    });
+  }
+  document.querySelectorAll("[data-raffle-quantity]").forEach(function (input) {
+    input.addEventListener("input", function () { syncRaffleStepper(input); });
+    input.addEventListener("change", function () { syncRaffleStepper(input); });
+    syncRaffleStepper(input);
+  });
+  document.querySelectorAll("[data-raffle-step]").forEach(function (step) {
+    step.addEventListener("click", function () {
+      var input = step.closest("[data-raffle-card]")?.querySelector("[data-raffle-quantity]");
+      if (!input) return;
+      var delta = Number(step.dataset.raffleStep) || 0;
+      input.value = String(Number(input.value) + delta);
+      syncRaffleStepper(input);
+    });
+  });
+  document.querySelectorAll("[data-raffle-buy]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var input = raffleQuantityInput(button);
+      var quantity = input ? clampRaffleQuantity(input) : 1;
+      askToBuyRaffle(button, quantity).then(function (confirmed) {
+        if (confirmed) placeRaffleOrder(button, quantity);
+      });
+    });
+  });
+  function placeRaffleOrder(button, quantity) {
+    var name = button.dataset.raffleTitle || "this raffle";
+    var cost = (Number(button.dataset.raffleCost) || 0) * quantity;
+    var recover = function (message) {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+      button.textContent = "Buy tickets";
+      setRaffleStatus(message, true);
+      focusWithoutScroll(button);
+    };
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.textContent = "Buying…";
+    setRaffleStatus("Buying tickets for “" + name + "”…");
+    var idempotencyKey = button.dataset.raffleKey;
+    if (!idempotencyKey) {
+      idempotencyKey = (typeof crypto !== "undefined" && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : Date.now() + "-" + Math.random().toString(36).slice(2);
+      button.dataset.raffleKey = idempotencyKey;
+    }
+    fetch("/api/viewer/raffles/buy", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
+      body: JSON.stringify({
+        slug: slug,
+        raffleId: button.dataset.raffleBuy,
+        quantity: quantity,
+        idempotencyKey: idempotencyKey,
+      }),
+    })
+      .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
+      .then(function (result) {
+        if (!result.ok || !result.data.ok) {
+          recover(raffleErrorText(result.data.error));
+          return;
+        }
+        delete button.dataset.raffleKey;
+        button.removeAttribute("aria-busy");
+        if (typeof result.data.balance === "number") updateBalance(result.data.balance);
+        var card = button.closest("[data-raffle-card]");
+        if (!card) return;
+        var sold = Number(result.data.totalTickets);
+        if (!Number.isFinite(sold)) sold = (Number(card.dataset.raffleSold) || 0) + quantity;
+        var owned = Number(result.data.myTickets);
+        if (!Number.isFinite(owned)) owned = (Number(card.dataset.raffleOwned) || 0) + quantity;
+        card.dataset.raffleSold = String(sold);
+        card.dataset.raffleOwned = String(owned);
+        var soldText = card.querySelector("[data-raffle-sold]");
+        if (soldText) soldText.textContent = sold.toLocaleString("en-US") + (sold === 1 ? " ticket sold" : " tickets sold");
+        var ownedText = card.querySelector("[data-raffle-owned]");
+        if (ownedText) ownedText.textContent = "You have " + owned.toLocaleString("en-US") + " of " + Number(card.dataset.raffleMax).toLocaleString("en-US");
+        var remaining = Math.max(0, Number(card.dataset.raffleMax) - owned);
+        card.dataset.raffleRemaining = String(remaining);
+        var input = card.querySelector("[data-raffle-quantity]");
+        var stepper = card.querySelector(".yr-raffle-stepper");
+        if (input) {
+          input.max = String(Math.min(remaining, 100));
+          input.value = "1";
+          syncRaffleStepper(input);
+        }
+        button.dataset.raffleRemaining = String(remaining);
+        button.disabled = remaining === 0 || (typeof result.data.balance === "number" && result.data.balance < Number(button.dataset.raffleCost));
+        button.textContent = remaining === 0
+          ? "Max tickets reached"
+          : button.disabled ? "Not enough credits" : "Buy tickets";
+        if (stepper && remaining === 0) stepper.hidden = true;
+        var message = "Bought " + quantity + (quantity === 1 ? " ticket" : " tickets") + " for “" + name + "”. You now have " + owned + " of " + Number(card.dataset.raffleMax) + "; " + sold + (sold === 1 ? " ticket" : " tickets") + " sold.";
+        setRaffleStatus(message, false);
+        focusWithoutScroll(raffleStatus || button);
+      })
+      .catch(function () {
+        recover("Network error. Your credits were not confirmed as deducted; please try again.");
+      });
+  }
+
   // ── Table overflow affordance ───────────────────────────────────────
   document.querySelectorAll("[data-table-wrap]").forEach(function (wrap) {
     var syncOverflow = function () {

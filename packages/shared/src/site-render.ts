@@ -603,6 +603,59 @@ ${action}
 </li>`;
 }
 
+function raffleAction({ raffle, viewer, member, balance, blocked, unavailable, membershipHref }) {
+  const cost = Number(raffle.ticket_cost) || 0;
+  const maximum = Math.max(0, Number(raffle.max_tickets_per_viewer) || 0);
+  const owned = Math.max(0, Number(raffle.my_tickets) || 0);
+  const remaining = Math.max(0, maximum - owned);
+  let action;
+
+  if (!viewer) {
+    action = `<a class="yr-act" href="${guestGateHref(membershipHref, "reward")}">Sign in to enter</a>`;
+  } else if (unavailable) {
+    action = `<span class="yr-act yr-act--off" role="note">Unavailable</span>`;
+  } else if (!member) {
+    action = `<a class="yr-act" href="${membershipHref}">Join to enter</a>`;
+  } else if (blocked) {
+    action = `<span class="yr-act yr-act--off" role="note">Unavailable</span>`;
+  } else if (remaining === 0) {
+    action = `<span class="yr-act yr-act--off" role="note">Max tickets reached</span>`;
+  } else if (balance < cost) {
+    action = `<span class="yr-act yr-act--off" role="note">Not enough credits</span>`;
+  } else {
+    const quantityId = `raffle-quantity-${String(raffle.id)}`;
+    const quantityMaximum = Math.min(remaining, 100);
+    action = `<div class="yr-raffle-controls"><div class="yr-raffle-stepper">
+<button class="yr-btn yr-btn--ghost yr-btn--sm yr-raffle-step" type="button" data-raffle-step="-1" aria-label="Remove one ticket from ${esc(raffle.title)}" disabled>−</button>
+<label class="yr-sr" for="${esc(quantityId)}">Tickets to buy for ${esc(raffle.title)}</label>
+<input class="yr-raffle-qty" id="${esc(quantityId)}" type="number" min="1" max="${quantityMaximum}" value="1" inputmode="numeric" data-raffle-quantity />
+<button class="yr-btn yr-btn--ghost yr-btn--sm yr-raffle-step" type="button" data-raffle-step="1" aria-label="Add one ticket for ${esc(raffle.title)}">+</button>
+</div>
+<button class="yr-act" type="button" data-raffle-buy="${esc(raffle.id)}" data-raffle-title="${esc(raffle.title)}" data-raffle-cost="${cost}" data-raffle-remaining="${remaining}">Buy tickets</button></div>`;
+  }
+
+  return { action, cost, maximum, owned, remaining };
+}
+
+function raffleRow({ raffle, viewer, member, balance, blocked, unavailable, membershipHref }) {
+  const { action, cost, maximum, owned } = raffleAction({
+    raffle, viewer, member, balance, blocked, unavailable, membershipHref,
+  });
+  const sold = Math.max(0, Number(raffle.total_tickets) || 0);
+  return `<li class="yr-rwd yr-raffle" id="raffle-${esc(raffle.id)}" data-raffle-card data-raffle-id="${esc(raffle.id)}" data-raffle-max="${maximum}" data-raffle-owned="${owned}" data-raffle-sold="${sold}">
+<div class="yr-rwd-main">
+<h3 class="yr-rwd-n">${esc(raffle.title)}</h3>
+${raffle.description ? `<p class="yr-rwd-p">${esc(raffle.description)}</p>` : ""}
+</div>
+<div class="yr-rwd-side">
+<p class="yr-rwd-c">${viewerIcon('coins')}${cost === 0 ? "Free tickets" : `${formatNumber(cost)} credits per ticket`}</p>
+<p class="yr-rwd-state" data-raffle-sold>${formatNumber(sold)} ${sold === 1 ? "ticket" : "tickets"} sold</p>
+${viewer && member ? `<p class="yr-rwd-state" data-raffle-owned>You have ${formatNumber(owned)} of ${formatNumber(maximum)}</p>` : ""}
+${action}
+</div>
+</li>`;
+}
+
 /** The viewer's own confirmation step for a claim. Native <dialog> so the
  *  focus trap, Escape and background inertness are the platform's, not ours. */
 function orderConfirmDialog() {
@@ -614,6 +667,20 @@ function orderConfirmDialog() {
 <div class="yr-modal-acts">
 <button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" data-order-cancel>Cancel</button>
 <button class="yr-btn yr-btn--sm" type="button" data-order-confirm>Claim</button>
+</div>
+</div>
+</dialog>`;
+}
+
+function raffleConfirmDialog() {
+  return `<dialog class="yr-modal" id="yr-raffle-confirm" aria-labelledby="yr-raffle-confirm-t" aria-describedby="yr-raffle-confirm-d">
+<div class="yr-modal-in">
+<h2 id="yr-raffle-confirm-t">Confirm tickets</h2>
+<p class="yr-fine" id="yr-raffle-confirm-d" data-raffle-detail></p>
+<p class="yr-note">Credits have no cash value.</p>
+<div class="yr-modal-acts">
+<button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" data-raffle-cancel>Cancel</button>
+<button class="yr-btn yr-btn--sm" type="button" data-raffle-confirm>Buy tickets</button>
 </div>
 </div>
 </dialog>`;
@@ -1218,6 +1285,7 @@ ${scene}${aside}
 function shopMain(ctx) {
   const { r, b, data, viewer, viewerData, viewerOnSite, isMember, balance, returnTo, slug, homeUrl, isCustomDomain } = ctx;
   const items = (viewerData?.shopItems || data.shopItems || []).filter((i) => i.active !== false).slice().sort((x, z) => Number(x.cost) - Number(z.cost));
+  const raffles = viewerData?.raffles || data.raffles || [];
   const blocked = !!viewerOnSite?.blocked;
   const creditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
 
@@ -1241,12 +1309,22 @@ function shopMain(ctx) {
     : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const canOrder = viewer && isMember && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
+  const canBuyRaffle = viewer && isMember && !blocked && !unavailable && raffles.some((raffle) =>
+    Math.max(0, Number(raffle.max_tickets_per_viewer) - Number(raffle.my_tickets || 0)) > 0
+      && Number(raffle.ticket_cost || 0) <= balance);
+  const raffleSection = raffles.length
+    ? `<section class="viewer-shop-raffles" aria-labelledby="viewer-raffles-title"><div class="viewer-shop-tools"><h2 id="viewer-raffles-title">Raffles</h2></div><ul class="yr-rwds" id="viewer-raffles" role="list">${raffles.map((raffle) => raffleRow({
+      raffle, viewer, member: isMember, balance, blocked, unavailable, membershipHref: creditsHref,
+    })).join("")}</ul><p class="yr-raffle-status" id="yr-raffle-status" role="status" aria-live="polite"></p></section>`
+    : "";
 
   return `${head}
 ${blockedNote}
 <p class="yr-redeem-status" id="yr-redeem-status" role="status" aria-live="polite" tabindex="-1"></p>
+${raffleSection}
 ${list}
-${canOrder ? orderConfirmDialog() : ""}`;
+${canOrder ? orderConfirmDialog() : ""}
+${canBuyRaffle ? raffleConfirmDialog() : ""}`;
 }
 
 /* ── Reward detail (/shop/<rewardId>) ─────────────────────────────────── */
