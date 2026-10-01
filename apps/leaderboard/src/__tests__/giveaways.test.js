@@ -253,6 +253,18 @@ describe("Giveaways React migration", () => {
     expect($id("gw-vpn-requirement").textContent.trim()).toBe("Unavailable right now.");
   });
 
+  it("explains that chat entries are unique per Kick account", async () => {
+    for (const entryMode of ["chat", "verified"]) {
+      await mountChat(verificationChat({ entryMode }));
+      const section = $id("gw-anti-abuse-section");
+      const copy = [...section.querySelectorAll("p")].find((paragraph) => paragraph.textContent.trim() === "Chat entries: one entry per Kick account.");
+
+      expect(section.hidden).toBe(false);
+      expect(copy).toBeTruthy();
+      expect(copy.className).toBe("text-xs text-muted-foreground");
+    }
+  });
+
   it("uses the connected-channel API without the legacy chatroom listener", () => {
     for (const legacy of ["connectKickChat", "chat-entry.js", "/api/giveaways/chatroom", "chatroomId", "Resolving Kick chatroom", "Start Listening", "Refreshing will clear"]) {
       expect(giveawaysPageSource).not.toContain(legacy);
