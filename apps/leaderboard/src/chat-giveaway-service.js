@@ -69,7 +69,9 @@ export async function drawGiveaway(run, session, { automatic = false, expectedWi
       kickLinked: !!entry.linked_viewer_id, previousWinner: entry.previous_winner,
       linkedRestricted: !!entry.linked_restricted,
       verified: !!entry.verified_at && entry.viewer_id === entry.linked_viewer_id,
-      ipAvailable: !!entry.ip_hash }, rules).status === "eligible");
+      ipAvailable: !!entry.ip_hash,
+      // The network check runs at verification; stored-eligible entries already passed it.
+      vpnCheckAvailable: true, anonymousNetwork: false }, rules).status === "eligible");
   const pool = rules.winnerRepeat === "again" ? eligible : eligible.filter((entry) => !entry.already_drawn);
   if (!pool.length) {
     if (automatic) {
