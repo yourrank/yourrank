@@ -52,6 +52,58 @@ describe("validateJson", () => {
     expect(result.ok).toBe(false);
   });
 
+  test("accepts a support contact request id", async () => {
+    const requestId = crypto.randomUUID();
+    const request = new Request("http://test/api/contact", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Support User",
+        email: "support@example.com",
+        subject: "Account help",
+        message: "Please help with my account.",
+        kind: "support",
+        requestId,
+      }),
+    });
+    const result = await validateJson(request, handlerSchemas.handleContact);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.requestId).toBe(requestId);
+  });
+
+  test("rejects an invalid contact request id", async () => {
+    const request = new Request("http://test/api/contact", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Support User",
+        email: "support@example.com",
+        message: "Please help with my account.",
+        kind: "support",
+        requestId: "bad id!",
+      }),
+    });
+    const result = await validateJson(request, handlerSchemas.handleContact);
+    expect(result.ok).toBe(false);
+  });
+
+  test("rejects unknown contact fields", async () => {
+    const request = new Request("http://test/api/contact", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Support User",
+        email: "support@example.com",
+        message: "Please help with my account.",
+        kind: "support",
+        unexpected: true,
+      }),
+    });
+    const result = await validateJson(request, handlerSchemas.handleContact);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("Unrecognized key");
+  });
+
   test("rejects unknown request fields", async () => {
     const request = new Request("http://test/api/site", {
       method: "PUT",

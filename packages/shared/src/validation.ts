@@ -352,6 +352,7 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
       subject: z.string().max(120).optional().or(z.literal("").optional()),
       message: z.string().trim().min(10).max(MAX_LONG_TEXT),
       kind: z.enum(["support", "feedback"]).optional().or(z.literal("").optional()),
+      requestId: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).optional().or(z.literal("").optional()),
       context: z
         .enum(["dashboard", "leaderboard", "bot", "analytics", "attribution", "billing"])
         .optional()
