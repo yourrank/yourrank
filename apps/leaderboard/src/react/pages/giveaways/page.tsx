@@ -89,6 +89,7 @@ type Confirmation = {
   action: string;
   destructive?: boolean;
 };
+type RaffleConfirmation = Confirmation & { kind: "draw" | "cancel" };
 type DrawerDraft = Record<string, string>;
 
 type PageDependencies = GiveawayPageDependencies;
@@ -1848,7 +1849,8 @@ function Raffles({
   const ticketCost = draft["rf-cost"];
   const maxTickets = draft["rf-max"];
   const [drawId, setDrawId] = useState("");
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [cancelId, setCancelId] = useState("");
+  const [confirmation, setConfirmation] = useState<RaffleConfirmation | null>(null);
   const [drawResult, setDrawResult] = useState<RafflesPayload | null>(null);
 
   const loadRaffles = useCallback(async () => {
@@ -1920,6 +1922,24 @@ function Raffles({
     }
   };
 
+  const cancelRaffle = async () => {
+    if (!cancelId) return;
+    setConfirmation(null);
+    onClearAlert();
+    try {
+      const result = await apiClient<{ refundedViewers: number; refundedCredits: number; message?: string }>(
+        "/api/events/raffles/cancel",
+        post({ raffleId: cancelId }),
+        siteId,
+      );
+      onAlert(result.message || `Raffle cancelled. Refunded ${result.refundedCredits} Credits to ${result.refundedViewers} viewers.`);
+      setCancelId("");
+      await loadRaffles();
+    } catch (error) {
+      onAlert(errorMessage(error, "Network error cancelling raffle."));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1953,18 +1973,37 @@ function Raffles({
                   </div>
                   <div className="flex flex-col items-start justify-between gap-3 lg:items-end">
                     <span className="text-xs text-muted-foreground">{(raffle.total_tickets || 0) > 0 ? "Ready to draw" : "Waiting for tickets"}</span>
-                    <Button
-                      className="btn--draw-raffle"
-                      type="button"
-                      size="sm"
-                      disabled={!raffle.total_tickets}
-                      onClick={() => {
-                        setDrawId(raffle.id);
-                        setConfirmation({ title: "Draw raffle winner", description: "Are you ready to draw the random winning ticket on stream?", action: "Draw winner" });
-                      }}
-                    >
-                      Draw winner
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        className="btn--draw-raffle"
+                        type="button"
+                        size="sm"
+                        disabled={!raffle.total_tickets}
+                        onClick={() => {
+                          setDrawId(raffle.id);
+                          setConfirmation({ kind: "draw", title: "Draw raffle winner", description: "Are you ready to draw the random winning ticket on stream?", action: "Draw winner" });
+                        }}
+                      >
+                        Draw winner
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setCancelId(raffle.id);
+                          setConfirmation({
+                            kind: "cancel",
+                            title: "Cancel this raffle?",
+                            description: "Everyone who bought tickets gets their Credits back.",
+                            action: "Cancel raffle",
+                            destructive: true,
+                          });
+                        }}
+                      >
+                        Cancel raffle
+                      </Button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -1982,7 +2021,7 @@ function Raffles({
                         <td className="px-3 py-3 font-semibold" data-label="Prize">{raffle.title}</td>
                         <td className="px-3 py-3" data-label="Ticket cost">{raffle.ticket_cost === 0 ? "Free" : `${raffle.ticket_cost} Credits`}</td>
                         <td className="px-3 py-3" data-label="Tickets">{raffle.total_tickets || 0} tickets</td>
-                        <td className="px-3 py-3" data-label="Winner">{raffle.winner_name ? <><strong>{raffle.winner_name}</strong><span className="block text-xs text-muted-foreground">Ticket #{raffle.winner_ticket_number}</span></> : "No winner drawn"}</td>
+                        <td className="px-3 py-3" data-label="Winner">{raffle.status === "cancelled" ? "Cancelled · Credits refunded" : raffle.winner_name ? <><strong>{raffle.winner_name}</strong><span className="block text-xs text-muted-foreground">Ticket #{raffle.winner_ticket_number}</span></> : "No winner drawn"}</td>
                         <td className="px-3 py-3" data-label="Drawn">{raffle.drawn_at ? new Date(raffle.drawn_at).toLocaleString() : "—"}</td>
                       </tr>
                     ))}</tbody>
@@ -2031,7 +2070,11 @@ function Raffles({
         </SheetContent>
       </Sheet>
 
-      <ConfirmAction confirmation={confirmation} onCancel={() => { setConfirmation(null); setDrawId(""); }} onConfirm={() => void drawRaffle()} />
+      <ConfirmAction
+        confirmation={confirmation}
+        onCancel={() => { setConfirmation(null); setDrawId(""); setCancelId(""); }}
+        onConfirm={() => void (confirmation?.kind === "cancel" ? cancelRaffle() : drawRaffle())}
+      />
       <Dialog open={Boolean(drawResult)} onOpenChange={(open) => { if (!open) setDrawResult(null); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Raffle winner</DialogTitle><DialogDescription>{drawResult?.message || "Winner drawn"}</DialogDescription></DialogHeader>

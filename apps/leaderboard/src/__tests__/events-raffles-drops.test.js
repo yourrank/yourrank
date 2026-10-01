@@ -143,15 +143,14 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       title: "VIP Role",
       status: "active",
       total_tickets: 3,
-    }); // find raffle
+    });
 
-    mockQuery.mockResolvedValueOnce([
+    mockOne.mockResolvedValueOnce({ id: "raffle-1" }); // guarded update
+    mockExec.mockResolvedValueOnce([
       { id: "t-1", ticket_number: 1, viewer_id: "v-1", site_viewer_id: "sv-1", viewer_name: "Alice" },
       { id: "t-2", ticket_number: 2, viewer_id: "v-2", site_viewer_id: "sv-2", viewer_name: "Bob" },
       { id: "t-3", ticket_number: 3, viewer_id: "v-3", site_viewer_id: "sv-3", viewer_name: "Charlie" },
-    ]); // find tickets
-
-    mockExec.mockResolvedValueOnce({}); // update raffle
+    ]); // lock raffle tickets for the draw transaction
 
     const req = new Request("http://localhost/api/events/raffles/draw", {
       method: "POST",
@@ -166,10 +165,12 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(body.status).toBe("drawn");
     expect(["Alice", "Bob", "Charlie"]).toContain(body.winnerName);
     expect([1, 2, 3]).toContain(body.winnerTicketNumber);
-    const ticketSql = mockQuery.mock.calls[0][0];
+    const ticketSql = mockExec.mock.calls[0][0];
     expect(ticketSql).toContain("COALESCE(v.kick_username, 'Viewer') AS viewer_name");
     expect(ticketSql).not.toContain("v.username");
     expect(ticketSql).not.toContain("v.display_name");
+    expect(mockOne.mock.calls[0][0]).toContain("FOR UPDATE OF r");
+    expect(mockOne.mock.calls[1][0]).toContain("WHERE id=$4 AND status='active'");
   });
 
   it("handleDrawRaffle refuses to draw when no tickets were sold", async () => {
@@ -180,7 +181,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       status: "active",
       total_tickets: 0,
     });
-    mockQuery.mockResolvedValueOnce([]); // no tickets
+    mockExec.mockResolvedValueOnce([]); // no tickets
 
     const req = new Request("http://localhost/api/events/raffles/draw", {
       method: "POST",
@@ -194,7 +195,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(body.ok).toBe(false);
     expect(body.error).toContain("nothing to draw");
     // The raffle must stay active: no state transition, no fabricated winner.
-    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockOne).toHaveBeenCalledTimes(1);
     expect(body.status).toBeUndefined();
     expect(body.winnerName).toBeUndefined();
   });

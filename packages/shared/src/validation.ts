@@ -486,6 +486,15 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
     })
     .strict(),
 
+  handleViewerBuyRaffleTickets: z
+    .object({
+      slug: z.string().trim().min(1).max(80),
+      raffleId: z.string().uuid(),
+      quantity: z.number().int().min(1).max(100),
+      idempotencyKey: z.string().trim().min(1).max(100),
+    })
+    .strict(),
+
   // --- Originals games ------------------------------------------------------
   // The client only ever sends a bet, game params and (for Mines) a tile.
   // Outcomes, multipliers and payouts are server-computed and never accepted

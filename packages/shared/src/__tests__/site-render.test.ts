@@ -29,6 +29,40 @@ const opts = {
   nonce: "fixed-nonce",
 };
 
+const raffle = (overrides = {}) => ({
+  id: "raffle-1",
+  title: "Community prize",
+  description: "A limited ticket draw.",
+  ticket_cost: 25,
+  max_tickets_per_viewer: 5,
+  total_tickets: 8,
+  my_tickets: 1,
+  ends_at: "2030-01-01T00:00:00Z",
+  ...overrides,
+});
+
+async function renderShopRaffles({
+  raffles = [raffle()],
+  viewer = { kick_username: "alice" },
+  membershipStatus = "member",
+  balance = 100,
+  blocked = false,
+  shopItems = [],
+} = {}) {
+  return renderSite({
+    r: fixture,
+    section: "shop",
+    viewer,
+    viewerData: {
+      membershipStatus,
+      viewerOnSite: membershipStatus === "member" ? { id: "sv-1", balance, blocked } : null,
+      shopItems,
+      raffles,
+    },
+    opts,
+  });
+}
+
 describe("shared public board renderer", () => {
   it("keeps the fixed fixture HTML stable", async () => {
     const html = await renderSite({
@@ -199,6 +233,70 @@ describe("shared public board renderer", () => {
       });
       expect(html).toContain(`id="viewer-rewards" role="list" data-count="${marker}"`);
     }
+  });
+
+  it("renders raffle cards above rewards with a member ticket stepper and confirmation dialog", async () => {
+    const html = await renderShopRaffles({
+      shopItems: [{ id: "reward-1", name: "Community Reward", cost: 10, active: true }],
+    });
+
+    expect(html.indexOf('aria-labelledby="viewer-raffles-title"')).toBeLessThan(html.indexOf('aria-label="All rewards"'));
+    expect(html).toContain(">Raffles</h2>");
+    expect(html).toContain("Community prize");
+    expect(html).toContain("A limited ticket draw.");
+    expect(html).toContain("25 credits per ticket");
+    expect(html).toContain("8 tickets sold");
+    expect(html).toContain("You have 1 of 5");
+    expect(html).toContain('type="number" min="1" max="4" value="1"');
+    expect(html).toContain('data-raffle-buy="raffle-1"');
+    expect(html).toContain('data-raffle-title="Community prize"');
+    expect(html).toContain('data-raffle-cost="25"');
+    expect(html).toContain('data-raffle-remaining="4"');
+    expect(html).toContain('id="yr-raffle-confirm"');
+    expect(html).toContain("Credits have no cash value.");
+    expect(html).toContain('id="yr-raffle-status" role="status"');
+  });
+
+  it("shows sign-in and join gates without member counts", async () => {
+    const guest = await renderShopRaffles({ viewer: null, membershipStatus: "absent" });
+    expect(guest).toContain("Sign in to enter");
+    expect(guest).toContain("/activity?intent=reward");
+    expect(guest).not.toContain("You have 1 of 5");
+    expect(guest).not.toContain('id="yr-raffle-confirm"');
+
+    const nonMember = await renderShopRaffles({ membershipStatus: "absent" });
+    expect(nonMember).toContain("Join to enter");
+    expect(nonMember).not.toContain("You have 1 of 5");
+    expect(nonMember).not.toContain('id="yr-raffle-confirm"');
+  });
+
+  it("shows max, insufficient-credit, blocked and unavailable raffle states", async () => {
+    const maxed = await renderShopRaffles({ raffles: [raffle({ my_tickets: 5 })] });
+    expect(maxed).toContain("Max tickets reached");
+    expect(maxed).not.toContain('data-raffle-buy="raffle-1"');
+
+    const insufficient = await renderShopRaffles({ balance: 20 });
+    expect(insufficient).toContain("Not enough credits");
+    expect(insufficient).not.toContain('id="yr-raffle-confirm"');
+
+    const blocked = await renderShopRaffles({ blocked: true });
+    expect(blocked).toContain("Unavailable");
+    expect(blocked).not.toContain('data-raffle-buy="raffle-1"');
+
+    const unavailable = await renderShopRaffles({ membershipStatus: "unavailable" });
+    expect(unavailable).toContain("Unavailable");
+    expect(unavailable).not.toContain('id="yr-raffle-confirm"');
+  });
+
+  it("renders free raffles as buyable and omits the raffle section when empty", async () => {
+    const free = await renderShopRaffles({ raffles: [raffle({ ticket_cost: 0 })] });
+    expect(free).toContain("Free per ticket");
+    expect(free).toContain('data-raffle-cost="0"');
+    expect(free).toContain('id="yr-raffle-confirm"');
+
+    const empty = await renderShopRaffles({ raffles: [] });
+    expect(empty).not.toContain('aria-labelledby="viewer-raffles-title"');
+    expect(empty).not.toContain('id="yr-raffle-confirm"');
   });
 
   it("contains a chosen creator typeface to display roles", async () => {

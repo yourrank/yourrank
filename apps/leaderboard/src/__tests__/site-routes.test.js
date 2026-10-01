@@ -244,6 +244,7 @@ describe("parseSitePath", () => {
     expect(isCustomViewerApiPath("POST", "/api/viewer/membership/join")).toBe(true);
     expect(isCustomViewerApiPath("POST", "/api/events/drops/claim")).toBe(true);
     expect(isCustomViewerApiPath("POST", "/api/viewer/checkin")).toBe(true);
+    expect(isCustomViewerApiPath("POST", "/api/viewer/raffles/buy")).toBe(true);
     expect(isCustomViewerApiPath("GET", "/api/events/drops/claim")).toBe(false);
     expect(isCustomViewerApiPath("POST", "/api/events/raffles")).toBe(false);
     expect(isCustomViewerApiPath("POST", "/api/viewer/redeem")).toBe(false);
@@ -473,9 +474,12 @@ describe("logged-out vs logged-in rendering", () => {
   });
 
   it("shop is browsable logged out with sign-in CTAs instead of claim buttons", async () => {
+    routeSiteData.calls.length = 0;
     const res = await renderSiteRoute({ request: req("https://example.com/streamer/shop"), env, ctx, nonce: "n", slug: "streamer", section: "shop", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
+    const dataCall = routeSiteData.calls.find((call) => call.opts);
+    expect(dataCall.opts).toMatchObject({ shop: true, raffles: true });
     expect(html).toContain("Shoutout");
     expect(html).toContain("/streamer/activity?intent=reward&reward=");
     expect(html).toContain("Sign in to claim");

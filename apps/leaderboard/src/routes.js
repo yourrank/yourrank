@@ -90,6 +90,7 @@ import {
   handleGetRaffles,
   handleCreateRaffle,
   handleDrawRaffle,
+  handleCancelRaffle,
   handleGetCodeDrops,
   handleCreateCodeDrop,
   handleClaimCodeDrop,
@@ -224,6 +225,7 @@ import {
   handleViewerMe,
   handleViewerJoin,
   handleViewerRedeem,
+  handleViewerBuyRaffleTickets,
 } from "./handlers/viewer-dashboard.js";
 import {
   handleGamesConfig,
@@ -383,6 +385,7 @@ export const ROUTES = [
   { path: "/api/events/raffles", method: "GET", handler: withHandler(handleGetRaffles) },
   { path: "/api/events/raffles", method: "POST", handler: withHandler(handleCreateRaffle) },
   { path: "/api/events/raffles/draw", method: "POST", handler: withHandler(handleDrawRaffle) },
+  { path: "/api/events/raffles/cancel", method: "POST", handler: withHandler(handleCancelRaffle) },
   { path: "/api/events/drops", method: "GET", handler: withHandler(handleGetCodeDrops) },
   { path: "/api/events/drops", method: "POST", handler: withHandler(handleCreateCodeDrop) },
   { path: "/api/events/drops/claim", method: "POST", handler: withHandler(handleClaimCodeDrop) },
@@ -507,6 +510,7 @@ export const ROUTES = [
   { path: "/api/viewer/notifications/read-all", method: "POST", handler: withHandler(handleViewerNotificationsReadAll) },
   { path: "/api/viewer/notifications/:id/read", method: "POST", handler: withHandler(handleViewerNotificationRead) },
   { path: "/api/viewer/redeem", method: "POST", handler: withHandler(handleViewerRedeem) },
+  { path: "/api/viewer/raffles/buy", method: "POST", handler: withHandler(handleViewerBuyRaffleTickets) },
   { path: "/api/viewer/export", method: "POST", handler: withHandler(handleCreateViewerExportJob) },
   { path: "/api/viewer/export/:id/status", method: "GET", handler: withHandler(handleViewerExportStatus) },
   { path: "/api/viewer/export/:id/download", method: "GET", handler: withHandler(handleViewerExportDownload) },

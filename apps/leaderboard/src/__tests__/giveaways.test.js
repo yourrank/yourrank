@@ -684,17 +684,78 @@ describe("Giveaways React migration", () => {
       winner_ticket_number: 4,
       drawn_at: "2026-09-29T00:00:00Z",
     };
+    const cancelled = {
+      ...active,
+      id: "raffle-cancelled",
+      title: "Cancelled prize",
+      status: "cancelled",
+      total_tickets: 3,
+    };
     await mountGiveawaysPage({
       tab: "raffles",
       site: { id: "site-1", name: "Kick Cup" },
-      deps: { api: async () => ({ raffles: [active, past] }) },
+      deps: { api: async () => ({ raffles: [active, past, cancelled] }) },
     });
 
     expect($id("rf-active-list").querySelector('[data-raffle-id="raffle-live"] h3').textContent).toBe("Live prize");
+    const activeCard = $id("rf-active-list").querySelector('[data-raffle-id="raffle-live"]');
+    expect([...activeCard.querySelectorAll("button")].map((button) => button.textContent.trim())).toEqual(["Draw winner", "Cancel raffle"]);
+    expect(activeCard.querySelectorAll("button")[1].className).toContain("border-input");
     expect($id("rf-past-list").querySelector("table")).toBeTruthy();
     expect($id("rf-past-list").textContent).toContain("Casey");
     expect($id("rf-past-list").textContent).toContain("Ticket #4");
+    expect($id("rf-past-list").textContent).toContain("Cancelled · Credits refunded");
     expect($id("rf-past-list").querySelector(".gw-table")).toBeNull();
+  });
+
+  it("confirms raffle cancellation, posts to the cancel endpoint, reloads, and reports refunds", async () => {
+    const active = {
+      id: "raffle-live",
+      title: "Live prize",
+      ticket_cost: 25,
+      max_tickets_per_viewer: 5,
+      status: "active",
+      total_tickets: 8,
+      participant_count: 4,
+      created_at: "2026-09-28T00:00:00Z",
+    };
+    const cancelled = { ...active, status: "cancelled" };
+    const requests = [];
+    let listLoads = 0;
+    await mountGiveawaysPage({
+      tab: "raffles",
+      site: { id: "site-1", name: "Kick Cup" },
+      deps: {
+        api: async (path, init, siteId) => {
+          requests.push({ path, init, siteId });
+          if (path === "/api/events/raffles") {
+            listLoads += 1;
+            return { raffles: listLoads === 1 ? [active] : [cancelled] };
+          }
+          if (path === "/api/events/raffles/cancel") {
+            return { refundedViewers: 2, refundedCredits: 50, message: "Raffle cancelled. Refunded 50 Credits to 2 viewers." };
+          }
+          return {};
+        },
+      },
+    });
+
+    const card = $id("rf-active-list").querySelector('[data-raffle-id="raffle-live"]');
+    clickGiveaways([...card.querySelectorAll("button")].find((button) => button.textContent.includes("Cancel raffle")));
+    await actGiveaways();
+    const dialog = document.querySelector('[role="alertdialog"]');
+    expect(dialog.textContent).toContain("Cancel this raffle?");
+    expect(dialog.textContent).toContain("Everyone who bought tickets gets their Credits back.");
+    clickGiveaways([...dialog.querySelectorAll("button")].find((button) => button.textContent.trim() === "Cancel raffle"));
+    await actGiveaways();
+
+    const cancelRequest = requests.find((request) => request.path === "/api/events/raffles/cancel");
+    expect(cancelRequest.siteId).toBe("site-1");
+    expect(cancelRequest.init.method).toBe("POST");
+    expect(JSON.parse(cancelRequest.init.body)).toEqual({ raffleId: "raffle-live" });
+    expect(listLoads).toBe(2);
+    expect($id("gw-page-alert").textContent).toContain("Refunded 50 Credits to 2 viewers");
+    expect($id("rf-past-list").textContent).toContain("Cancelled · Credits refunded");
   });
 
   it("renders settled prediction history using the React table", async () => {
