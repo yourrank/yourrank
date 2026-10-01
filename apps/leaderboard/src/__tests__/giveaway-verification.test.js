@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import { giveawayIpHash, handleGiveawayVerification } from "../handlers/giveaway-verification.js";
+import { giveawayIpHash, handleGiveawayVerification, handleGiveawayVerificationPage } from "../handlers/giveaway-verification.js";
 import { drawGiveaway } from "../chat-giveaway-service.js";
 const id = "11111111-1111-4111-8111-111111111111";
 const viewer = { id: "viewer", identities: [{ provider: "kick", externalUserId: "42", username: "alice", linkedAt: "2026-01-01" }] };
@@ -23,6 +23,14 @@ function setup({ actor = viewer, entry = { id: "entry", badges: [], eligibility_
   };
 }
 describe("giveaway verification boundary", () => {
+  it("shows the VPN notice without provider-specific copy", async () => {
+    const response = handleGiveawayVerificationPage(new Request("https://yourrank.site/giveaways/verify"), {});
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('<p id="giveaway-vpn-notice" hidden>VPN / proxy check is on. Turn off any VPN or proxy before you verify.</p>');
+    expect(html).not.toContain("proxycheck.io");
+  });
+
   it("keeps unregistered and unlinked viewers pending without writing", async () => {
     for (const [actor, reason] of [[null, "not_yourrank_member"], [{ id: "viewer", identities: [] }, "kick_not_linked"]]) {
       const d = setup({ actor });

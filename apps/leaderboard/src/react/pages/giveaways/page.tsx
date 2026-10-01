@@ -630,6 +630,13 @@ function ChatGiveaway({
   const autoRerollKeyRef = useRef("");
   const session = data.session || null;
   const entries = data.entries || [];
+  const verificationPath = session
+    ? `/giveaways/verify?sessionId=${encodeURIComponent(session.id)}`
+    : "";
+  const verificationUrl = session
+    ? new URL(verificationPath, window.location.origin).href
+    : "";
+  const pendingCount = entries.filter((entry) => entry.eligibility_status === "pending_verification").length;
   const connection = data.connection || EMPTY_CONNECTION;
   const capabilities = data.capabilities || {};
   const winner = data.winner || null;
@@ -1066,6 +1073,15 @@ function ChatGiveaway({
     }
   };
 
+  const copyVerificationLink = async () => {
+    try {
+      await navigator.clipboard.writeText(verificationUrl);
+      onAlert("Verification link copied.");
+    } catch {
+      onAlert("Could not copy the verification link.");
+    }
+  };
+
   const updateAdvancedOpen = (open: boolean) => {
     setAdvancedOpen(open);
     try { window.localStorage.setItem("yr:gw-advanced-open", open ? "1" : "0"); } catch { /* storage unavailable */ }
@@ -1284,8 +1300,8 @@ function ChatGiveaway({
                         {rules.entryMode !== "verified"
                           ? "Locked — Requires Verified Entry"
                           : capabilities.vpnDetection === true
-                            ? "Blocks VPN, proxy, Tor and hosting networks (proxycheck.io)."
-                            : "Unavailable — PROXYCHECK_API_KEY not configured"}
+                            ? "Blocks VPN, proxy, Tor and hosting networks."
+                            : "Unavailable right now."}
                       </p>
                       <p id="gw-device-requirement" className="text-xs text-muted-foreground">
                         {rules.entryMode === "verified" ? "Unavailable — No supported device check" : "Locked — Requires Verified Entry and a supported device check"}
@@ -1314,13 +1330,6 @@ function ChatGiveaway({
                 {settingsLocked ? "Entry rules are locked for the current giveaway. Winner verification can still change until you confirm a winner." : "Settings are saved when you start a giveaway. Changes apply to the next giveaway."}
               </p>
               {manualUi && <p id="gw-manual-rules-note" className="text-xs text-muted-foreground">Other rules need a connected Kick channel.</p>}
-              {session?.rules?.entryMode === "verified" && (
-                <div id="gw-verification-link-wrap">
-                  <a id="gw-verification-link" className="text-sm text-primary underline-offset-4 hover:underline" href={`/giveaways/verify?sessionId=${encodeURIComponent(session.id)}`}>
-                    Open verification link
-                  </a>
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>
@@ -1444,6 +1453,22 @@ function ChatGiveaway({
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {session?.rules?.entryMode === "verified" && (session.status === "active" || session.status === "stopped") && (
+                <section id="gw-verification-share" aria-labelledby="gw-verification-share-title" className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                  <div>
+                    <h3 id="gw-verification-share-title" className="text-sm font-semibold">Verification link</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">Share this with your chat. Entries stay pending until the viewer opens it and selects Verify Entry. Only verified entries can win.</p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input id="gw-verification-url" readOnly aria-label="Verification link" value={verificationUrl} onFocus={(event) => event.currentTarget.select()} className="font-mono text-xs" />
+                    <div className="flex gap-2">
+                      <Button id="gw-btn-copy-verification" type="button" size="sm" onClick={() => void copyVerificationLink()}>Copy link</Button>
+                      <Button asChild size="sm" variant="outline"><a id="gw-verification-link" href={verificationPath} target="_blank" rel="noopener noreferrer">Open</a></Button>
+                    </div>
+                  </div>
+                  {pendingCount > 0 && <p id="gw-verification-pending" className="text-xs text-muted-foreground" role="status">{pendingCount} {pendingCount === 1 ? "entry is" : "entries are"} waiting for verification.</p>}
+                </section>
+              )}
               {linkedCount > 0 && (
                 <div id="gw-linked-banner" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-700/20 bg-amber-500/5 px-4 py-3 text-sm" role="status">
                   <span id="gw-linked-banner-text">{linkedCount} entrant{linkedCount === 1 ? " is" : "s are"} linked to another entrant.</span>

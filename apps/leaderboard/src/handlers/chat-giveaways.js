@@ -185,7 +185,7 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
     if (rulesError) return bad(rulesError, 400);
   }
   if (parsedRules.data.vpnDetection && !env?.PROXYCHECK_API_KEY) {
-    return bad("VPN / proxy detection isn't configured (PROXYCHECK_API_KEY missing).", 400);
+    return bad("VPN / proxy detection isn't available right now.", 400);
   }
   // Basic giveaways are free: keyword, entryMode chat|members, subscriberOnly,
   // winnerRepeat, excludePreviousWinners. Advanced fields require the

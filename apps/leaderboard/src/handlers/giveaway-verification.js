@@ -108,7 +108,7 @@ export function handleGiveawayVerificationPage(request, env) {
     <body><main class="wrap"><section class="card"><a href="/me">YourRank account</a><h1>Verify giveaway entry</h1>
     <h2 id="giveaway-community"></h2><p id="giveaway-identity"></p><p id="giveaway-state" role="status" aria-live="polite">Loading your entry…</p>
     <p id="giveaway-ip-notice" hidden>One account per IP is enabled. YourRank stores a giveaway-specific hash, never your raw IP. People sharing a connection or Wi-Fi may be unable to enter together.</p>
-    <p id="giveaway-vpn-notice" hidden>VPN / proxy check is on. Your connection is checked with proxycheck.io when you verify. Turn off any VPN or proxy first.</p>
+    <p id="giveaway-vpn-notice" hidden>VPN / proxy check is on. Turn off any VPN or proxy before you verify.</p>
     <a class="btn" id="giveaway-signin" hidden>Sign in with Kick</a><button class="btn btn--accent" id="giveaway-verify" type="button" disabled>Verify Entry</button>
     </section></main><script src="/assets/device-signal.js" defer></script><script type="module" src="/assets/giveaway-verification.js"></script></body></html>`,
   { headers: { ...SECURE_HTML, "cache-control": "private, no-store", "set-cookie": csrfCookie(token, request) } });

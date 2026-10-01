@@ -50,6 +50,49 @@ async function mountChat(chat = emptyChat) {
   return requests;
 }
 
+const verificationEntries = [
+  {
+    id: "entry-pending",
+    giveaway_session_id: "verified-session",
+    provider: "kick",
+    provider_user_id: "kick:pending",
+    username: "pending-viewer",
+    avatar_url: null,
+    message: "",
+    badges: [],
+    entered_at: "2026-09-28T00:00:00Z",
+    eligibility_status: "pending_verification",
+  },
+  {
+    id: "entry-eligible",
+    giveaway_session_id: "verified-session",
+    provider: "kick",
+    provider_user_id: "kick:eligible",
+    username: "eligible-viewer",
+    avatar_url: null,
+    message: "",
+    badges: [],
+    entered_at: "2026-09-28T00:01:00Z",
+    eligibility_status: "eligible",
+  },
+];
+
+function verificationChat({ status = "active", entryMode = "verified", vpnDetection = false } = {}) {
+  return {
+    ...emptyChat,
+    capabilities: { vpnDetection },
+    session: {
+      id: "verified-session",
+      status,
+      provider: "kick",
+      keyword: "!verify",
+      started_at: "2026-09-28T00:00:00Z",
+      rules: { entryMode, vpnDetection },
+    },
+    entries: verificationEntries,
+  };
+}
+
 async function withSiteQuery(siteId, run) {
   const originalUrl = window.location.href;
   const originalState = window.history.state;
@@ -136,6 +179,83 @@ describe("Giveaways React migration", () => {
     expect($id("gw-stage-card")).toBeTruthy();
     expect($id("gw-entrants-empty").textContent).toContain("No entrants yet");
     expect(requests.some((request) => request.path === "/api/giveaways/chat" && request.siteId === "site-1")).toBe(true);
+  });
+
+  it("renders the verification share box above entrants with the pending count", async () => {
+    await mountChat(verificationChat());
+
+    const verificationPath = `/giveaways/verify?sessionId=${encodeURIComponent("verified-session")}`;
+    const verificationUrl = new URL(verificationPath, window.location.origin).href;
+    const share = $id("gw-verification-share");
+    expect(share).toBeTruthy();
+    expect(share.hidden).toBe(false);
+    expect(share.parentElement.firstElementChild).toBe(share);
+    expect($id("gw-verification-url").value).toBe(verificationUrl);
+    expect($id("gw-verification-link").getAttribute("href")).toBe(verificationPath);
+    expect($id("gw-verification-link").getAttribute("target")).toBe("_blank");
+    expect($id("gw-verification-pending").textContent.trim()).toBe("1 entry is waiting for verification.");
+    expect($id("gw-verification-pending").getAttribute("role")).toBe("status");
+    expect($id("gw-verification-link-wrap")).toBeNull();
+  });
+
+  it("copies the absolute verification URL and announces success", async () => {
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "clipboard");
+    const copied = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (text) => { copied.push(text); } },
+    });
+
+    try {
+      await mountChat(verificationChat());
+      clickGiveaways($id("gw-btn-copy-verification"));
+      await actGiveaways();
+
+      expect(copied).toEqual([new URL("/giveaways/verify?sessionId=verified-session", window.location.origin).href]);
+      expect($id("gw-page-alert").textContent).toContain("Verification link copied.");
+    } finally {
+      if (clipboardDescriptor) Object.defineProperty(window.navigator, "clipboard", clipboardDescriptor);
+      else delete window.navigator.clipboard;
+    }
+  });
+
+  it("announces when copying the verification URL fails", async () => {
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "clipboard");
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async () => { throw new Error("Clipboard unavailable"); } },
+    });
+
+    try {
+      await mountChat(verificationChat());
+      clickGiveaways($id("gw-btn-copy-verification"));
+      await actGiveaways();
+
+      expect($id("gw-page-alert").textContent).toContain("Could not copy the verification link.");
+    } finally {
+      if (clipboardDescriptor) Object.defineProperty(window.navigator, "clipboard", clipboardDescriptor);
+      else delete window.navigator.clipboard;
+    }
+  });
+
+  it("hides the verification share box for chat-mode sessions", async () => {
+    await mountChat(verificationChat({ entryMode: "chat" }));
+    expect($id("gw-verification-share")).toBeNull();
+  });
+
+  it("hides the verification share box for completed sessions", async () => {
+    await mountChat(verificationChat({ status: "completed" }));
+    expect($id("gw-verification-share")).toBeNull();
+  });
+
+  it("shows plain-language VPN detection availability copy", async () => {
+    await mountChat(verificationChat({ vpnDetection: true }));
+    expect($id("gw-vpn-requirement").textContent.trim()).toBe("Blocks VPN, proxy, Tor and hosting networks.");
+  });
+
+  it("shows plain-language unavailability copy when VPN detection is unavailable", async () => {
+    await mountChat(verificationChat());
+    expect($id("gw-vpn-requirement").textContent.trim()).toBe("Unavailable right now.");
   });
 
   it("uses the connected-channel API without the legacy chatroom listener", () => {
