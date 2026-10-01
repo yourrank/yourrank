@@ -120,7 +120,16 @@
 }
 
 .yr-react.audience-react .audience-status.error {
-  color: var(--ws-danger, #b42318);
+  border: 1px solid var(--ws-danger-line);
+  border-radius: var(--ws-radius-sm);
+  padding: 0.625rem 1rem;
+  background: var(--ws-danger-soft);
+  color: var(--ws-danger-text);
+}
+
+.yr-react.audience-react .audience-status.sr-only {
+  min-height: 0;
+  margin: -1px;
 }
 
 .yr-react.audience-react .audience-empty {
@@ -373,6 +382,21 @@
   text-transform: capitalize;
 }
 
+.yr-react.audience-react .cr-member-name .v3-chip--cancelled {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  border: 1px solid var(--ws-danger-line);
+  border-radius: var(--ws-radius-pill);
+  padding: 0.125rem 0.5rem;
+  background: var(--ws-danger-soft);
+  color: var(--ws-danger-text);
+  font-family: var(--ws-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
 .yr-react.audience-react .audience-member-credits {
   justify-items: end;
   text-align: right;
@@ -403,6 +427,11 @@
 .yr-react.audience-react .audience-list-foot__hint {
   margin-left: auto;
   text-align: right;
+}
+
+.yr-react.audience-react .audience-list-foot .list-page-info,
+.yr-react.audience-react .audience-list-foot__hint {
+  color: var(--ws-text-soft);
 }
 
 .yr-react.audience-react .audience-note {
@@ -1101,6 +1130,10 @@
     width: 100%;
   }
 
+  .yr-react.audience-react .audience-activity-search {
+    flex-basis: auto;
+  }
+
   .yr-react.audience-react .audience-activity-type {
     flex-basis: auto;
     min-width: 0;
@@ -1187,6 +1220,127 @@
   .yr-react.audience-react .people-review-actions button {
     width: 100%;
     min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 700px) {
+  .yr-react.audience-react .audience-member-table tr,
+  .yr-react.audience-react .audience-activity-table tr {
+    box-sizing: border-box;
+    width: calc(100% - 1rem);
+    margin: 0.5rem;
+    border: 1px solid var(--ws-line);
+    border-radius: var(--ws-radius);
+    padding: 0.5rem;
+    background: var(--ws-surface-soft);
+  }
+
+  .yr-react.audience-react .audience-member-table tr {
+    position: relative;
+  }
+
+  .yr-react.audience-react .audience-member-table td[data-label="Select"] {
+    position: absolute;
+    top: 1.25rem;
+    left: 0.75rem;
+    display: flex;
+    width: auto;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  .yr-react.audience-react .audience-member-table td[data-label="Select"]::before,
+  .yr-react.audience-react .audience-member-table td[data-label="Member"]::before,
+  .yr-react.audience-react .audience-member-table td[data-label="View"]::before {
+    display: none;
+    content: none;
+  }
+
+  .yr-react.audience-react .audience-member-table td[data-label="Member"] {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-width: 0;
+    padding: 0.35rem 0.25rem 0.5rem 2.25rem;
+  }
+
+  .yr-react.audience-react .audience-member-table td[data-label="Last active"],
+  .yr-react.audience-react .audience-member-table td[data-label="Account"],
+  .yr-react.audience-react .audience-member-table td[data-label="Credits"] {
+    display: grid;
+    grid-template-columns: 6rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.35rem 0.25rem;
+    text-align: right;
+  }
+
+  .yr-react.audience-react .audience-member-table td[data-label="Last active"]::before,
+  .yr-react.audience-react .audience-member-table td[data-label="Account"]::before,
+  .yr-react.audience-react .audience-member-table td[data-label="Credits"]::before,
+  .yr-react.audience-react .audience-activity-table td[data-label="When"]::before,
+  .yr-react.audience-react .audience-activity-table td[data-label="Activity"]::before,
+  .yr-react.audience-react .audience-activity-table td[data-label="Details"]::before {
+    flex: none;
+    min-width: 0;
+    color: var(--ws-text-mute);
+    text-align: left;
+  }
+
+  .yr-react.audience-react .audience-member-table td[data-label="Last active"] .cr-member-activity,
+  .yr-react.audience-react .audience-member-table td[data-label="Account"] .cr-member-platforms,
+  .yr-react.audience-react .audience-member-table td[data-label="Credits"] .audience-member-credits {
+    min-width: 0;
+    justify-self: end;
+    text-align: right;
+  }
+
+  .yr-react.audience-react .audience-member-table td[data-label="View"] {
+    justify-content: flex-end;
+    padding: 0.5rem 0.25rem 0.25rem;
+    text-align: right;
+  }
+
+  .yr-react.audience-react .audience-activity-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .yr-react.audience-react .audience-activity-table td[data-label="Member"] {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  .yr-react.audience-react .audience-activity-table td[data-label="Member"]::before,
+  .yr-react.audience-react .audience-activity-table td[data-label="Change"]::before {
+    display: none;
+    content: none;
+  }
+
+  .yr-react.audience-react .audience-activity-table td[data-label="When"],
+  .yr-react.audience-react .audience-activity-table td[data-label="Activity"],
+  .yr-react.audience-react .audience-activity-table td[data-label="Details"] {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 6rem minmax(0, 1fr);
+    align-items: center;
+    text-align: right;
+  }
+
+  .yr-react.audience-react .audience-activity-table td[data-label="Details"] {
+    overflow-wrap: anywhere;
+  }
+
+  .yr-react.audience-react .audience-activity-table td[data-label="Change"] {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    align-items: center;
+    justify-content: flex-end;
+    padding-left: 0.25rem;
   }
 }
 

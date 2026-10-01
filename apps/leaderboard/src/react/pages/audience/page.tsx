@@ -232,8 +232,8 @@ function LoadingRows({ cols, rows = 3 }: { cols: number; rows?: number }) {
   );
 }
 
-function StatusMessage({ children, error = false }: { children: string; error?: boolean }) {
-  return children ? <p className={`status audience-status${error ? " error" : ""}`} role={error ? "alert" : "status"}>{children}</p> : null;
+function StatusMessage({ children, error = false, visuallyHidden = false }: { children: string; error?: boolean; visuallyHidden?: boolean }) {
+  return children ? <p className={`status audience-status${error ? " error" : visuallyHidden ? " sr-only" : ""}`} role={error ? "alert" : "status"}>{children}</p> : null;
 }
 
 function PageHeader({ title, description, aside }: { title: string; description: string; aside?: ReactNode }) {
@@ -979,7 +979,7 @@ export function AudiencePage({
         <PageHeader
           title="Members"
           description="People who joined this site, with their Credits."
-          aside={<span className="audience-header-count">{memberTotal ?? members.length} members</span>}
+          aside={<span className="audience-header-count">{memberTotal ?? members.length} {(memberTotal ?? members.length) === 1 ? "member" : "members"}</span>}
         />
         <section className="cr-table-card cr-member-list audience-members" id="cr-viewers" aria-label="Members in this site">
           <div className="audience-toolbar" id="cr-viewer-toolbar">
@@ -1017,7 +1017,7 @@ export function AudiencePage({
               <Button id="cr-bulk-clear" type="button" variant="ghost" onClick={clearMemberSelection}>Clear selection</Button>
             </div>
           </div>
-          <StatusMessage error={memberStatusError}>{memberStatus}</StatusMessage>
+          <StatusMessage error={memberStatusError} visuallyHidden>{memberStatus}</StatusMessage>
           {membersLoading && !members.length
             ? <LoadingRows cols={6} />
             : membersError
@@ -1190,7 +1190,7 @@ export function AudiencePage({
         <PageHeader
           title="Activity"
           description="Every Credit earned or spent on this site."
-          aside={<span className="audience-header-count">{activityEvents.length} entries</span>}
+          aside={<span className="audience-header-count">{activityEvents.length} {activityEvents.length === 1 ? "entry" : "entries"}</span>}
         />
         <section className="cr-table-card audience-activity">
           <form className="audience-activity-filters" aria-label="Filter activity" onSubmit={(event) => {
@@ -1220,7 +1220,7 @@ export function AudiencePage({
                 </table></div>
               : <div className="v3-empty audience-empty" id="cr-history-empty"><h3>No sites found</h3><p>This member has no activity on your sites.</p></div>}
           </section>}
-          <StatusMessage error={activityStatusError}>{activityStatus}</StatusMessage>
+          <StatusMessage error={activityStatusError} visuallyHidden>{activityStatus}</StatusMessage>
           {activityLoading
             ? <LoadingRows cols={5} />
             : activityError
@@ -1277,7 +1277,7 @@ export function AudiencePage({
         />
         <section className="people-reviews" aria-label="Audience reviews">
           <div className={`people-review-queue${reviewsLoading ? " is-loading" : ""}`} aria-busy={reviewsLoading}>
-            <div className="people-review-feedback" aria-live="polite"><StatusMessage error={reviewsStatusError}>{reviewsStatus}</StatusMessage>{reviewsError && <Button type="button" variant="outline" id="people-reviews-retry" onClick={() => void loadReviews()}>Try again</Button>}</div>
+            <div className="people-review-feedback" aria-live="polite"><StatusMessage error={reviewsStatusError} visuallyHidden>{reviewsStatus}</StatusMessage>{reviewsError && <Button type="button" variant="outline" id="people-reviews-retry" onClick={() => void loadReviews()}>Try again</Button>}</div>
             {reviewsLoading
               ? <div id="people-reviews-loading" className="people-review-loading"><LoadingRows cols={5} /></div>
               : reviewsError
@@ -1297,7 +1297,7 @@ export function AudiencePage({
                     id="people-reviews-empty"
                     kind="reviews"
                     className="people-review-empty"
-                    title={reviewFilter === "pending" ? "You're all caught up" : "No resolved reviews yet."}
+                    title={reviewFilter === "pending" ? "You're all caught up" : "No resolved reviews yet"}
                     body={reviewFilter === "pending"
                       ? "When a signup needs a human decision, it shows up here."
                       : "Decisions made for this site will appear here."}
@@ -1349,7 +1349,7 @@ export function AudiencePage({
       />
       <section className="cr-table-card people-linked" aria-label="Linked accounts">
         <div className="people-linked-content" aria-busy={linkedLoading}>
-          <StatusMessage error={linkedStatusError}>{linkedStatus}</StatusMessage>
+          <StatusMessage error={linkedStatusError} visuallyHidden>{linkedStatus}</StatusMessage>
           {linkedLoading
             ? <LoadingRows cols={3} rows={3} />
             : linkedError
@@ -1364,7 +1364,7 @@ export function AudiencePage({
                 : <AudienceEmptyState
                   kind="linked"
                   className="people-review-empty"
-                  title={linkedFilter === "dismissed" ? "No dismissed account links." : "No linked accounts to check"}
+                  title={linkedFilter === "dismissed" ? "No dismissed account links" : "No linked accounts to check"}
                   body={linkedFilter === "dismissed"
                     ? "Dismissed signals for this site will appear here."
                     : "When two accounts look connected, they appear here so you can keep or dismiss the link."}
