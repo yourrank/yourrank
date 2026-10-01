@@ -114,6 +114,54 @@ describe("Settings React account and connection actions", () => {
     expect(document.getElementById("accVerificationStatus").textContent).toBe("Verification email requested. Check your inbox.");
   });
 
+  it("edits and saves the account profile name with Enter", async () => {
+    const { calls, request } = requestFor({
+      onRequest: async (method, path) => path === "/api/account/profile" && method === "PATCH"
+        ? { ok: true, data: { ok: true, displayName: "Atlas Artist" } }
+        : null,
+    });
+    await mountSettingsPage({ user, tab: "account", deps: { request } });
+
+    const shellName = document.createElement("span");
+    shellName.className = "gm-profile-id-name";
+    shellName.textContent = "Atlas Owner";
+    document.body.append(shellName);
+
+    await actAndFlush(() => document.getElementById("accProfileNameEdit").click());
+    const input = document.getElementById("accProfileNameInput");
+    expect(input.value).toBe("Atlas Owner");
+    expect(input.maxLength).toBe(40);
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    setter.call(input, "  Atlas   Artist  ");
+    await actAndFlush(() => input.dispatchEvent(new window.Event("input", { bubbles: true })));
+    await actAndFlush(() => input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+
+    expect(calls.find(({ path }) => path === "/api/account/profile")).toEqual({
+      method: "PATCH",
+      path: "/api/account/profile",
+      body: { displayName: "  Atlas   Artist  " },
+    });
+    expect(document.querySelector("#accSummaryName span").textContent).toBe("Atlas Artist");
+    expect(shellName.textContent).toBe("Atlas Artist");
+  });
+
+  it("shows a profile update error inline and cancels with Escape", async () => {
+    const { request } = requestFor({
+      onRequest: async (method, path) => path === "/api/account/profile" && method === "PATCH"
+        ? { ok: false, data: { error: "Use 40 characters or fewer." } }
+        : null,
+    });
+    await mountSettingsPage({ user, tab: "account", deps: { request } });
+
+    await actAndFlush(() => document.getElementById("accProfileNameEdit").click());
+    await actAndFlush(() => document.getElementById("accProfileNameSave").click());
+    expect(document.getElementById("accProfileNameError").textContent).toBe("Use 40 characters or fewer.");
+
+    await actAndFlush(() => document.getElementById("accProfileNameInput").dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.querySelector("#accSummaryName span").textContent).toBe("Atlas Owner");
+    expect(document.getElementById("accProfileNameInput")).toBeNull();
+  });
+
   it("keeps the sponsor guide copy and sends the test conversion request", async () => {
     const { calls, request } = requestFor();
     let copied = "";

@@ -227,18 +227,69 @@ function reportStatus(message: string, isError = false) {
 function AccountPanel({ user, deps }: { user: User; deps: SettingsDependencies }) {
   const name = text(user.displayName, text(user.email?.split("@")[0], "Account"));
   const email = text(user.email, "—");
+  const [profileName, setProfileName] = useState(name);
+  const [editingProfileName, setEditingProfileName] = useState(false);
+  const [profileNameDraft, setProfileNameDraft] = useState(name);
+  const [profileNameError, setProfileNameError] = useState("");
+  const [profileNameSaving, setProfileNameSaving] = useState(false);
   const [verification, setVerification] = useState(user.emailVerified === false ? "Not verified" : "Checking…");
   const [verificationStatus, setVerificationStatus] = useState("");
   const [resending, setResending] = useState(false);
 
   useEffect(() => {
     (state as MutableSettingsState).ME = user;
+    setProfileName(name);
+    setProfileNameDraft(name);
+    setEditingProfileName(false);
+    setProfileNameError("");
     const resend = document.getElementById("accResendVerification") as (HTMLButtonElement & { _wired?: boolean }) | null;
     if (resend) resend._wired = true;
     const cleanup = wireAccount();
     setVerification(user.emailVerified ? "Verified" : "Not verified");
     return cleanup;
-  }, [user]);
+  }, [name, user]);
+
+  function editProfileName() {
+    setProfileNameDraft(profileName);
+    setProfileNameError("");
+    setEditingProfileName(true);
+  }
+
+  function cancelProfileNameEdit() {
+    if (profileNameSaving) return;
+    setProfileNameDraft(profileName);
+    setProfileNameError("");
+    setEditingProfileName(false);
+  }
+
+  async function saveProfileName() {
+    if (profileNameSaving) return;
+    setProfileNameSaving(true);
+    setProfileNameError("");
+    try {
+      const result = await deps.request<{ displayName?: string }>(
+        "PATCH",
+        "/api/account/profile",
+        { displayName: profileNameDraft },
+      );
+      if (!result.ok || typeof result.data.displayName !== "string") {
+        setProfileNameError(statusMessage(result.data, "Couldn't update your name. Try again."));
+        return;
+      }
+
+      const updatedName = result.data.displayName;
+      setProfileName(updatedName);
+      setProfileNameDraft(updatedName);
+      setEditingProfileName(false);
+      (state as MutableSettingsState).ME = { ...user, displayName: updatedName };
+      const shellName = document.querySelector(".gm-profile-id-name");
+      if (shellName) shellName.textContent = updatedName;
+    } catch {
+      setProfileNameError("Couldn't update your name. Try again.");
+    } finally {
+      setProfileNameSaving(false);
+    }
+  }
 
   async function resendVerification() {
     setResending(true);
@@ -260,7 +311,45 @@ function AccountPanel({ user, deps }: { user: User; deps: SettingsDependencies }
         <h2 id="accountIdentityTitle">Profile</h2>
         <p className="card-sub">The identity used for your YourRank account.</p>
         <dl className="account-detail-list">
-          <div><dt>Name</dt><dd id="accSummaryName">{name}</dd></div>
+          <div>
+            <dt>Name</dt>
+            <dd id="accSummaryName">
+              {editingProfileName ? (
+                <form className="d-flex gap-8 items-center flex-wrap" onSubmit={(event) => { event.preventDefault(); void saveProfileName(); }}>
+                  <Label className="sr-only" htmlFor="accProfileNameInput">Profile name</Label>
+                  <Input
+                    id="accProfileNameInput"
+                    autoComplete="name"
+                    autoFocus
+                    className="w-full sm:w-56"
+                    maxLength={40}
+                    value={profileNameDraft}
+                    aria-invalid={Boolean(profileNameError)}
+                    aria-describedby={profileNameError ? "accProfileNameError" : undefined}
+                    disabled={profileNameSaving}
+                    onChange={(event) => setProfileNameDraft(event.currentTarget.value)}
+                    onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void saveProfileName();
+                      } else if (event.key === "Escape") {
+                        event.preventDefault();
+                        cancelProfileNameEdit();
+                      }
+                    }}
+                  />
+                  <button className="btn btn--sm btn--accent" id="accProfileNameSave" type="submit" disabled={profileNameSaving} aria-busy={profileNameSaving}>{profileNameSaving ? "Saving…" : "Save"}</button>
+                  <button className="btn btn--sm btn--ghost" id="accProfileNameCancel" type="button" disabled={profileNameSaving} onClick={cancelProfileNameEdit}>Cancel</button>
+                  {profileNameError && <p className="w-full text-xs text-destructive" id="accProfileNameError" role="alert">{profileNameError}</p>}
+                </form>
+              ) : (
+                <div className="d-flex gap-8 items-center flex-wrap">
+                  <span>{profileName}</span>
+                  <button className="btn btn--sm btn--ghost" id="accProfileNameEdit" type="button" onClick={editProfileName}>Edit</button>
+                </div>
+              )}
+            </dd>
+          </div>
           <div><dt>Email</dt><dd id="accSummaryEmail">{email}</dd></div>
           <div>
             <dt>Verification</dt>

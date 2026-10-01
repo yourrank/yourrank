@@ -39,6 +39,7 @@ import { handleTrial, handleEndPlanAccess, handleBillingFunnel } from "./handler
 import { handleLead } from "./handlers/leads.js";
 import { handleAttribution, handleAttributionExport, handlePostback, handleRotatePostbackKey, handleRevokePostbackKey } from "./handlers/attribution.js";
 import {
+  handleAccountProfile,
   handleAccountPostbacks,
   handleAccountPostbacksRotate,
   handleAccountPostbacksRevoke,
@@ -483,6 +484,7 @@ export const ROUTES = [
   // Bot lifecycle is owned by the bot Worker; obsolete leaderboard routes removed (C-06).
 
   // Account
+  { path: "/api/account/profile", method: "PATCH", handler: withHandler(handleAccountProfile) },
   { path: "/api/account/postbacks", method: "GET", handler: withHandler(handleAccountPostbacks) },
   { path: "/api/account/postbacks/rotate", method: "POST", handler: withHandler(handleAccountPostbacksRotate) },
   { path: "/api/account/postbacks", method: "DELETE", handler: withHandler(handleAccountPostbacksRevoke) },
