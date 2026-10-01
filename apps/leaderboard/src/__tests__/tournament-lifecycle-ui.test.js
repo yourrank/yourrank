@@ -352,6 +352,34 @@ describe("tournament lifecycle UI", () => {
     expect(requestsTo("/api/tournaments", "POST")).toHaveLength(0);
   });
 
+  it("keeps the create dialog usable during rapid consecutive input changes", async () => {
+    await click("tournament-create");
+
+    async function changeTwice(id, firstValue, finalValue) {
+      const input = $id(id);
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      if (!setter) throw new Error("Native HTMLInputElement value setter is unavailable");
+
+      await actAndFlush(() => {
+        setter.call(input, firstValue);
+        input.dispatchEvent(new window.Event("input", { bubbles: true }));
+        setter.call(input, finalValue);
+        input.dispatchEvent(new window.Event("input", { bubbles: true }));
+      });
+
+      expect($id(id).value).toBe(finalValue);
+      expect(visible("tournament-create-modal")).toBe(true);
+    }
+
+    await changeTwice("tc-title", "Fri", "Friday Cup");
+    await click("tc-more-trigger");
+    await changeTwice("tc-game", "Fort", "Fortnite");
+    await chooseOption("tc-entry-cap", "Custom…");
+    await changeTwice("tc-entry-cap-custom", "4", "40");
+    await changeTwice("tc-chat-channel", "cre", "creator");
+    await changeTwice("tc-keyword", "!f", "!final");
+  });
+
   it("sends the selected values to the API and renders the Draft state", async () => {
     await click("tournament-create");
     await fill("tc-title", "Friday Cup");
