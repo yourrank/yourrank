@@ -279,6 +279,7 @@ describe("Giveaways React migration", () => {
       "gw-add-entrant-form",
       "gw-add-entrant-name",
       "gw-rules-summary",
+      "gw-advanced-card",
       "gw-advanced-options",
       "gw-settings-note",
       "gw-manual-rules-note",
@@ -288,14 +289,80 @@ describe("Giveaways React migration", () => {
       expect(giveawaysPageSource).toContain(`id="${id}"`);
     }
     expect(giveawaysPageSource.indexOf('id="gw-keyword-field"')).toBeLessThan(giveawaysPageSource.indexOf('id="gw-btn-listen"'));
-    expect(giveawaysPageSource.indexOf('id="gw-advanced-options"')).toBeLessThan(giveawaysPageSource.indexOf('id="gw-settings-note"'));
-    expect(giveawaysPageSource).toContain("min-[961px]:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.7fr)]");
+    expect(giveawaysPageSource.indexOf('id="gw-settings-note"')).toBeLessThan(giveawaysPageSource.indexOf('id="gw-advanced-options"'));
+    expect(giveawaysPageSource).toContain("grid gap-6 min-[961px]:grid-cols-2 min-[1280px]:grid-cols-[minmax(18rem,1fr)_minmax(0,1.35fr)_minmax(17rem,0.95fr)]");
+    expect(giveawaysPageSource).toContain("min-[961px]:max-[1279px]:row-span-2");
     expect(giveawaysPageSource).toContain("max-[960px]:order-1");
     expect(giveawaysPageSource).toContain("max-[960px]:order-2");
-    expect(giveawaysPageSource).toContain("min-[961px]:sticky");
-    expect(giveawaysPageSource).toContain("max-h-[min(60vh,520px)] overflow-auto");
+    expect(giveawaysPageSource).toContain("max-[960px]:order-3");
+    expect(giveawaysPageSource).toContain("max-[960px]:order-4");
+    expect(giveawaysPageSource).not.toContain("min-[961px]:sticky");
+    expect(giveawaysPageSource).toContain("overflow-x-auto rounded-lg border min-[1280px]:max-h-[70vh] min-[1280px]:overflow-y-auto");
+    expect(giveawaysPageSource).toContain("w-full min-w-[560px] min-[1280px]:min-w-0 text-left text-sm");
+    expect(giveawaysPageSource).toContain("gw-entrant-msg-inline hidden truncate text-xs text-muted-foreground min-[1280px]:block");
+    expect(giveawaysPageSource).toContain("min-[1280px]:hidden");
+    expect(giveawaysPageSource).not.toContain("min-w-[680px]");
+    expect(giveawaysPageSource).toContain("mt-4 grid gap-6 md:grid-cols-3");
     expect(giveawaysPageSource).toContain("sticky top-0 z-10");
+    expect(giveawaysPageSource).toContain('className="rounded-lg"');
+    expect(giveawaysPageSource).toContain("text-base font-semibold");
     expect(giveawaysConfig.styles).not.toContain("/assets/giveaways.css");
+  });
+
+  it("orders Settings, Participants, Winners, and Advanced as outer-grid children", async () => {
+    const manualChat = verificationChat();
+    manualChat.session.provider = "manual";
+    await mountChat(manualChat);
+
+    const setupCard = $id("gw-setup-card");
+    const settingsColumn = setupCard.parentElement;
+    const entrantsCard = $id("gw-entrants-card");
+    const participantsColumn = entrantsCard.parentElement;
+    const winnersColumn = $id("gw-layout");
+    const advancedCard = $id("gw-advanced-card");
+    const outerGrid = settingsColumn.parentElement;
+
+    expect(outerGrid.children).toHaveLength(4);
+    expect(outerGrid.children[0]).toBe(settingsColumn);
+    expect(outerGrid.children[1]).toBe(participantsColumn);
+    expect(outerGrid.children[2]).toBe(winnersColumn);
+    expect(outerGrid.children[3]).toBe(advancedCard);
+    expect(settingsColumn.querySelector("#gw-rules-card")).toBe($id("gw-rules-card"));
+    expect($id("gw-rules-card").contains($id("gw-settings-note"))).toBe(true);
+    expect($id("gw-rules-card").contains($id("gw-manual-rules-note"))).toBe(true);
+    expect(participantsColumn.querySelector("#gw-entrants-card")).toBe(entrantsCard);
+    for (const id of [
+      "gw-settings",
+      "gw-entry-modes",
+      "gw-kick-eligibility-section",
+      "gw-winner-repeat-modes",
+      "gw-response-settings",
+      "gw-advanced-settings",
+      "gw-advanced-eligibility-section",
+      "gw-anti-abuse-section",
+    ]) {
+      expect($id(id).className).toContain("mx-0 min-w-0 border-0 p-0");
+    }
+    expect($id("gw-advanced-options").className).toBe("rounded-lg");
+    expect($id("gw-advanced-options").querySelector("summary").className).toContain("text-base font-semibold");
+    expect(settingsColumn.className).toContain("max-[960px]:order-3");
+    expect(participantsColumn.className).toContain("max-[960px]:order-2");
+    expect(winnersColumn.className).toContain("max-[960px]:order-1");
+    expect(advancedCard.className).toContain("max-[960px]:order-4");
+    expect(winnersColumn.children).toHaveLength(1);
+    expect(winnersColumn.firstElementChild).toBe($id("gw-stage-card"));
+    expect(advancedCard.querySelector("#gw-advanced-settings")).toBeTruthy();
+    expect(advancedCard.querySelector("#gw-advanced-options")).toBeTruthy();
+    expect($id("gw-rules-card").querySelector("#gw-advanced-options")).toBeNull();
+  });
+
+  it("keeps inactive mobile cards in Settings, Participants, Winners, Advanced order", async () => {
+    await mountChat();
+
+    expect($id("gw-setup-card").parentElement.className).toContain("max-[960px]:order-1");
+    expect($id("gw-entrants-card").parentElement.className).toContain("max-[960px]:order-2");
+    expect($id("gw-layout").className).toContain("max-[960px]:order-3");
+    expect($id("gw-advanced-card").className).toContain("max-[960px]:order-4");
   });
 
   it("renders entrant values as text and rejects unsafe avatar URLs", async () => {
@@ -317,9 +384,24 @@ describe("Giveaways React migration", () => {
       }],
     });
     const row = $id("gw-entrants-list").querySelector("tr");
+    const viewerCell = row.querySelector('[data-label="Viewer"]');
+    const viewerName = row.querySelector(".gw-entrant-name");
     expect(row.querySelector(".gw-entrant-name").textContent).toBe(username);
+    expect(viewerCell.className).toContain("min-[1280px]:w-full min-[1280px]:max-w-0");
+    expect(row.querySelector("img").className).toContain("shrink-0");
+    expect(viewerName.parentElement.className).toBe("min-w-0 flex-1");
+    expect(viewerName.className).toContain("min-[1280px]:block min-[1280px]:truncate");
+    expect(row.querySelector('[data-label="Status"]').className).toContain("whitespace-nowrap");
+    expect(row.querySelector('[data-label="Action"]').className).toContain("whitespace-nowrap min-[1280px]:px-2");
     expect(row.querySelector(".gw-entrant-name img")).toBeNull();
     expect(row.querySelector(".gw-entrant-msg").textContent).toBe(message);
+    const inlineMessage = row.querySelector(".gw-entrant-msg-inline");
+    expect(inlineMessage).toBeTruthy();
+    expect(inlineMessage.textContent).toBe(message);
+    expect(inlineMessage.className).toContain("min-[1280px]:block");
+    const chatMessageHeader = [...$id("gw-entrants-card").querySelectorAll("th")].find((header) => header.textContent === "Chat Message");
+    expect(chatMessageHeader).toBeTruthy();
+    expect(chatMessageHeader.className).toContain("min-[1280px]:hidden");
     expect(row.querySelector("img").getAttribute("src")).not.toContain("javascript:");
     expect(giveawaysPageSource).not.toContain("dangerouslySetInnerHTML");
   });
