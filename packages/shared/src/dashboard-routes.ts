@@ -166,7 +166,6 @@ const ROUTE_DEFS = [
   { id: "board.share", canonicalPath: "/dashboard/leaderboard/share", section: "board", tab: "share", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
   { id: "board.history", canonicalPath: "/dashboard/leaderboard/history", section: "board", tab: "history", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
   { id: "boards", canonicalPath: "/dashboard/leaderboards", section: "boards", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "account", navParams: ["board"] },
-  { id: "games", canonicalPath: "/dashboard/games", section: "games", navKey: "games", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
   { id: "performance", canonicalPath: "/dashboard/analytics", section: "performance", navKey: "performance", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: [] },
   { id: "performance.activity", canonicalPath: "/dashboard/analytics/activity", section: "performance", tab: "activity", navKey: "performance", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
   { id: "performance.referrals", canonicalPath: "/dashboard/analytics/referrals", section: "performance", tab: "referrals", navKey: "performance", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: [] },
@@ -182,8 +181,6 @@ const ROUTE_DEFS = [
   { id: "siteConnections.channel", canonicalPath: "/dashboard/site/connections", section: "siteConnections", tab: "channel", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.hub", canonicalPath: "/dashboard/giveaways", section: "giveaways", tab: "hub", navKey: "engage", railKey: "overview", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.chat", canonicalPath: "/dashboard/giveaways/chat", section: "giveaways", tab: "chat", navKey: "engage", railKey: "giveaways", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
-  { id: "giveaways.raffles", canonicalPath: "/dashboard/giveaways/raffles", section: "giveaways", tab: "raffles", navKey: "engage", railKey: "giveaways", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
-  { id: "giveaways.preds", canonicalPath: "/dashboard/giveaways/predictions", section: "giveaways", tab: "preds", navKey: "engage", railKey: "giveaways", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.tournaments", canonicalPath: "/dashboard/giveaways/tournaments", section: "giveaways", tab: "tournaments", navKey: "engage", railKey: "tournaments", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.viewers", canonicalPath: "/dashboard/audience/members", section: "audience", tab: "viewers", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.activity", canonicalPath: "/dashboard/audience/activity", section: "audience", tab: "activity", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
@@ -261,7 +258,6 @@ export const DASHBOARD_ROUTE_ALIASES: readonly DashboardRouteAlias[] = [
   { path: "/dashboard/rewards/channel", routeId: "siteConnections.channel", kind: "redirect", status: 301, search: "preserve" },
   { path: "/dashboard/settings/integrations", routeId: "siteConnections.channel", kind: "redirect", status: 301, search: "preserve" },
   // giveaways
-  { path: "/dashboard/giveaways/preds", routeId: "giveaways.preds", kind: "redirect", status: 301, search: "preserve" },
   // Code Drops are owned by Activities; the retired Giveaways → Drops tab
   // keeps its address as a redirect so bookmarks land on the canonical owner.
   { path: "/dashboard/giveaways/drops", routeId: "activities.overview", kind: "redirect", status: 301, search: "preserve" },
@@ -317,7 +313,6 @@ export const NAV_QUERY_ALIASES: Readonly<Record<string, DashboardRouteId>> = {
   boards: "boards",
   leaderboards: "boards",
   sites: "boards",
-  games: "games",
   performance: "performance",
   analytics: "performance",
   growth: "performance",
@@ -472,7 +467,6 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
   accentB: [{ classification: "feature", context: "public leaderboard rendering", where: "Public leaderboard render options." }],
   channel: [{ classification: "feature", context: "API endpoints", where: "API connection endpoints; not a dashboard document parameter." }],
   handoff: [{ classification: "feature", context: "auth flows", where: "Auth session handoff between Workers." }],
-  isolated: [{ classification: "feature", context: "Games island debug", where: "Games island debug/render mode." }],
   id: [{ classification: "feature", context: "API endpoints", where: "API object lookups." }],
   key: [{ classification: "feature", context: "API/webhook endpoints", where: "API/webhook credentials." }],
   kickUsername: [{ classification: "feature", context: "API endpoints", where: "API viewer lookups." }],

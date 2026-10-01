@@ -142,7 +142,7 @@ const proOwner    = () => ({ plan: "pro", plan_expires_at: Date.now() + 86_400_0
 const agencyOwner = () => ({ plan: "agency", plan_expires_at: Date.now() + 86_400_000 * 30, status: "active" });
 const site        = () => ({ id: "site-1", user_id: "user-1" });
 const existingSite = () => ({
-  id: "site-1", slug: "testslug", name: "Test", tagline: "", casino: "Stake",
+  id: "site-1", slug: "testslug", name: "Test", tagline: "", casino: "Example Sponsor",
   code: "CODE", cta_url: "", prize_pool: "", period: "Monthly", ends_at: null,
   reset_note: null, blurb: "", extra_json: null, published: true, theme_json: null,
   updated_at: new Date().toISOString(),

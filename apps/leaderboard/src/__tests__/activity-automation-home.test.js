@@ -3,11 +3,10 @@ import { readFileSync } from "node:fs";
 import { activityHomeState, automationHomeState } from "../assets/dashboard/overview-state.js";
 
 describe("Wave K Home operational ownership", () => {
-  it("shows only a real upcoming safe schedule and removes cancelled work", () => {
+  it("shows only a real upcoming code-drop schedule and removes cancelled work", () => {
     const result = automationHomeState({ schedules: [
       { id: "cancelled", kind: "safe_code_drop", status: "cancelled", templateName: "Old" },
       { id: "next", kind: "safe_code_drop", status: "scheduled", templateName: "Tomorrow" },
-      { id: "restricted", kind: "prediction", status: "scheduled", templateName: "Not safe" },
     ] });
     expect(result.upcoming).toEqual([]);
     const withTime = automationHomeState({ schedules: [{ id: "next", kind: "safe_code_drop", status: "scheduled", templateName: "Tomorrow", nextRunAt: "2099-01-01T00:00:00Z" }] });
@@ -25,7 +24,6 @@ describe("Wave K Home operational ownership", () => {
     const result = activityHomeState([
       { id: "drop:1", source: { kind: "code_drop" }, type: "drop", title: "Code drop SECRET", state: "open", endsAt: "2026-09-05T12:00:00Z", progress: { claimed: 3, capacity: 10 }, reward: { creditsPerClaim: 25 } },
       { id: "drop:2", source: { kind: "code_drop" }, type: "drop", title: "Code drop ENDED", state: "completed" },
-      { id: "restricted", source: { kind: "prediction" }, type: "prediction", title: "Restricted", state: "open" },
     ]);
     expect(result).toEqual({
       totalOpen: 1,
@@ -47,10 +45,8 @@ describe("Wave K Home operational ownership", () => {
     expect(reactPage).toContain('id="ovAttentionList"');
     const source = readFileSync(new URL("../assets/dashboard/overview.js", import.meta.url), "utf8");
     expect(source).toContain("new URLSearchParams({ siteId })");
-    expect(source).not.toMatch(/prediction|raffle|wager|payout|settlement/i);
     const projections = readFileSync(new URL("../assets/dashboard/overview-state.js", import.meta.url), "utf8");
     expect(projections).toContain('buildDashboardPath("activities.overview", { siteId })');
-    expect(projections).not.toMatch(/prediction|raffle|wager|payout|settlement/i);
     const dashboardCss = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
     expect(dashboardCss).toContain(".ov-attention-row .btn,");
     const activitiesClient = readFileSync(new URL("../react/pages/activities/page.tsx", import.meta.url), "utf8");

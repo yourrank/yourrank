@@ -13,30 +13,6 @@ export async function getShopItems(siteId, queryImpl = query) {
   ) || [];
 }
 
-async function getActiveRaffles(siteId, siteViewerId, queryImpl = query) {
-  const rows = await queryImpl(
-    `SELECT r.id, r.title, r.description, r.ticket_cost, r.max_tickets_per_viewer,
-            r.total_tickets, r.ends_at, count(t.id)::int AS my_tickets
-       FROM raffles r
-       LEFT JOIN raffle_tickets t
-         ON t.raffle_id = r.id AND t.site_viewer_id = $2
-      WHERE r.site_id = $1
-        AND r.status = 'active'
-        AND (r.ends_at IS NULL OR r.ends_at > now())
-      GROUP BY r.id
-      ORDER BY r.created_at DESC
-      LIMIT 20`,
-    [siteId, siteViewerId],
-  );
-  return (rows || []).map((row) => ({
-    ...row,
-    ticket_cost: Number(row.ticket_cost) || 0,
-    max_tickets_per_viewer: Number(row.max_tickets_per_viewer) || 0,
-    total_tickets: Number(row.total_tickets) || 0,
-    my_tickets: siteViewerId ? Number(row.my_tickets) || 0 : 0,
-  }));
-}
-
 /**
  * One reward for the public detail page, scoped to the community. Inactive
  * rows are returned so the page can say the reward was withdrawn; deleted
@@ -126,7 +102,7 @@ export async function getLoyaltyBoard(siteId, { limit = LOYALTY_BOARD_LIMIT } = 
 export async function getViewerSiteData(
   siteId,
   viewerId,
-  { shop = false, raffles = false, claims = false, ledger = false, participation = false, checkin = false } = {},
+  { shop = false, claims = false, ledger = false, participation = false, checkin = false } = {},
   {
     oneImpl = one,
     queryImpl = query,
@@ -144,19 +120,14 @@ export async function getViewerSiteData(
     participationLimit: VIEWER_PARTICIPATION_LIMIT,
     participationTruncated: false,
     checkin: null,
-    raffles: [],
   };
   if (!viewerId) {
-    const [shopItems, publicRaffles] = await Promise.all([
-      shop ? getShopItems(siteId, queryImpl) : Promise.resolve([]),
-      raffles ? getActiveRaffles(siteId, null, queryImpl) : Promise.resolve([]),
-    ]);
+    const shopItems = shop ? await getShopItems(siteId, queryImpl) : [];
     return {
       membershipStatus: "absent",
       viewerOnSite: null,
       shopItems,
       ...emptyHistory,
-      raffles: publicRaffles,
     };
   }
 
@@ -202,7 +173,6 @@ export async function getViewerSiteData(
       shopItems: shop ? shopItems : [],
       ...emptyHistory,
       checkin: checkinData,
-      raffles: raffles ? await getActiveRaffles(siteId, null, queryImpl) : [],
     };
   }
 
@@ -223,7 +193,7 @@ export async function getViewerSiteData(
     }
   }
 
-  const [claimResult, ledgerRows, participationResult, checkinData, raffleRows] = await Promise.all([
+  const [claimResult, ledgerRows, participationResult, checkinData] = await Promise.all([
     claims
       ? getViewerClaimsImpl(siteId, viewerId, viewerOnSite.id, { queryImpl })
       : Promise.resolve({ claims: [], limit: 50, truncated: false }),
@@ -258,7 +228,6 @@ export async function getViewerSiteData(
             return null;
           })
       : Promise.resolve(null),
-    raffles ? getActiveRaffles(siteId, viewerOnSite.id, queryImpl) : Promise.resolve([]),
   ]);
 
   // Per-item cooldown snapshot: how long this member must still wait before
@@ -308,6 +277,5 @@ export async function getViewerSiteData(
     participationLimit: participationResult.limit,
     participationTruncated: !!participationResult.truncated,
     checkin: checkinData,
-    raffles: raffleRows,
   };
 }

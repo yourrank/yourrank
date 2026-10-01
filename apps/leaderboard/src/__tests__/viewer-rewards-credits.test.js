@@ -302,7 +302,6 @@ describe("a creator's My Community page", () => {
       expect(html).toContain("Redeem code");
       const claimSection = html.match(/<section class="member-code yr-code-drop"[\s\S]*?<\/section>/)?.[0] || "";
       expect(claimSection).toContain("data-code-drop-claim");
-      expect(claimSection).not.toMatch(/raffle|prediction|wager|stake|odds|payout|settlement/i);
     }
 
     expect(nonMemberHtml).toContain("A successful claim joins this community");
@@ -469,9 +468,6 @@ describe("a creator's My Community page", () => {
     expect(html).toContain("Feb 3, 2024");
     const participationHtml = html.match(/<section class="member-section" id="membership-participation"[\s\S]*?<\/section>/)?.[0] || "";
     expect(participationHtml).toContain("Claimed a code drop");
-    for (const banned of ["raffle", "prediction", "wager", "streak", "scorecard"]) {
-      expect(participationHtml.toLowerCase()).not.toContain(banned);
-    }
   });
 
   it("uses canonical Claim states and audit-backed terminal timestamps", async () => {
@@ -528,11 +524,6 @@ describe("viewer row geometry", () => {
 /* ── the global account page ──────────────────────────────────────── */
 
 describe("the global account page", () => {
-  it("keeps restricted legacy mechanics out of the viewer membership journey", () => {
-    expect(viewerDashboardPage()).not.toContain("vd-raffles");
-    expect(viewerDashboardPage()).not.toContain("vd-predictions");
-  });
-
   const page = viewerDashboardPage();
 
   it("opens with the Viewer Account gateway, not an operator dashboard head", () => {

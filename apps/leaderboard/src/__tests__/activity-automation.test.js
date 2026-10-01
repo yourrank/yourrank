@@ -95,7 +95,7 @@ describe("Wave K safe Activity automation", () => {
 
     const restricted = await handleCreateActivityTemplate(jsonRequest("/api/activities/templates", {
       siteId: SITE.id,
-      kind: "prediction",
+      kind: "unsupported",
       name: "Not allowed",
       config: { pointsReward: 50, maxClaims: 20, expireMinutes: 30 },
     }), {}, deps.value);
@@ -222,7 +222,7 @@ describe("Wave K safe Activity automation", () => {
     const malicious = await handleCreateActivitySchedule(jsonRequest("/api/activities/schedules", {
       siteId: SITE.id,
       templateId: "template-1",
-      kind: "raffle",
+      kind: "unsupported",
       recurrence: "daily",
       runAt: "2026-09-01T12:00:00.000Z",
     }), {}, deps.value);

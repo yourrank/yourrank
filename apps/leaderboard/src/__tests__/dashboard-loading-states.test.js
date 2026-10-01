@@ -94,28 +94,17 @@ describe("dashboard loading states", () => {
     const page = fs.readFileSync(path.resolve(assets, "../pages/dashboard.jsx"), "utf8");
     expect(page).not.toMatch(/id="(?:ovPendingRedemptions|ovViews14|ovCopies14|perfKpiViews|perfKpiClicks|perfKpiCopies|perfKpiCtr)">[–—]/);
     expect(page).not.toMatch(/id="perfTotalViews">0</);
-    expect(read("dashboard/games.js")).not.toContain("renderGames([])");
-  });
-
-  it("does not link to disabled public Games pages", () => {
-    const games = read("dashboard/games.js");
-    expect(games).toContain('previewBtn.removeAttribute("href")');
-    expect(games).toContain('previewBtn.setAttribute("aria-disabled", "true")');
-    expect(games).toContain('previewBtn.textContent = "Enable Games to open the public page"');
-    expect(games).toContain("updateSimulator();");
   });
 
   it("tracks request status around dashboard fetches", () => {
     const site = read("dashboard/site.js");
     const account = read("dashboard/account.js");
-    const games = read("dashboard/games.js");
     const performance = read("dashboard/performance.js");
     expect(site).toContain("setState({ STATS_STATUS: \"loading\" })");
     expect(site).toContain("setState({ STATS: s, STATS_STATUS: \"ready\" })");
     expect(site).toContain("setState({ CREDITS_STATUS: \"loading\" })");
     expect(site).toContain("setState({ USAGE_STATUS: \"loading\" })");
     expect(account).toContain("setState({ SESSIONS_STATUS: \"loading\" })");
-    expect(games).toContain("setState({ GAMES_STATUS: \"loading\" })");
     expect(performance).toContain("setState({ HEATMAP_STATUS: \"loading\" })");
   });
 

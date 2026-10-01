@@ -115,11 +115,8 @@ export type PlanFeature =
   | "advanced_overlays"
   | "activity_automation" // templates + scheduling + recurring + automation
   | "advanced_giveaways"
-  | "predictions"
   | "tournaments"
-  | "wheel"
   | "quests"
-  | "duels"
   | "battlepass"
   | "telegram_broadcasts" // broadcasts + scheduled campaigns + segmentation
   | "telegram_postbacks"
@@ -134,11 +131,8 @@ export const FEATURE_MIN_TIER: Record<PlanFeature, PlanTier> = {
   advanced_overlays: "pro",
   activity_automation: "pro",
   advanced_giveaways: "pro",
-  predictions: "starter",
   tournaments: "starter",
-  wheel: "pro",
   quests: "pro",
-  duels: "pro",
   battlepass: "pro",
   telegram_broadcasts: "pro",
   telegram_postbacks: "pro",
@@ -174,11 +168,8 @@ export const FEATURE_LABELS: Record<PlanFeature, { name: string; description: st
   advanced_overlays: { name: "Advanced overlays", description: "Custom OBS overlay styling and alerts without branding." },
   activity_automation: { name: "Activity automation", description: "Templates, scheduling and recurring Activities." },
   advanced_giveaways: { name: "Advanced giveaways", description: "Verified entry, anti-abuse rules and winner response checks." },
-  predictions: { name: "Predictions", description: "Run viewer predictions on your site." },
   tournaments: { name: "Tournaments", description: "Brackets and signups for your community." },
-  wheel: { name: "Lucky wheel", description: "Spin-to-win engagement for viewers." },
   quests: { name: "Quests", description: "Daily quests and progress rewards." },
-  duels: { name: "Duels", description: "Head-to-head viewer challenges." },
   battlepass: { name: "Battlepass", description: "Season tiers and XP rewards." },
   telegram_broadcasts: { name: "Telegram broadcasts", description: "Mass messages with scheduling and segmentation." },
   telegram_postbacks: { name: "Telegram postbacks", description: "Conversion postbacks for tracked offers." },
@@ -254,11 +245,11 @@ export const PLAN_META: Record<PlanTier, {
   },
   starter: {
     name: "Starter",
-    positioning: "Run live community games",
+    positioning: "Grow your community",
     highlight: false,
     features: [
       `Everything in Free, bigger: ${PLAN_LIMITS.starter.sites} site · ${PLAN_LIMITS.starter.players_per_site} players · ${PLAN_LIMITS.starter.active_viewers_30d} viewers`,
-      "Predictions and tournaments",
+      "Tournaments",
       `${PLAN_LIMITS.starter.reward_mappings} reward mappings · ${PLAN_LIMITS.starter.shop_items} shop items`,
       `${PLAN_LIMITS.starter.telegram_offers} Telegram offers · ${PLAN_LIMITS.starter.telegram_interactions_per_month.toLocaleString("en-US")} interactions/mo`,
       `Branded OBS overlay · ${PLAN_LIMITS.starter.history_days} days of history`,
@@ -273,7 +264,7 @@ export const PLAN_META: Record<PlanTier, {
     features: [
       `Everything in Starter, at scale: ${PLAN_LIMITS.pro.sites} sites · ${PLAN_LIMITS.pro.players_per_site.toLocaleString("en-US")} players · ${PLAN_LIMITS.pro.active_viewers_30d.toLocaleString("en-US")} viewers`,
       "Activity templates, scheduling and automation",
-      "Wheel, quests, duels and battlepass",
+      "Quests and battlepass",
       `Telegram broadcasts, scheduling, postbacks and segmentation (${PLAN_LIMITS.pro.broadcast_deliveries_per_month.toLocaleString("en-US")} deliveries/mo)`,
       "Custom domain, signed API and no YourRank branding",
       `Advanced analytics · 12 months of history`,

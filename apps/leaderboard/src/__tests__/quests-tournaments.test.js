@@ -5,12 +5,6 @@ import {
   handleTrackQuestProgress,
 } from "../handlers/quests.js";
 import {
-  handleGetDuels,
-  handleCreateDuel,
-  handleAcceptDuel,
-  handleDeclineDuel,
-} from "../handlers/duels.js";
-import {
   handleGetTournaments,
   handleCreateTournament,
   handleUpdateTournamentSettings,
@@ -30,7 +24,7 @@ function mockEnv() {
 const USER = { id: "user-123", email: "streamer@test.com", plan: "pro" };
 const SITE = { id: "site-456", user_id: "user-123", slug: "streamer", name: "Streamer Hub" };
 
-describe("Quests, Duels & Tournaments Suite", () => {
+describe("Quests & Tournaments Suite", () => {
   let mockOne;
   let mockQuery;
   let mockExec;
@@ -202,195 +196,6 @@ describe("Quests, Duels & Tournaments Suite", () => {
         body: JSON.stringify({ siteId: "site-456", viewerId: "attacker", questKey: "chat_5_msgs" }),
       }), mockEnv(), deps);
       expect(res.status).toBe(401);
-    });
-  });
-
-  // --- VIEWER 1v1 DUELS ---
-  describe("Viewer 1v1 Duels", () => {
-    it("lists active duels for a site", async () => {
-      mockOne.mockResolvedValueOnce(SITE);
-      mockQuery.mockResolvedValueOnce([
-        { id: "duel-1", wager_amount: 50, status: "pending", challenger_name: "alice", target_name: "bob" },
-      ]);
-
-      const req = new Request("http://localhost/api/duels/active?site=streamer");
-      const res = await handleGetDuels(req, mockEnv(), deps);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.ok).toBe(true);
-      expect(body.duels.length).toBe(1);
-      const duelsSql = mockQuery.mock.calls[0][0];
-      expect(duelsSql).toContain("vc.kick_username AS challenger_name");
-      expect(duelsSql).toContain("vt.kick_username AS target_name");
-      expect(duelsSql).toContain("vw.kick_username AS winner_name");
-      expect(duelsSql).not.toContain("vc.username");
-      expect(duelsSql).not.toContain("vt.username");
-      expect(duelsSql).not.toContain("vw.username");
-    });
-
-    it("creates a duel challenge and locks challenger wager", async () => {
-      mockOne.mockResolvedValueOnce(SITE); // site
-      mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 }); // challenger sv
-      mockOne.mockResolvedValueOnce({ id: "v-2", kick_username: "rival" }); // target viewer
-      mockOne.mockResolvedValueOnce({ id: "sv-2", balance: 100 }); // target sv
-      mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 50 }); // guarded debit update
-      mockOne.mockResolvedValueOnce({ id: "duel-1", wager_amount: 50, status: "pending" }); // insert duel in tx
-
-      const req = new Request("http://localhost/api/duels/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          site: "streamer",
-          challengerViewerId: "v-1",
-          targetUsername: "rival",
-          wagerAmount: 50,
-        }),
-      });
-
-      const res = await handleCreateDuel(req, mockEnv(), deps);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.ok).toBe(true);
-      expect(body.duel.wager_amount).toBe(50);
-      const ledgerWrites = mockExec.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
-      expect(ledgerWrites).toHaveLength(1);
-      expect(ledgerWrites[0][0]).toContain("'spend'");
-      expect(ledgerWrites[0][1]).toEqual([
-        "sv-1",
-        50,
-        "Duel Challenge against @rival (50 pts)",
-      ]);
-      expect(mockOne.mock.calls[4][0]).toContain("total_spent = total_spent + $1");
-    });
-
-    it("accepts a duel, executes provably fair roll and awards 2x pot to winner", async () => {
-      deps.requireViewer.mockResolvedValue({ viewer: { id: "v-2" }, res: null });
-      mockOne.mockResolvedValueOnce({
-        id: "duel-1",
-        site_id: "site-456",
-        challenger_viewer_id: "v-1",
-        challenger_site_viewer_id: "sv-1",
-        target_viewer_id: "v-2",
-        target_site_viewer_id: "sv-2",
-        wager_amount: 50,
-        status: "pending",
-        challenger_name: "alice",
-        target_name: "bob",
-      }); // find duel
-      mockOne.mockResolvedValueOnce({ id: "sv-2", balance: 100 }); // target sv balance
-      mockOne.mockResolvedValueOnce({ id: "sv-2", balance: 50 }); // guarded debit update
-
-      const req = new Request("http://localhost/api/duels/duel-1/accept", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ duelId: "duel-1", viewerId: "v-2" }),
-      });
-
-      const res = await handleAcceptDuel(req, mockEnv(), deps);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.ok).toBe(true);
-      expect(body.totalPot).toBe(100);
-      expect(body.winnerName).toBeTruthy();
-      expect(body.rollDetails.challenger_name).toBe("alice");
-      expect(body.rollDetails.target_name).toBe("bob");
-      const acceptSql = mockOne.mock.calls[0][0];
-      expect(acceptSql).toContain("vc.kick_username AS challenger_name");
-      expect(acceptSql).toContain("vt.kick_username AS target_name");
-      expect(acceptSql).not.toContain("vc.username");
-      expect(acceptSql).not.toContain("vt.username");
-      const ledgerWrites = mockExec.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
-      expect(ledgerWrites).toHaveLength(2);
-      expect(ledgerWrites[0][0]).toContain("'spend'");
-      expect(ledgerWrites[0][1]).toEqual(["sv-2", 50, "Accepted Duel vs @alice (50 pts)"]);
-      expect(ledgerWrites[1][0]).toContain("'earn'");
-      expect(ledgerWrites[1][1][1]).toBe(100);
-      expect(ledgerWrites[1][1][2]).toContain("Won Duel Pot vs ");
-      expect(mockOne.mock.calls[2][0]).toContain("total_spent = total_spent + $1");
-    });
-
-    it("declines a duel and refunds challenger wager", async () => {
-      deps.requireViewer.mockResolvedValue({ viewer: { id: "v-2" }, res: null });
-      mockOne.mockResolvedValueOnce({
-        id: "duel-1",
-        challenger_site_viewer_id: "sv-1",
-        challenger_viewer_id: "v-1",
-        target_viewer_id: "v-2",
-        wager_amount: 50,
-        status: "pending",
-      });
-
-      const req = new Request("http://localhost/api/duels/duel-1/decline", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ duelId: "duel-1", viewerId: "v-2" }),
-      });
-
-      const res = await handleDeclineDuel(req, mockEnv(), deps);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.ok).toBe(true);
-      expect(body.status).toBe("declined");
-      const ledgerWrite = mockExec.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
-      expect(ledgerWrite[0]).toContain("'revoke'");
-      expect(ledgerWrite[1]).toEqual(["sv-1", 50]);
-      const refundUpdate = mockExec.mock.calls.find(([sql]) => String(sql).includes("UPDATE site_viewers"));
-      expect(refundUpdate[0]).toContain("total_spent = GREATEST(total_spent - $1, 0)");
-    });
-
-    it("rejects duel actions without a viewer session", async () => {
-      deps.requireViewer.mockResolvedValue({ viewer: null, res: new Response(null, { status: 401 }) });
-      for (const handler of [handleCreateDuel, handleAcceptDuel, handleDeclineDuel]) {
-        const res = await handler(new Request("http://localhost/api/duels/action", {
-          method: "POST",
-          body: JSON.stringify({ site: "streamer", duelId: "duel-1", viewerId: "attacker", challengerViewerId: "attacker", targetUsername: "rival", wagerAmount: 10 }),
-        }), mockEnv(), deps);
-        expect(res.status).toBe(401);
-      }
-    });
-
-    it("returns insufficient credits and writes no duel ledger when the guarded debit updates zero rows", async () => {
-      mockOne.mockResolvedValueOnce(SITE);
-      mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 });
-      mockOne.mockResolvedValueOnce({ id: "v-2", username: "rival" });
-      mockOne.mockResolvedValueOnce({ id: "sv-2", balance: 100 });
-      mockOne.mockResolvedValueOnce(null); // guarded debit update
-
-      const res = await handleCreateDuel(new Request("http://localhost/api/duels/create", {
-        method: "POST",
-        body: JSON.stringify({ site: "streamer", challengerViewerId: "attacker", targetUsername: "rival", wagerAmount: 50 }),
-      }), mockEnv(), deps);
-
-      expect(res.status).toBe(400);
-      expect((await res.json()).error).toContain("Insufficient credits");
-      expect(mockExec).toHaveBeenCalledTimes(0);
-    });
-
-    it("returns insufficient credits and writes no accept ledger when the guarded debit updates zero rows", async () => {
-      deps.requireViewer.mockResolvedValue({ viewer: { id: "v-2" }, res: null });
-      mockOne.mockResolvedValueOnce({
-        id: "duel-1",
-        site_id: "site-456",
-        challenger_viewer_id: "v-1",
-        challenger_site_viewer_id: "sv-1",
-        target_viewer_id: "v-2",
-        target_site_viewer_id: "sv-2",
-        wager_amount: 50,
-        status: "pending",
-        challenger_name: "alice",
-        target_name: "bob",
-      });
-      mockOne.mockResolvedValueOnce({ id: "sv-2", balance: 100 });
-      mockOne.mockResolvedValueOnce(null); // guarded debit update
-
-      const res = await handleAcceptDuel(new Request("http://localhost/api/duels/duel-1/accept", {
-        method: "POST",
-        body: JSON.stringify({ duelId: "duel-1", viewerId: "attacker" }),
-      }), mockEnv(), deps);
-
-      expect(res.status).toBe(400);
-      expect((await res.json()).error).toContain("Insufficient credits");
-      expect(mockExec).toHaveBeenCalledTimes(0);
     });
   });
 

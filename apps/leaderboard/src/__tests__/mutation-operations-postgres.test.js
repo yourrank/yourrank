@@ -1,9 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import postgres from "postgres";
 import { handleCreditsAdjustBalance } from "../handlers/credits.js";
-import { handleCancelRaffle } from "../handlers/events.js";
 import { handleScores } from "../handlers/scores.js";
-import { handleViewerBuyRaffleTickets } from "../handlers/viewer-dashboard.js";
 import { invalidateSiteCache } from "../site.js";
 import { withTransaction } from "@yourrank/shared/db";
 
@@ -15,9 +13,6 @@ const otherSiteId = crypto.randomUUID();
 const viewerId = crypto.randomUUID();
 const membershipId = crypto.randomUUID();
 const otherMembershipId = crypto.randomUUID();
-const raffleViewerId = crypto.randomUUID();
-const raffleMembershipId = crypto.randomUUID();
-const raffleId = crypto.randomUUID();
 const suffix = crypto.randomUUID().replace(/-/g, "");
 const triggerName = `audit_score_failure_${suffix}`;
 const owner = { id: ownerId, plan: "pro", status: "active", plan_expires_at: Date.now() + 86400000 };
@@ -51,31 +46,6 @@ function scores(id, name = "Alice", score = 10) {
     logPostbackIntake: () => {},
   });
 }
-function buyRaffleTickets(idempotencyKey) {
-  return handleViewerBuyRaffleTickets(new Request("https://yourrank.site/api/viewer/raffles/buy", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ slug: site().slug, raffleId, quantity: 2, idempotencyKey }),
-  }), {}, {
-    requireViewer: async () => ({ viewer: { id: raffleViewerId }, res: null }),
-    getPublicSite: async () => site(),
-    rateLimit: async () => ({ ok: true }),
-    withTransaction,
-    markActive: async () => {},
-  });
-}
-function cancelRaffleTickets() {
-  return handleCancelRaffle(new Request("https://yourrank.site/api/events/raffles/cancel", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ raffleId }),
-  }), {}, {
-    requireUser: async () => ({ user: owner, res: null }),
-    withTransaction,
-    logAudit: async () => {},
-  });
-}
-
 beforeAll(async () => {
   if (!databaseUrl) return;
   const parsed = new URL(databaseUrl);
@@ -88,14 +58,8 @@ beforeAll(async () => {
            (${otherSiteId}, ${ownerId}, ${`b-${suffix}`}, 'Audit B', true, false)`;
   await sql`INSERT INTO viewers (id, kick_user_id, kick_username, kick_linked_at)
     VALUES (${viewerId}, ${`kick-${suffix}`}, ${`viewer-${suffix}`}, now())`;
-  await sql`INSERT INTO viewers (id, kick_user_id, kick_username, kick_linked_at)
-    VALUES (${raffleViewerId}, ${`kick-raffle-${suffix}`}, ${`raffle-viewer-${suffix}`}, now())`;
   await sql`INSERT INTO site_viewers (id, site_id, viewer_id) VALUES
     (${membershipId}, ${siteId}, ${viewerId}), (${otherMembershipId}, ${otherSiteId}, ${viewerId})`;
-  await sql`INSERT INTO site_viewers (id, site_id, viewer_id, balance)
-    VALUES (${raffleMembershipId}, ${siteId}, ${raffleViewerId}, 200)`;
-  await sql`INSERT INTO raffles (id, site_id, title, ticket_cost, max_tickets_per_viewer)
-    VALUES (${raffleId}, ${siteId}, 'Audit raffle', 25, 5)`;
   oldUrl = process.env.DATABASE_URL;
   const worker = new URL(databaseUrl);
   worker.username = "yourrank_worker";
@@ -106,7 +70,7 @@ afterAll(async () => {
   await sql.unsafe(`DROP TRIGGER IF EXISTS ${triggerName} ON public.players`);
   await sql.unsafe(`DROP FUNCTION IF EXISTS public.${triggerName}()`);
   await sql`DELETE FROM sites WHERE id IN (${siteId}, ${otherSiteId})`;
-  await sql`DELETE FROM viewers WHERE id IN (${viewerId}, ${raffleViewerId})`;
+  await sql`DELETE FROM viewers WHERE id=${viewerId}`;
   await sql`DELETE FROM users WHERE id=${ownerId}`;
   await sql.end({ timeout: 0 });
   if (oldUrl === undefined) delete process.env.DATABASE_URL;
@@ -147,46 +111,6 @@ describe("C11 committed credit operation identity", () => {
     expect((await adjust("")).status).toBe(400);
     expect((await adjust(crypto.randomUUID(), 1.5)).status).toBe(400);
     expect((await adjust(crypto.randomUUID(), 5, siteId, otherMembershipId)).status).toBe(404);
-  });
-});
-
-describe("raffle ticket purchase and cancellation (Postgres)", () => {
-  integrationIt("buys tickets and refunds the purchase when its raffle is cancelled", async () => {
-    const response = await buyRaffleTickets(crypto.randomUUID());
-    const purchase = await response.json();
-    expect(response.status).toBe(200);
-    expect(purchase).toMatchObject({ quantity: 2, balance: 150, myTickets: 2, totalTickets: 2 });
-
-    const tickets = await sql`SELECT ticket_number, purchase_id FROM raffle_tickets
-      WHERE raffle_id=${raffleId} AND site_viewer_id=${raffleMembershipId} ORDER BY ticket_number`;
-    expect(tickets).toEqual([
-      { ticket_number: 1, purchase_id: purchase.purchaseId },
-      { ticket_number: 2, purchase_id: purchase.purchaseId },
-    ]);
-    const cancelledResponse = await cancelRaffleTickets();
-    const cancelled = await cancelledResponse.json();
-    expect(cancelledResponse.status).toBe(200);
-    expect(cancelled).toMatchObject({ refundedViewers: 1, refundedCredits: 50 });
-
-    const [membership] = await sql`SELECT balance, total_spent FROM site_viewers WHERE id=${raffleMembershipId}`;
-    const [raffle] = await sql`SELECT status, total_tickets FROM raffles WHERE id=${raffleId}`;
-    const [purchaseRow] = await sql`SELECT refunded_at FROM raffle_ticket_purchases WHERE id=${purchase.purchaseId}`;
-    const ledger = await sql`SELECT type, amount, description, metadata FROM credit_ledger
-      WHERE site_viewer_id=${raffleMembershipId} ORDER BY type`;
-    expect(membership).toEqual({ balance: 200, total_spent: 0 });
-    expect(raffle).toEqual({ status: "cancelled", total_tickets: 2 });
-    expect(purchaseRow.refunded_at).toBeInstanceOf(Date);
-    expect(ledger).toHaveLength(2);
-    expect(ledger.find((entry) => entry.type === "spend")).toMatchObject({
-      amount: 50,
-      description: "Raffle tickets: Audit raffle",
-      metadata: { raffle_id: raffleId, purchase_id: purchase.purchaseId, quantity: 2 },
-    });
-    expect(ledger.find((entry) => entry.type === "revoke")).toMatchObject({
-      amount: 50,
-      description: "Raffle cancelled refund: Audit raffle",
-      metadata: { raffle_id: raffleId, purchase_id: purchase.purchaseId },
-    });
   });
 });
 

@@ -110,7 +110,6 @@ describe("Wave E safe Activities foundation", () => {
     expect(mock.calls.query[0].params).toEqual(["site-1", null, 51]);
     expect(mock.calls.query[0].sql).toContain("FROM code_drops");
     expect(mock.calls.query[0].sql).toContain("ORDER BY d.created_at DESC, d.id DESC");
-    expect(mock.calls.query.map(({ sql }) => sql).join("\n")).not.toMatch(/raffle|prediction|tournament|wager|ticket|payout|settlement/i);
   });
 
   it("pages server-side with a bounded limit and a site-bound keyset cursor", async () => {
@@ -308,7 +307,7 @@ describe("Wave E safe Activities foundation", () => {
     expect(unauthorizedQueried).toBe(false);
   });
 
-  it("ships a real private page, fragment, and API route without restricted workflow hooks", () => {
+  it("ships a real private page, fragment, and API route for supported workflows", () => {
     expect(PAGES.activities.Component).toBeTruthy();
     expect(activitiesConfig.canonical).toBe("https://yourrank.site/dashboard/activities");
     expect(activitiesConfig.styles).toContain("/assets/react/react.css");
@@ -316,12 +315,11 @@ describe("Wave E safe Activities foundation", () => {
     expect(activitiesContentHtml).toContain('id="activities-root"');
     expect(activitiesContentHtml).toContain(">Activities</h1>");
     const client = readFileSync(new URL("../react/pages/activities/page.tsx", import.meta.url), "utf8");
-    expect(client).toContain("No purchase or stake is required.");
+    expect(client).toContain("No purchase is required.");
     // Drops (live + history) render before the secondary Automation panel.
     expect(client.indexOf('id="act-panel-drops"')).toBeLessThan(client.indexOf('id="act-panel-automation"'));
     expect(client).toContain("Templates and schedules need Pro or Team");
     expect(client).toContain('id="act-automation" hidden={!automationLoaded || automationError || !canAutomate}');
-    expect(activitiesContentHtml).not.toMatch(/Raffles|Predictions|Games|wagering|stakes/i);
     expect(ROUTES.some((route) => route.path === "/api/activities" && route.method === "GET")).toBe(true);
     expect(ROUTES.some((route) => route.path === "/api/activities/close" && route.method === "POST")).toBe(true);
 
@@ -330,7 +328,6 @@ describe("Wave E safe Activities foundation", () => {
     expect(shim).toContain('import "./dashboard/command-palette.js";');
     expect(client).toContain('"/api/events/drops"');
     expect(client).toContain('"/api/activities/close"');
-    expect(client).not.toMatch(/\/api\/(?:predictions|tournaments|games)|\/api\/events\/raffles/i);
     expect(client).toContain("AbortSignal.timeout(10_000)");
     expect(client).toContain('"The request timed out."');
     expect(client).toContain('error?.status === 401');

@@ -14,7 +14,6 @@ exports[`shared public board renderer keeps the fixed fixture HTML stable 1`] = 
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" /></noscript>
 <link rel="stylesheet" href="/assets/site-shell.css" />
 <link rel="stylesheet" href="/assets/viewer-shell.css" />
-
 <meta name="viewer-accent" content="var(--yr-color-board-accent)" /><meta name="viewer-accent-ink" content="#000000" /><style nonce="fixed-nonce" data-viewer-theme-tokens>.yr-site.viewer-shell{--yr-accent:var(--yr-color-board-accent);--yr-accent-ink:#000000}</style>
 
 </head><body class="yr-site viewer-shell" data-section="leaderboard" data-slug="board fixture" data-custom-domain="false" data-creator-contact="false" data-currency="$" data-rank-by="wagered">
@@ -45,7 +44,7 @@ FORM: DESIGN.md owns the composition. Production routes and scoped records suppl
 <div class="viewer-board-hero-copy">
 <p class="viewer-hero-kicker">Ampersand &amp; Board · Creator community</p>
 <h1 class="yr-h1 yr-lbh-title">Leaderboard</h1>
-<p class="yr-lbh-note">Ranked by wagered. Tied players share a rank.</p>
+<p class="yr-lbh-note">Ranked by amount. Tied players share a rank.</p>
 <p class="yr-lbh-meta"><span class="yr-lbh-state is-live">Live</span><span>Q&amp;A leaderboard</span></p>
 </div>
 <div class="viewer-board-hero-scene" aria-hidden="true"><span class="viewer-board-orb viewer-board-orb--a"></span><span class="viewer-board-orb viewer-board-orb--b"></span><span class="viewer-board-hero-trophy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/></svg></span></div>
@@ -53,16 +52,16 @@ FORM: DESIGN.md owns the composition. Production routes and scoped records suppl
 <div id="standings" data-player-board>
 <div class="yr-panel yr-lb">
 <div class="yr-panel-head yr-panel-head--quiet"><h2 class="yr-sr">Standings</h2><span class="yr-panel-meta"><span data-player-count-badge>2 players</span></span></div>
-<div class="yr-search-row"><label class="yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players by name" autocomplete="off" enterkeyhint="search" /></div><div class="yr-stand-head" aria-hidden="true" data-hide-prizes="false"><span>#</span><span>Player</span><span class="yr-r">Wagered</span><span class="yr-r">Prize</span></div>
-<ol class="yr-stand" data-rows aria-label="Standings for Ampersand &amp; Board" data-value-label="Wagered" data-prize-label="Prize" data-hide-prizes="false"><li class="yr-srow yr-srow--first" data-player-name="alice &lt;3" data-position="1">
+<div class="yr-search-row"><label class="yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players by name" autocomplete="off" enterkeyhint="search" /></div><div class="yr-stand-head" aria-hidden="true" data-hide-prizes="false"><span>#</span><span>Player</span><span class="yr-r">Amount</span><span class="yr-r">Prize</span></div>
+<ol class="yr-stand" data-rows aria-label="Standings for Ampersand &amp; Board" data-value-label="Amount" data-prize-label="Prize" data-hide-prizes="false"><li class="yr-srow yr-srow--first" data-player-name="alice &lt;3" data-position="1">
 <span class="yr-srow-rank"><span class="yr-sr">Rank </span>1</span>
 <a class="yr-srow-name" href="/board%20fixture/player/Alice%20%3C3"><span class="yr-player-mark" aria-hidden="true">AL</span><span class="yr-player-name">Alice &lt;3</span></a>
-<span class="yr-srow-val"><span class="yr-sr">Wagered: </span>$5,000</span>
+<span class="yr-srow-val"><span class="yr-sr">Amount: </span>$5,000</span>
 <span class="yr-srow-prize"><span class="yr-sr">Prize: </span>$100</span>
 </li><li class="yr-srow yr-srow--top" data-player-name="bob" data-position="2">
 <span class="yr-srow-rank"><span class="yr-sr">Rank </span>2</span>
 <a class="yr-srow-name" href="/board%20fixture/player/Bob"><span class="yr-player-mark" aria-hidden="true">BO</span><span class="yr-player-name">Bob</span></a>
-<span class="yr-srow-val"><span class="yr-sr">Wagered: </span>$3,000</span>
+<span class="yr-srow-val"><span class="yr-sr">Amount: </span>$3,000</span>
 <span class="yr-srow-prize"><span class="yr-sr">Prize: </span>$60</span>
 </li></ol>
 <p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>

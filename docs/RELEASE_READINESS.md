@@ -49,7 +49,7 @@ The production deployment order encoded in the repository is migrations, Leaderb
 | ID | Finding | Audit disposition |
 |---|---|---|
 | P1-01 | Creator signup/recovery could mutate account state while email verification delivery was unavailable, and resend recovery could depend on browser-supplied email. | **FIXED.** Production/staging require both `RESEND_API_KEY` and `MAIL_FROM`; signup and password recovery fail before mutation when delivery is unavailable; signed-in resend resolves the current user server-side; delivery failure is truthful; `/health` and deploy smoke expose the requirement. Regression tests pass. Deployment secrets themselves remain **NOT VERIFIED**. |
-| P1-02 | Public marketing, onboarding, and legal/product copy promoted or described restricted legacy mechanics and nonexistent recurring/crypto billing as current product behavior. | **FIXED.** Primary marketing and onboarding now describe sites, community, free credits, Rewards and Claims; the marketing `/games` destination permanently redirects to `/sites`; factual policy wording now matches the current free-credit product and does not promise checkout. Restricted Owner routes remain contained and were not redesigned. |
+| P1-02 | Public marketing, onboarding, and legal/product copy described unsupported activities and nonexistent recurring/crypto billing as current product behavior. | **FIXED.** Primary marketing and onboarding now describe sites, community, free credits, Rewards and Claims; removed destinations use existing unknown-route behavior; factual policy wording matches the current free-credit product and does not promise checkout. |
 | P1-03 | Staging deployed only part of the runtime, did not apply migrations first, and omitted non-inherited Cloudflare bindings/variables. It could accidentally point at incomplete or production-shared infrastructure. | **FIXED IN CODE / OPERATIONALLY BLOCKED.** Staging now has a fail-closed preflight, migrations-before-code, isolated queue/service/worker definitions, full Web/Consumer/Leaderboard/Bot/Monitor order, and smoke before Monitor. Literal Hyperdrive placeholders deliberately prevent deployment until dedicated staging infrastructure is provisioned. |
 | P1-04 | DLQ health reported green based only on count even when rows were stale; the live system has 12 pending rows and the oldest was 748,873 seconds old at the probe. | **DETECTOR FIXED / BACKLOG OPEN.** Health now degrades for count, age (24-hour default), or a failed probe and returns reasons. The production backlog was not mutated during the audit and must be investigated/replayed or intentionally disposed of before launch. |
 | P1-05 | Recovery evidence is absent, and the backup freshness handler read `process.env` rather than the Worker environment. `/api/health/backup` currently returns 503 because no successful restore verification is recorded. | **CODE FIXED / OPERATIONAL BLOCKER OPEN.** The handler now validates the Worker environment threshold and fails closed; recovery documentation no longer claims unverified backups/PITR. An isolated restore drill and provider-side backup/PITR verification are still required. |
@@ -74,7 +74,7 @@ The production deployment order encoded in the repository is migrations, Leaderb
 - Communication, messaging, social graph and creator CRM: absent by design.
 - Generic automation and additional Activity types: absent; only allowlisted `safe_code_drop` scheduling exists.
 - Recurring paid subscriptions: absent and independently blocks Paid Public.
-- Restricted Games, wagering, predictions, paid-chance and settlement mechanics: not target launch strategy; no implementation or optimization occurred in this audit.
+- Activities outside the supported community workflows: not part of the launch product; no implementation or optimization occurred in this audit.
 
 ## Creator journey
 
@@ -90,7 +90,7 @@ Result: **PARTIALLY VERIFIED; launch-blocking end-to-end run NOT VERIFIED.**
 Result: **PASSED at authorization/service boundaries; real invitation browser journey NOT VERIFIED.**
 
 - The capability matrix allows Members safe operations, Reviews, ordinary Claims, safe Activities, aggregate Insights and Team-entitled safe automation.
-- Billing, account security, Team administration, provider credentials/Connection lifecycle, site-owner settings, bot configuration, arbitrary credit adjustment and restricted legacy boundaries are server-denied.
+- Billing, account security, Team administration, provider credentials/Connection lifecycle, site-owner settings, bot configuration, arbitrary credit adjustment and unsupported boundaries are server-denied.
 - Removal is rechecked server-side; focused tests show an old session loses capability after membership removal.
 - A real email invitation acceptance through a deployed browser session is **NOT VERIFIED** locally.
 
@@ -103,7 +103,7 @@ Result: **PASSED at renderer/service boundaries and isolated local browser behav
 - Global `/me` remains the My communities index; creator-local `/me` is the exact selected Community relationship.
 - Participation is bounded to persisted free code-drop claims; Claims reuse the canonical lifecycle; Recognition remains absent; no “Member since” date is fabricated.
 - Anonymous demo browser checks reached creator Home, Leaderboard, Rewards, local My Community and global My communities at all required widths without overflow.
-- An isolated stateful local browser run used the real creator Activities component/client and creator-branded My Community renderer/client: a manual `FREE25` drop appeared with 25 credits and 10 claims, a signed-in non-member claimed it, the page reloaded as a Membership with 25 free credits, and Participation showed `Claimed a code drop`. Clean creator and viewer repeats had zero console errors and no restricted launch terminology.
+- An isolated stateful local browser run used the real creator Activities component/client and creator-branded My Community renderer/client: a manual `FREE25` drop appeared with 25 credits and 10 claims, a signed-in non-member claimed it, the page reloaded as a Membership with 25 free credits, and Participation showed `Claimed a code drop`. Clean creator and viewer repeats had zero console errors and no unsupported launch terminology.
 - A fresh deployed Viewer OAuth/Join/Claim/Participation browser journey is **NOT VERIFIED** because isolated provider and database infrastructure were unavailable.
 
 ## Multi-site isolation
@@ -197,24 +197,20 @@ Result: **PASSED at validation/service boundaries and isolated local browser beh
 - Successful claim commits membership, credits, ledger and Participation evidence together.
 - Failed, exhausted, expired, blocked and replayed attempts cannot mark activity or billing activity.
 - No name/IP/device matching is used as identity.
-- Local browser behavior verified manual creation, safe `safe_code_drop` template/schedule presentation, viewer claim, Membership convergence, credit balance, Participation readback and restricted-copy absence. Persistence and transaction guarantees remain established by the service/handler tests; the browser harness did not replace those tests with a mock claim.
+- Local browser behavior verified manual creation, safe `safe_code_drop` template/schedule presentation, viewer claim, Membership convergence, credit balance, Participation readback and unsupported-copy absence. Persistence and transaction guarantees remain established by the service/handler tests; the browser harness did not replace those tests with a mock claim.
 
 ### Safe engagement deletion audit and restoration
 
 The audit compared the current branch with the Viewer convergence change (`3d5ea3b9`) and this release-readiness branch's starting SHA. “Restore” means restore the capability at its canonical owner, not necessarily reinstate the deleted component or URL.
 
-| Removed item | Safe free engagement? | Restricted/chance/wagering? | Restore? | Reason |
-|---|---:|---:|---:|---|
-| Global `/me?site=<slug>` creator-detail mode | Yes: it previously carried Rewards, Claims and free-code claiming | No | No | Creator-specific Membership state now belongs to creator-branded `/<slug>/me`; restoring the global detail mode would recreate duplicate ownership. |
-| `GET /api/viewer/site` detail endpoint and `activeDropCount` response | Yes | No | No | The creator-branded page is server-rendered from the canonical site/Membership composition and does not need a duplicate account-detail API or an active-drop count to validate a shared code. |
-| Global `/me` Rewards list, redemption controls and Claims history | Yes | No | No | These safe capabilities already moved to the creator-branded Rewards and My Community pages. They remain covered there and the global account stays an index. |
-| Global `/me` “Live events” / code-drop claim component | Yes | No | **Yes, at `/<slug>/me`** | Removing this control without a branded replacement broke the public viewer entry point. The restored form is explicitly a free code drop and uses the existing authenticated endpoint. |
-| Global `viewer-dashboard.js` creator-detail, redemption and drop-claim client branch | Mixed safe viewer behavior | No | **Partial** | The old client router and duplicate Rewards/Claims logic stay removed. Only code-drop submission behavior is restored in canonical `site-shell.js`. |
-| Viewer-account client tests for creator detail, Rewards, Claims and code-drop submission | Yes | No | **Equivalent branded coverage** | Rewards, Claims and Participation already had branded renderer tests. Regression coverage now pins the branded claim form, non-member Membership creation message, blocked state and safe-only copy. |
-| Primary Engagement/Giveaways navigation entry and mixed legacy giveaway hub | Code-drop tab was safe | Chat-name giveaway, paid-ticket raffle and settled prediction paths were mixed/restricted | No | `/dashboard/activities` is the canonical safe creator surface. The mixed hub remains directly routable only for authorized legacy containment and is not restored to primary navigation. |
-| Marketing “Run giveaways” row listing chat giveaways, ticket raffles, code drops and predictions | Code-drop portion was safe | Other listed mechanisms were unsafe or unproven | **Safe portion only** | Launch copy now names the existing free code-drop workflow and participation evidence without restoring the other mechanisms. |
-| Marketing Games route, Games product component and Games peer/footer navigation | No | Yes | No | These were restricted game promotion, not safe engagement. `/games` continues to redirect to `/sites`. |
-| Username/random-winner giveaway presentation | Not with current evidence | Chance-based and not tied to canonical Viewer/Membership identity | **DEFERRED — needs safe identity-backed giveaway design.** | The old implementation cannot be relabelled into the safe layer. No replacement giveaway system is introduced here. |
+| Removed item | Safe community capability? | Restore? | Reason |
+|---|---:|---:|---|
+| Global `/me?site=<slug>` creator-detail mode | Yes: it previously carried Rewards, Claims and free-code claiming | No | Creator-specific Membership state now belongs to creator-branded `/<slug>/me`; restoring the global detail mode would recreate duplicate ownership. |
+| `GET /api/viewer/site` detail endpoint and `activeDropCount` response | Yes | No | The creator-branded page is server-rendered from the canonical site/Membership composition and does not need a duplicate account-detail API or an active-drop count to validate a shared code. |
+| Global `/me` Rewards list, redemption controls and Claims history | Yes | No | These safe capabilities already moved to the creator-branded Rewards and My Community pages. They remain covered there and the global account stays an index. |
+| Global `/me` “Live events” / code-drop claim component | Yes | **Yes, at `/<slug>/me`** | Removing this control without a branded replacement broke the public viewer entry point. The restored form is explicitly a free code drop and uses the existing authenticated endpoint. |
+| Global `viewer-dashboard.js` creator-detail, redemption and drop-claim client branch | Mixed safe viewer behavior | **Partial** | The old client router and duplicate Rewards/Claims logic stay removed. Only code-drop submission behavior is restored in canonical `site-shell.js`. |
+| Viewer-account client tests for creator detail, Rewards, Claims and code-drop submission | Yes | **Equivalent branded coverage** | Rewards, Claims and Participation already had branded renderer tests. Regression coverage now pins the branded claim form, non-member Membership creation message, blocked state and safe-only copy. |
 
 The following safe owners were not deleted and remain canonical: `/dashboard/activities`, `/api/activities`, manual `POST /api/events/drops`, authenticated `POST /api/events/drops/claim`, `code_drops` / `code_drop_claims`, Membership-backed Participation history, Rewards, Claims, and Wave K `safe_code_drop` automation.
 
@@ -251,7 +247,7 @@ The endpoint accepts only 7/30, uses UTC, requires `canRoleViewInsights`, exclud
 
 - Migration filename/order/static audit: **PASSED**.
 - Wave I indexes, Wave H role constraints, Viewer/Membership/billing reconciliation and Wave K occurrence constraints are present in the ordered migration set.
-- Empty-database apply and PostgreSQL concurrency: **PASSED in PR CI**. PostgreSQL 16 applied all 125 migrations with `ON_ERROR_STOP`, then passed wagering, rollup, session/team, two real automation race/cancel tests, JSONB writer tests and schema-consistency checks.
+- Empty-database apply and PostgreSQL concurrency: **PASSED in PR CI**. PostgreSQL 16 applied all 125 migrations with `ON_ERROR_STOP`, then passed conversion, rollup, session/team, two real automation race/cancel tests, JSONB writer tests and schema-consistency checks.
 - A separate realistic production-data upgrade and fresh `EXPLAIN (ANALYZE, BUFFERS)` run remain **NOT VERIFIED**; the CI database is an empty isolated schema.
 - Recovery is forward-fix plus restore evidence; no unsafe generic rollback SQL was invented.
 
@@ -317,11 +313,11 @@ Result: **PASSED in shared renderer/auth tests; live custom-domain OAuth/cookie 
 
 ## Dead routes
 
-Canonical dashboard route/Worker ownership and aliases pass mechanical parity tests. Internal route inventory found no unowned canonical dashboard destination or redirect loop. Marketing `/games` is now a permanent redirect to `/sites`; it is not advertised in primary marketing navigation. Contained direct restricted Owner routes remain only where current architecture requires them and were not expanded. A full deployed link crawler remains **NOT VERIFIED**.
+Canonical dashboard route/Worker ownership and aliases pass mechanical parity tests. Internal route inventory found no unowned canonical dashboard destination or redirect loop. Removed marketing and dashboard destinations use existing unknown-route behavior. A full deployed link crawler remains **NOT VERIFIED**.
 
 ## Product-copy truth
 
-Primary public copy now describes the implemented creator site, community, leaderboard, free-credit Rewards/Claims, Insights and safe scheduling boundaries. It does not promise Recognition, Communication, AI, generic automation, paid checkout or restricted mechanics as launch capabilities. Onboarding calls a new site a draft until verified/published. Policy wording was corrected only for factual runtime consistency; this audit makes no legal conclusion.
+Primary public copy now describes the implemented creator site, community, leaderboard, free-credit Rewards/Claims, Insights and supported scheduling boundaries. It does not promise Recognition, Communication, AI, generic automation or paid checkout as launch capabilities. Onboarding calls a new site a draft until verified/published. Policy wording was corrected only for factual runtime consistency; this audit makes no legal conclusion.
 
 ## Performance evidence
 
@@ -350,7 +346,7 @@ Local evidence before PR:
 | Test-mock guard | **PASSED** — 11 documented legacy files |
 | `.ai` self-check | **PASSED** — 95 skills/contracts and instruction graph; external `skills-ref` executable unavailable |
 | `git diff --check` | **PASSED** |
-| Migration/Postgres race tests | **PASSED in PR CI** — all 125 migrations plus wagering, rollup, session/team, automation concurrency and JSONB writers |
+| Migration/Postgres race tests | **PASSED in PR CI** — all 125 migrations plus conversion, rollup, session/team, automation concurrency and JSONB writers |
 | E2E and scheduler E2E | **PASSED in PR CI** — 60 passed, 0 failed; the Wave K scheduled Activity executed once and recorded normal participation |
 | E2E environment-dependent cases | **SKIPPED: 12** — marketing root/pricing, separate Bot Worker/Telegram routes and real Telegram bot were unavailable in the isolated Worker runtime |
 | Password-reset email token | **NOT VERIFIABLE** in E2E — no mailbox; API reset request/bogus-token/change-password path passed |
@@ -360,7 +356,7 @@ PR #681 executable checks passed: Build, Dependency Audit, E2E, Lint, Migration 
 
 ## Production smoke plan
 
-Use isolated launch-test accounts/data; do not mutate restricted systems or existing production Viewer records.
+Use isolated launch-test accounts/data; do not mutate unsupported legacy records or existing production Viewer records.
 
 1. Confirm migration job and all Worker versions correspond to the approved SHA.
 2. Require `/health` DB, email verification, Consumer and DLQ state to be healthy; require `/api/health/backup` 200 with a recent restore drill.

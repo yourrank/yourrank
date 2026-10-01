@@ -84,7 +84,6 @@ test_route GET "/forgot" "Forgot password page" 200
 test_route GET "/reset" "Reset password (no token → handled)" 200
 test_route GET "/terms" "Terms of service" 200
 test_route GET "/privacy" "Privacy policy" 200
-test_route GET "/responsible" "Responsible gaming" 200
 test_route GET "/demo" "Demo leaderboard" 200
 echo ""
 

@@ -119,7 +119,7 @@ export function wireHandlers(bot: Bot, botRow: BotRow, env?: any): void {
   // in the native "Menu" button next to the chat input.
   async function buildMenuKeyboard(): Promise<InlineKeyboard> {
     const kb = new InlineKeyboard()
-      .text("🎁 Bonus codes", "m:code").text("🏆 Leaderboard", "m:board").row()
+      .text("🎁 Promo codes", "m:code").text("🏆 Leaderboard", "m:board").row()
       .text("🔔 Subscribe", "m:sub").text("❓ Help", "m:help").row()
       .text("💬 Support", "m:support");
     const customs = await query<{ command: string }>(
@@ -140,7 +140,7 @@ export function wireHandlers(bot: Bot, botRow: BotRow, env?: any): void {
   const helpText = (): string =>
     "<b>Available commands</b>\n\n" +
     "/menu — open the tappable menu\n" +
-    "/code — get bonus codes and referral links\n" +
+    "/code — get promo codes and referral links\n" +
     "/subscribe &lt;player name&gt; — get DMs when your rank changes\n" +
     "/unsubscribe — stop rank-change DMs\n" +
     "/support — contact the YourRank team\n" +
@@ -363,7 +363,7 @@ export function wireHandlers(bot: Bot, botRow: BotRow, env?: any): void {
 
     // Compute the exact ordinal and total in the database rather than loading
     // up to 1,000 players into the Worker. The id tie-breaker makes equal
-    // wagered values deterministic while preserving one position per player.
+    // amount values deterministic while preserving one position per player.
     const player = await one<{ name: string; wagered: number; rank: number; total: number }>(
       `SELECT p.name, p.wagered,
               (
@@ -390,7 +390,7 @@ export function wireHandlers(bot: Bot, botRow: BotRow, env?: any): void {
     const displayName = site.name || "this streamer";
     const url = config.publicBaseUrl ? `${config.publicBaseUrl}/${site.slug}` : "";
 
-    let msg = `🏆 @${username} is ranked #${player.rank} of ${player.total} on ${displayName}'s leaderboard! Wagered: ${fmtMoney(player.wagered)}`;
+    let msg = `🏆 @${username} is ranked #${player.rank} of ${player.total} on ${displayName}'s leaderboard! Amount: ${fmtMoney(player.wagered)}`;
     if (url) msg += `\n\n🔗 ${url}`;
 
     await ctx.reply(msg, {
@@ -467,7 +467,7 @@ export function wireHandlers(bot: Bot, botRow: BotRow, env?: any): void {
 // streamer's enabled custom commands are appended.
 const BUILTIN_MENU_COMMANDS = [
   { command: "menu", description: "Show the menu" },
-  { command: "code", description: "Get bonus codes & links" },
+  { command: "code", description: "Get promo codes & links" },
   { command: "subscribe", description: "Get DMs when your rank changes" },
   { command: "unsubscribe", description: "Stop rank-change DMs" },
   { command: "help", description: "Show help" },
@@ -540,7 +540,7 @@ async function sendOffers(ctx: Context, botRow: BotRow): Promise<void> {
       ? `${config.publicBaseUrl}/r/${offer.slug}${u}`
       : offer.referral_url;
     const kb = new InlineKeyboard().url(
-      `Claim on ${offer.casino_name}`,
+      `Claim at ${offer.casino_name}`,
       buttonUrl
     );
 

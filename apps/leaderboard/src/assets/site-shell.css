@@ -564,9 +564,6 @@
 }
 .yr-rwd-c { font-family: var(--yr-mono); font-size: 14px; font-weight: 700; color: var(--yr-fog); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .yr-rwd-state { font-family: var(--yr-sans); font-size: 12px; line-height: 1.4; color: var(--yr-faint); flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.yr-raffle-controls, .yr-raffle-stepper { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.yr-raffle-qty { width: 64px; min-height: 40px; padding: 0 6px; border: 1px solid var(--yr-edge); border-radius: var(--yr-r-ctl); background: var(--yr-ink); color: var(--yr-fog); text-align: center; font: 600 14px/1 var(--yr-mono); }
-.yr-raffle-qty:focus-visible { outline: 2px solid var(--yr-primary-hover); outline-offset: 2px; }
 
 .yr-hist-n, .yr-ord-n, .yr-part-n { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--yr-fog); overflow-wrap: anywhere; }
 .yr-part-p { margin-top: 2px; font-family: var(--yr-mono); font-size: 12px; line-height: 1.5; color: var(--yr-mute); font-variant-numeric: tabular-nums; }
@@ -792,12 +789,11 @@
 .viewer-rules-list { margin: 0; padding-left: 22px; display: grid; gap: 8px; font-size: 14px; line-height: 1.5; color: var(--yr-fog); }
 
 .yr-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 20; }
-.yr-search-status, .yr-redeem-status, .yr-join-status, .yr-code-drop-status, .yr-raffle-status { min-height: 20px; padding: 8px 24px; color: var(--yr-mute); font-size: 12px; line-height: 1.5; }
+.yr-search-status, .yr-redeem-status, .yr-join-status, .yr-code-drop-status { min-height: 20px; padding: 8px 24px; color: var(--yr-mute); font-size: 12px; line-height: 1.5; }
 .yr-join-status, .yr-code-drop-status { padding-inline: 0; }
 #viewer-reward-status { padding: 8px 0 0; }
-#yr-raffle-status { padding: 8px 0 0; }
-.yr-search-status:empty, .yr-redeem-status:empty, .yr-join-status:empty, .yr-code-drop-status:empty, .yr-raffle-status:empty { display: none; }
-.yr-search-status.is-error, .yr-redeem-status.is-error, .yr-join-status.is-error, .yr-code-drop-status.is-error, .yr-raffle-status.is-error { color: var(--yr-warning-readable); }
+.yr-search-status:empty, .yr-redeem-status:empty, .yr-join-status:empty, .yr-code-drop-status:empty { display: none; }
+.yr-search-status.is-error, .yr-redeem-status.is-error, .yr-join-status.is-error, .yr-code-drop-status.is-error { color: var(--yr-warning-readable); }
 .yr-search-retry { margin-left: 12px; min-height: 44px; padding: 0 14px; border: 1px solid var(--yr-primary); border-radius: var(--yr-r-ctl); color: #fff; background: var(--yr-primary); font-size: 14px; font-weight: 600; }
 .yr-search-retry:hover { color: #fff; background: var(--yr-primary-hover); border-color: var(--yr-primary-hover); }
 

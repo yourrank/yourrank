@@ -3,7 +3,7 @@ import { logAudit } from "@yourrank/shared/audit";
 
 const PAGE_SIZE = 500;
 const PART_SIZE = 8 * 1024 * 1024;
-const EXPORT_VERSION = "account-export-v2";
+const EXPORT_VERSION = "account-export-v3";
 const TABLES = [
   "exportedAt", "user", "sites", "players", "archives", "subscriptions",
   "payments", "sessions", "offers", "shortLinks", "conversions", "bots",
@@ -12,7 +12,6 @@ const TABLES = [
   "adminAudit", "supportMessages", "siteStatsHourly", "siteReferrers",
   "viewers", "siteViewers", "creditLedger", "redemptions", "shopItems",
   "creditRewardMappings", "kickRewardEvents", "viewerUsernameHistory",
-  "siteGameSettings", "gameSeeds", "gameSeedReveals", "gameRounds",
   "playerSubscriptions", "streamChannels", "siteVisitorStats",
   "siteScrollDepth", "siteClicks",
 ];
@@ -44,28 +43,9 @@ function copyFields(value, fields) {
 }
 
 async function sanitiseLedgerMetadata(value, pseudonymise) {
-  const output = copyFields(value, ["game", "nonce", "manual"]);
-  if (typeof value?.game_round_id === "string") output.game_round_ref = await pseudonymise("round:", value.game_round_id);
+  const output = copyFields(value, ["manual"]);
   if (typeof value?.redemption_id === "string") output.redemption_ref = await pseudonymise("redemption:", value.redemption_id);
   return output;
-}
-
-const GAME_PARAM_FIELDS = {
-  mines: ["gridSize", "mines", "houseEdgeBps"],
-  plinko: ["rows", "risk", "houseEdgeBps"],
-  dice: ["target", "direction", "houseEdgeBps"],
-  limbo: ["target", "houseEdgeBps"],
-};
-
-const GAME_OUTCOME_FIELDS = {
-  mines: ["gridSize", "mines", "minePositions"],
-  plinko: ["rows", "risk", "path", "bucket"],
-  dice: ["target", "direction", "roll", "rollDisplay", "win"],
-  limbo: ["target", "crashPoint", "win"],
-};
-
-function sanitiseGameJson(value, game, fields) {
-  return copyFields(value, fields[game] || []);
 }
 
 async function createPseudonymiser(salt = randomSalt()) {
@@ -255,10 +235,6 @@ export async function processAccountExport(event, env, {
       creditRewardMappings: siteIds.length ? await count("credit_reward_mappings", siteFilter, [siteIds]) : 0,
       kickRewardEvents: siteIds.length ? await count("kick_reward_events", siteFilter, [siteIds]) : 0,
       viewerUsernameHistory: siteIds.length ? await countQuery("SELECT COUNT(*)::bigint AS count FROM viewer_username_history h JOIN site_viewers sv ON sv.viewer_id=h.viewer_id WHERE sv.site_id = ANY($1)", [siteIds]) : 0,
-      siteGameSettings: siteIds.length ? await count("site_game_settings", siteFilter, [siteIds]) : 0,
-      gameSeeds: siteIds.length ? await countQuery("SELECT COUNT(*)::bigint AS count FROM game_seeds gs JOIN site_viewers sv ON sv.id=gs.site_viewer_id WHERE sv.site_id = ANY($1)", [siteIds]) : 0,
-      gameSeedReveals: siteIds.length ? await countQuery("SELECT COUNT(*)::bigint AS count FROM game_seed_reveals gsr JOIN site_viewers sv ON sv.id=gsr.site_viewer_id WHERE sv.site_id = ANY($1)", [siteIds]) : 0,
-      gameRounds: siteIds.length ? await countQuery("SELECT COUNT(*)::bigint AS count FROM game_rounds gr JOIN site_viewers sv ON sv.id=gr.site_viewer_id WHERE sv.site_id = ANY($1)", [siteIds]) : 0,
       playerSubscriptions: siteIds.length ? await count("player_subscriptions", siteFilter, [siteIds]) : 0,
       streamChannels: await count("stream_channels", "owner_id=$1", [userId]),
       siteVisitorStats: siteIds.length ? siteIds.length : 0,
@@ -400,59 +376,6 @@ export async function processAccountExport(event, env, {
           viewer_ref: await pseudonymise("viewer:", row.viewer_id),
           username_ref: await pseudonymise("viewer-username:", row.username),
           seen_at: row.seen_at,
-        }))
-      : 0;
-    actualCounts.siteGameSettings = siteIds.length
-      ? await emitPages(writer, "siteGameSettings", "SELECT id, site_id, game, enabled, min_bet, max_bet, house_edge_bps, daily_loss_cap, created_at, updated_at FROM site_game_settings WHERE site_id = ANY($1)", [siteIds], "id", read)
-      : 0;
-    actualCounts.gameSeeds = siteIds.length
-      ? await emitPages(writer, "gameSeeds", "SELECT gs.id, gs.site_viewer_id, sv.viewer_id, gs.server_seed_hash, gs.client_seed, gs.nonce, gs.rotated_at, gs.created_at, gs.updated_at FROM game_seeds gs JOIN site_viewers sv ON sv.id=gs.site_viewer_id WHERE sv.site_id = ANY($1)", [siteIds], "id", read,
-        async (row) => ({
-          seed_ref: await pseudonymise("seed:", row.id),
-          site_viewer_ref: await pseudonymise("site-viewer:", row.site_viewer_id),
-          viewer_ref: await pseudonymise("viewer:", row.viewer_id),
-          server_seed_hash: row.server_seed_hash,
-          client_seed: row.client_seed,
-          nonce: row.nonce,
-          rotated_at: row.rotated_at,
-          created_at: row.created_at,
-          updated_at: row.updated_at,
-        }))
-      : 0;
-    actualCounts.gameSeedReveals = siteIds.length
-      ? await emitPages(writer, "gameSeedReveals", "SELECT gsr.id, gsr.site_viewer_id, sv.viewer_id, gsr.server_seed, gsr.server_seed_hash, gsr.client_seed, gsr.final_nonce, gsr.revealed_at FROM game_seed_reveals gsr JOIN site_viewers sv ON sv.id=gsr.site_viewer_id WHERE sv.site_id = ANY($1)", [siteIds], "id", read,
-        async (row) => ({
-          reveal_ref: await pseudonymise("seed-reveal:", row.id),
-          site_viewer_ref: await pseudonymise("site-viewer:", row.site_viewer_id),
-          viewer_ref: await pseudonymise("viewer:", row.viewer_id),
-          server_seed: row.server_seed,
-          server_seed_hash: row.server_seed_hash,
-          client_seed: row.client_seed,
-          final_nonce: row.final_nonce,
-          revealed_at: row.revealed_at,
-        }))
-      : 0;
-    actualCounts.gameRounds = siteIds.length
-      ? await emitPages(writer, "gameRounds", "SELECT gr.id, gr.site_id, gr.site_viewer_id, sv.viewer_id, gr.game, gr.bet, gr.state, gr.payout, gr.multiplier, gr.house_edge_bps, gr.server_seed_hash, gr.client_seed, gr.nonce, gr.params, gr.outcome, gr.revealed, gr.created_at, gr.settled_at FROM game_rounds gr JOIN site_viewers sv ON sv.id=gr.site_viewer_id WHERE sv.site_id = ANY($1)", [siteIds], "id", read,
-        async (row) => ({
-          round_ref: await pseudonymise("round:", row.id),
-          site_id: row.site_id,
-          site_viewer_ref: await pseudonymise("site-viewer:", row.site_viewer_id),
-          viewer_ref: await pseudonymise("viewer:", row.viewer_id),
-          game: row.game,
-          bet: row.bet,
-          state: row.state,
-          payout: row.payout,
-          multiplier: row.multiplier,
-          house_edge_bps: row.house_edge_bps,
-          server_seed_hash: row.server_seed_hash,
-          client_seed: row.client_seed,
-          nonce: row.nonce,
-          params: sanitiseGameJson(row.params, row.game, GAME_PARAM_FIELDS),
-          outcome: sanitiseGameJson(row.outcome, row.game, GAME_OUTCOME_FIELDS),
-          revealed: Array.isArray(row.revealed) ? row.revealed.filter(Number.isInteger) : [],
-          created_at: row.created_at,
-          settled_at: row.settled_at,
         }))
       : 0;
     actualCounts.playerSubscriptions = siteIds.length

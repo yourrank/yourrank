@@ -44,7 +44,6 @@ const LEGAL_PAGES = [
   { key: "privacy", label: "Privacy Policy" },
   { key: "cookies", label: "Cookie Policy" },
   { key: "refund", label: "Refund & Cancellation" },
-  { key: "responsible", label: "Responsible Play" },
 ];
 
 function record(data, opts) {
@@ -109,9 +108,8 @@ function legalBody(data, page) {
   // .sr-only is a ui.css component, which no public viewer page loads, so that
   // disclosure used to render as visible text mid-sentence.
   const copy = {
-    terms: `<p>Welcome to the ${name} community page. By viewing or participating you agree to these terms.</p><p>${name} is responsible for the rules, rewards, and standings shown here. YourRank provides the hosting platform and free community credits; it does not accept deposits, permit cash withdrawals, or operate cash wagering.</p><p>You must be 18 or older to participate. ${name} may update these terms at any time. For questions, use the Contact page.</p>`,
+    terms: `<p>Welcome to the ${name} community page. By viewing or participating you agree to these terms.</p><p>${name} sets the rules for the page, rewards, and standings shown here. YourRank provides the hosting platform and free community credits.</p><p>You must be 18 or older to participate. ${name} may update these terms at any time. For questions, use the Contact page.</p>`,
     privacy: `<p>${name} values your privacy. This page collects only the information needed to display the leaderboard, such as player names and scores.</p><p>Public pages are visible to anyone with the link. Do not share personal information you do not want made public.</p><p>We use essential cookies and basic analytics to keep the service running. You can contact ${name} through the Contact page for data questions.</p>`,
-    responsible: `<p>${name} uses free community credits. Credits cannot be purchased, withdrawn, transferred between communities, or exchanged for cash.</p><p>Creator-provided rewards and promotion rules are the responsibility of ${name}. Read the published terms before participating, do not share account credentials, and contact the creator if a reward or claim needs attention.</p><p>This page is intended for adults 18 and older only.</p>`,
     cookies: `<p>${name} uses cookies and similar technologies to provide the leaderboard service and to understand how visitors use the page.</p><p>Essential cookies are required for the page to function. Analytics cookies help us improve the experience. You can adjust your browser settings to manage cookies.</p>`,
     refund: `<p>YourRank does not currently offer recurring checkout on this page. ${name} sets the rules for creator-provided rewards and promotions.</p><p>If you have a question about a reward, claim, or creator promotion, contact ${name} directly (see Contact below). For a YourRank account or future platform-billing question, contact YourRank support.</p>`,
   };
@@ -159,7 +157,7 @@ export function renderNewPlayerProfile(data, player, history, opts) {
   // A player asks two things on a phone: where they stand now, and what they
   // did before. Both answers are flat rows in the viewer's own row shape; the
   // three-KPI card wall and the four-column table behind a 620px horizontal
-  // scroller answered neither at 390px. Wagered and Prize keep their existing
+  // scroller answered neither at 390px. Amount and Prize keep their existing
   // labels, values and secondary position — nothing here is recalculated,
   // renamed or promoted, and a hidden prize is simply absent rather than an
   // em dash the viewer has to interpret.
@@ -172,7 +170,7 @@ export function renderNewPlayerProfile(data, player, history, opts) {
     { label: "Current rank", value: rank },
     rankBy === "score"
       ? { label: "Score", value: `${Number(p.score || 0).toLocaleString("en-US")} points` }
-      : { label: "Wagered", value: formatMoney(currency, p.wagered) },
+      : { label: "Amount", value: formatMoney(currency, p.wagered) },
     ...(showPrizes ? [{ label: "Prize", value: formatMoney(currency, p.prize) }] : []),
   ]
     .map((s) => `<li class="yr-hist"><div class="yr-hist-main"><p class="yr-hist-n">${esc(s.label)}</p></div><div class="yr-hist-side"><p class="yr-hist-amt">${esc(s.value)}</p></div></li>`)
@@ -183,7 +181,7 @@ export function renderNewPlayerProfile(data, player, history, opts) {
       const prize = showPrizes ? `<p class="yr-hist-d">Prize ${esc(formatMoney(currency, h.prize))}</p>` : "";
       const metric = rankBy === "score"
         ? `<span class="yr-hist-lbl">Score</span>${esc(`${Number(h.score || 0).toLocaleString("en-US")} points`)}`
-        : `<span class="yr-hist-lbl">Wagered</span>${esc(formatMoney(currency, h.wagered))}`;
+        : `<span class="yr-hist-lbl">Amount</span>${esc(formatMoney(currency, h.wagered))}`;
       return `<li class="yr-hist"><div class="yr-hist-main"><p class="yr-hist-n">${esc(h.label || "Archived")}</p><p class="yr-hist-p">${place}</p></div><div class="yr-hist-side"><p class="yr-hist-amt">${metric}</p>${prize}</div></li>`;
     }).join("")}</ul>`
     : `<p class="yr-note">No archived results yet. Past ${period ? `${esc(period.toLowerCase())} ` : ""}boards appear here once ${esc(brandName)} archives one.</p>`;
@@ -230,7 +228,7 @@ export function renderNewEmbed(data, opts) {
   // shell's class, because .empty belongs to ui.css and is never loaded here.
   const currency = prizeCurrency(data);
   const hasPrizes = !hidePrizes && players.some((player) => Number(player.prize) > 0);
-  const metricLabel = rankBy === "score" ? "Score" : "Wagered";
+  const metricLabel = rankBy === "score" ? "Score" : "Amount";
   const metricValue = (player) => rankBy === "score" ? `${Number(player.score || 0).toLocaleString("en-US")} pts` : formatMoney(currency, player.wagered);
   const columnCount = hasPrizes ? 4 : 3;
   const rows = players.length ? players.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${esc(metricValue(p))}</td>${hasPrizes ? `<td>${esc(formatMoney(currency, p.prize))}</td>` : ""}</tr>`).join("") : `<tr><td colspan="${columnCount}"><p class="yr-empty">No players yet.</p></td></tr>`;

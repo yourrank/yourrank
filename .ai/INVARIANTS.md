@@ -124,9 +124,9 @@ Source of truth: `apps/leaderboard/src/viewer-membership.js`, `apps/leaderboard/
 
 How coverage is derived: search all production `INSERT INTO site_viewers` / upsert callers, then exercise passive reads, generic and explicit OAuth, target substitution, Join replay, two-community isolation, and safe-action success/failure paths.
 
-Named enforcement/test: `apps/leaderboard/src/__tests__/viewer-membership.test.js`, `site-data.test.js`, `kick-oauth-state.test.js`, `events-raffles-drops.test.js`, and `credits-lifecycle.test.js`.
+Named enforcement/test: `apps/leaderboard/src/__tests__/viewer-membership.test.js`, `site-data.test.js`, `kick-oauth-state.test.js`, `events-drops.test.js`, and `credits-lifecycle.test.js`.
 
-Intentional exclusions: restricted legacy Games/wagering systems are not redesigned or adopted as Membership-creation examples. Reward redemption requires an existing Membership because credits cannot exist without one.
+Intentional exclusions: activities outside the approved code-drop workflow are not Membership-creation examples. Reward redemption requires an existing Membership because credits cannot exist without one.
 
 ## MEM-002 — Presence and Billable Activity Stay Separate
 
@@ -140,7 +140,7 @@ Why it matters: presence is not billable engagement, and Membership creation is 
 
 Source of truth: `apps/leaderboard/src/site-data.js`, `packages/shared/src/plan-usage.ts`, `apps/leaderboard/src/handlers/events.js`, and `packages/shared/src/kick-credits.ts`.
 
-Named enforcement/test: `apps/leaderboard/src/__tests__/site-data.test.js`, `events-raffles-drops.test.js`, `credits-lifecycle.test.js`, and the existing billing/plan-usage suites.
+Named enforcement/test: `apps/leaderboard/src/__tests__/site-data.test.js`, `events-drops.test.js`, `credits-lifecycle.test.js`, and the existing billing/plan-usage suites.
 
 Intentional exclusions: historical `last_active_at` provenance is not rewritten because the source caller cannot be reconstructed safely.
 
@@ -158,7 +158,7 @@ Source of truth: `apps/leaderboard/src/site-data.js`, `apps/leaderboard/src/hand
 
 Named enforcement/test: `apps/leaderboard/src/__tests__/viewer-participation.test.js`, `claims.test.js`, `site-data.test.js`, `site-routes.test.js`, `viewer-rewards-credits.test.js`, `viewer-membership.test.js`, and `viewer-privacy-boundary.test.js`.
 
-Intentional exclusions: leaderboard/archive/Hall-of-Fame names, tournament operations, Reviews, daily quests, provider event payloads, and restricted legacy Games/wagering/chance systems are not Recognition or Participation evidence.
+Intentional exclusions: leaderboard/archive/Hall-of-Fame names, tournament operations, Reviews, daily quests, provider event payloads, and activities outside approved safe workflows are not Recognition or Participation evidence.
 
 ## AUT-001 — Only Explicit Safe Activity Kinds Are Automatable
 
@@ -174,7 +174,7 @@ Source of truth: `apps/leaderboard/src/code-drop-service.js`, `apps/leaderboard/
 
 Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js` and `activity-automation-home.test.js`.
 
-Intentional exclusions: Games, wagering, stakes, predictions, paid chance, raffles, tournament operations, payout, settlement, Telegram, Discord delivery, and generic Communication.
+Intentional exclusions: tournament operations, provider delivery, and generic Communication remain separate workflows.
 
 ## AUT-002 — One Occurrence Creates At Most One Activity
 
@@ -204,7 +204,7 @@ Why it matters: two creation paths would drift on reward limits, expiry, secret 
 
 Source of truth: `apps/leaderboard/src/code-drop-service.js` and `apps/leaderboard/src/handlers/events.js`.
 
-Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js`, `events-raffles-drops.test.js`, and `activities-foundation.test.js`.
+Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js`, `events-drops.test.js`, and `activities-foundation.test.js`.
 
 Intentional exclusions: a Template is inert configuration and is not an Activity instance.
 
@@ -224,21 +224,21 @@ Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test
 
 Intentional exclusions: a short platform delay within the documented six-hour window is not invalid context by itself.
 
-## AUT-005 — Restricted Legacy Cannot Enter Automation
+## AUT-005 — Excluded Mechanics Cannot Enter Automation
 
-Name: Restricted workflow isolation from scheduled execution
+Name: Excluded workflow isolation from scheduled execution
 
 Scope: APIs, persistence constraints, executor dispatch, Home, audit, and creator UI.
 
-Property: Restricted legacy mechanics cannot be represented, dispatched, or rendered as Wave K automation. The scheduler has no generic handler registry or arbitrary payload dispatch.
+Property: Excluded mechanics cannot be represented, dispatched, or rendered as Wave K automation. The scheduler has no generic handler registry or arbitrary payload dispatch.
 
-Why it matters: Automation is not permission to redesign or run restricted financial/chance mechanics unattended.
+Why it matters: Automation is not permission to add unsupported workflows unattended.
 
 Source of truth: the `safe_code_drop` schema constraints and explicit conditionals in the Wave K handler/executor.
 
-Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js`, `activity-automation-home.test.js`, and repository restricted-isolation suites.
+Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js`, `activity-automation-home.test.js`, and repository excluded-mechanics suites.
 
-Intentional exclusions: legacy systems and their own operational scheduler behavior remain unchanged and separately owned.
+Intentional exclusions: operations outside the explicit code-drop automation allowlist remain outside this scheduler.
 
 ## AUT-006 — Downgrade Preserves Configuration Without Releasing Backlog
 
@@ -269,6 +269,12 @@ Words such as `permanent`, `permanently fixed`, `cannot regress`, `fully prevent
 Any excluded route, package, API, permission, feature, or state must be named and justified.
 
 Silent exclusions are not coverage.
+
+### Excluded mechanics
+
+YourRank has no games of chance, wagering/stakes, predictions, paid or
+credit-ticket raffles, spin wheels, or odds/payout logic, and these must not be
+added.
 
 ## REQ-001 — Material Ambiguity Is Resolved Against Evidence
 

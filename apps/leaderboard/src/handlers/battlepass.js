@@ -25,7 +25,7 @@ export function generateDefaultTiers() {
     else if (lvl === 25) reward = { type: "points_and_badge", title: "🥇 Gold Champion Badge", points: 1500, badge: "gold" };
     else if (lvl === 35) reward = { type: "points_and_badge", title: "🔥 Elite Legend Badge", points: 2500, badge: "elite" };
     else if (lvl === 50) reward = { type: "points_and_badge", title: "💎 Diamond Master Title & Border", points: 5000, badge: "diamond" };
-    else if (lvl % 2 === 0) reward = { type: "points", title: `+${lvl * 20} Bonus Credits`, points: lvl * 20 };
+    else if (lvl % 2 === 0) reward = { type: "points", title: `+${lvl * 20} Additional Credits`, points: lvl * 20 };
 
     tiers.push({
       level: lvl,

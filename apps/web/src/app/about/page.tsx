@@ -20,7 +20,7 @@ const BELIEFS = [
   },
   {
     title: "Community credits, never cash",
-    body: "Credits have no cash value anywhere in the launch product. There are no deposits and no cashouts — credits connect safe participation to creator-provided rewards.",
+    body: "Credits have no cash value and can be used to claim creator-provided rewards.",
   },
   {
     title: "Calm, honest design",

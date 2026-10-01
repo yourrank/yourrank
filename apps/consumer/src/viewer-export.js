@@ -4,11 +4,10 @@ import { linkedViewerIdentities, viewerIdentitiesSql } from "@yourrank/shared/vi
 
 const PAGE_SIZE = 500;
 const PART_SIZE = 8 * 1024 * 1024;
-const EXPORT_VERSION = "viewer-export-v1";
+const EXPORT_VERSION = "viewer-export-v2";
 export const VIEWER_EXPORT_TABLES = [
   "exportedAt", "viewer", "sites", "siteViewers", "creditLedger", "redemptions",
-  "gameRounds", "gameSeeds", "gameSeedReveals", "kickRewardEvents",
-  "viewerUsernameHistory", "viewerFeedback",
+  "kickRewardEvents", "viewerUsernameHistory", "viewerFeedback",
 ];
 
 class NdjsonWriter {
@@ -89,14 +88,7 @@ async function collectIds(sql, params, read) {
   }
 }
 
-const LEDGER_METADATA_KEYS = new Set(["redemption_id", "kick_event_id", "game_round_id", "item_name"]);
-const GAME_PARAM_KEYS = {
-  mines: new Set(["gridSize", "mines"]),
-  plinko: new Set(["rows", "risk"]),
-  dice: new Set(["target", "direction"]),
-  limbo: new Set(["target"]),
-};
-const GAME_OUTCOME_KEYS = new Set(["roll", "win", "minePositions", "gridSize", "mines", "rows", "slot", "multiplier"]);
+const LEDGER_METADATA_KEYS = new Set(["redemption_id", "kick_event_id", "item_name"]);
 
 function allowObject(value, keys) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -104,12 +96,6 @@ function allowObject(value, keys) {
 }
 function safeLedgerMetadata(value) {
   return allowObject(value, LEDGER_METADATA_KEYS);
-}
-function safeGameParams(value, game) {
-  return allowObject(value, GAME_PARAM_KEYS[game] || new Set());
-}
-function safeGameOutcome(value) {
-  return allowObject(value, GAME_OUTCOME_KEYS);
 }
 function safeViewer(row) {
   // Identities come from viewer_identities; the kick_*/discord_* keys keep the
@@ -126,18 +112,6 @@ function safeViewer(row) {
     discord_user_id: byProvider("discord")?.externalUserId ?? null,
     discord_username: byProvider("discord")?.username ?? null,
     avatar_url: row.avatar_url ?? null,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  };
-}
-function safeGameSeed(row) {
-  return {
-    id: row.id,
-    site_viewer_id: row.site_viewer_id,
-    server_seed_hash: row.server_seed_hash,
-    client_seed: row.client_seed,
-    nonce: row.nonce,
-    rotated_at: row.rotated_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -214,9 +188,6 @@ export async function processViewerExport(event, env, {
       siteViewers: await count("site_viewers", membershipFilter, [siteViewerIds]),
       creditLedger: await count("credit_ledger", relationshipFilter, [siteViewerIds]),
       redemptions: await count("redemptions", relationshipFilter, [siteViewerIds]),
-      gameRounds: await count("game_rounds", relationshipFilter, [siteViewerIds]),
-      gameSeeds: await count("game_seeds", relationshipFilter, [siteViewerIds]),
-      gameSeedReveals: await count("game_seed_reveals", relationshipFilter, [siteViewerIds]),
       kickRewardEvents: viewerRows[0]?.kick_user_id ? await count("kick_reward_events", "redeemer_kick_user_id=$1", [viewerRows[0].kick_user_id]) : 0,
       viewerUsernameHistory: await count("viewer_username_history", "viewer_id=$1", [viewerId]),
       viewerFeedback: await count("viewer_feedback", "viewer_id=$1", [viewerId]),
@@ -232,7 +203,6 @@ export async function processViewerExport(event, env, {
           viewer_sessions: "Authentication credentials.",
           public_token: "Site-specific bearer credential.",
           oauth_tokens: "Encrypted provider access and refresh tokens.",
-          active_server_seed: "Unrevealed provably-fair game secret.",
           kick_reward_payload: "Raw provider payload may contain unrelated third-party data.",
           site_visitors: "Browser-level pseudonymous identifiers are not viewer-owned records.",
           viewer_feedback_ip_hash: "Unnecessary tracking derivative.",
@@ -280,31 +250,6 @@ export async function processViewerExport(event, env, {
               r.created_at, r.updated_at, i.name AS item_name, i.description AS item_description
          FROM redemptions r JOIN shop_items i ON i.id=r.shop_item_id
         WHERE r.site_viewer_id = ANY($1)`,
-      [siteViewerIds], "id", read
-    );
-    actualCounts.gameRounds = await emitPages(
-      writer,
-      "gameRounds",
-      `SELECT gr.id, gr.site_id, gr.site_viewer_id, gr.game, gr.bet, gr.state,
-              gr.payout, gr.multiplier, gr.house_edge_bps, gr.server_seed_hash,
-              gr.client_seed, gr.nonce, gr.params, gr.outcome, gr.revealed,
-              gr.created_at, gr.settled_at
-         FROM game_rounds gr WHERE gr.site_viewer_id = ANY($1)`,
-      [siteViewerIds], "id", read,
-      (row) => ({ ...row, params: safeGameParams(row.params, row.game), outcome: safeGameOutcome(row.outcome) })
-    );
-    actualCounts.gameSeeds = await emitPages(
-      writer, "gameSeeds",
-      `SELECT gs.id, gs.site_viewer_id, gs.server_seed_hash, gs.client_seed,
-              gs.nonce, gs.rotated_at, gs.created_at, gs.updated_at
-         FROM game_seeds gs WHERE gs.site_viewer_id = ANY($1)`,
-      [siteViewerIds], "id", read, safeGameSeed
-    );
-    actualCounts.gameSeedReveals = await emitPages(
-      writer, "gameSeedReveals",
-      `SELECT gsr.id, gsr.site_viewer_id, gsr.server_seed, gsr.server_seed_hash,
-              gsr.client_seed, gsr.final_nonce, gsr.revealed_at
-         FROM game_seed_reveals gsr WHERE gsr.site_viewer_id = ANY($1)`,
       [siteViewerIds], "id", read
     );
     actualCounts.kickRewardEvents = await emitPages(

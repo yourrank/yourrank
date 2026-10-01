@@ -64,7 +64,7 @@ Additional interaction probe before editing (`interaction-probe.json`):
 ### Repository and database checks
 
 - PASSED: targeted Phase 5 regression tests (32 tests), `bun run lint`, `bun run typecheck`, static migration compatibility, and the complete repository test runner (exit 0; its suites reported 171 shared tests plus the isolated leaderboard suites with zero failures).
-- PASSED: real PostgreSQL games, rollup, identity/RLS, session/team, activity automation, JSONB, provider portability, dashboard lists, and claim support suites against disposable local databases. The rollup suite required UTC on the disposable database to match CI's timestamp semantics.
+- PASSED: real PostgreSQL conversion, rollup, identity/RLS, session/team, activity automation, JSONB, provider portability, dashboard lists, and claim support suites against disposable local databases. The rollup suite required UTC on the disposable database to match CI's timestamp semantics.
 - PASSED: N-1 compatibility against the recorded coherent and Leaderboard source commits. The gate exercised 125 baseline migrations and 27 expanded migrations through upgrade, current-worker, and rollback contracts.
 - NOT VERIFIED: the local E2E release gate. Wrangler startup was blocked by stale local Miniflare state locks from the first attempt; automatic approval review rejected the cleanup command because the review service had exhausted its usage limit. No product or repository files were changed by that failed gate.
 - NOT VERIFIED: dependency audit, secret scan, CodeQL, and SBOM generation. These are CI/host-tool checks and were not available to execute fully in this local session.

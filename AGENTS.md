@@ -25,7 +25,7 @@ Guidance for automated agents and new contributors working in this repo.
 
 - **TARGET product architecture:** `docs/YOURRANK_PRODUCT_ARCHITECTURE.md`.
   It defines owner-approved product direction, information architecture, domain
-  boundaries, migration rules, deferred gates, and restricted legacy scope.
+  boundaries, migration rules, deferred gates, and excluded mechanics.
 - **CURRENT dashboard route semantics:** `packages/shared/src/dashboard-routes.ts`.
   Stable IDs, canonical paths, Worker owners, delivery modes, account/site scope,
   navigation-state parameters, and aliases remain implementation truth until a
@@ -45,12 +45,11 @@ Guidance for automated agents and new contributors working in this repo.
   Telegram Subscriber identities. Shared Activity, Review, or Claims persistence
   remains deferred until implementation evidence proves the abstraction.
 
-Architecture/product migration work must not redesign, optimize, debug, extend,
-or consolidate Games, wagering/stakes, race/wager mechanics, predictions,
-paid-chance mechanics, credit-ticket/random-value raffle mechanics,
-odds/payout/settlement behavior, or gambling-specific Telegram behavior.
-Generic shell/documentation work may acknowledge that legacy routes exist, but
-those systems are not target product strategy.
+## Excluded mechanics
+
+YourRank has no games of chance, wagering/stakes, predictions, paid or
+credit-ticket raffles, spin wheels, or odds/payout logic, and these must not be
+added.
 
 ## Product and frontend design
 

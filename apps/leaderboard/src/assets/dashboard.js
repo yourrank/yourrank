@@ -12,7 +12,6 @@ import { maybeAutoStartTour } from "./dashboard/tour.js";
 import { initPerformance } from "./dashboard/performance.js";
 import { initOverlayDesigner } from "./dashboard/overlay-designer.js";
 import { setupSettingsScreen } from "./dashboard/account.js";
-import { initGames } from "./dashboard/games.js";
 import { initQuickActions, setQuickActionsSite } from "./dashboard/quick-actions.js";
 import { updateProfileMenu } from "./dashboard/profile-menu.js";
 import {
@@ -180,7 +179,7 @@ async function init() {
     if (!state.ACTIVE_SITE_ID) return;
     const target = new URL(link.getAttribute("href"), location.origin);
     const creditsPath = target.pathname.startsWith("/dashboard/rewards/") || target.pathname === "/dashboard/site/connections";
-    const sitePath = target.pathname === "/dashboard" || target.pathname === "/dashboard/leaderboards" || target.pathname === "/dashboard/leaderboard" || target.pathname === "/dashboard/games" || target.pathname === "/dashboard/site" || target.pathname.startsWith("/dashboard/leaderboard/") || target.pathname.startsWith("/dashboard/analytics/");
+    const sitePath = target.pathname === "/dashboard" || target.pathname === "/dashboard/leaderboards" || target.pathname === "/dashboard/leaderboard" || target.pathname === "/dashboard/site" || target.pathname.startsWith("/dashboard/leaderboard/") || target.pathname.startsWith("/dashboard/analytics/");
     if (creditsPath) {
       target.searchParams.set("siteId", state.ACTIVE_SITE_ID);
     } else if (sitePath) {
@@ -292,7 +291,6 @@ async function init() {
   // first time a section is shown instead of at boot — and never re-initializes
   // the workspace when you move between sections.
   registerSectionMounter((page) => {
-    if (page === "games") initGames();
     if (page === "performance") initPerformance();
     if (page === "board") { initOverlayDesigner(); }
   });

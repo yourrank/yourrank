@@ -34,7 +34,7 @@ const postbackData = {
   ok: true,
   status: "pending",
   postback: {
-    signedEndpoint: "https://api.example.test/deposit?key=signed",
+    signedEndpoint: "https://api.example.test/conversion?key=signed",
     key: "private-key",
     legacyUrl: "https://api.example.test/legacy?key=legacy",
     createdAt: "2026-02-01T00:00:00Z",

@@ -10,10 +10,8 @@ import {
   Loader2,
   RefreshCw,
   Search,
-  Ticket,
   Trash2,
   Trophy,
-  Users,
   X,
 } from "lucide-react";
 import { engageCardState } from "../../../assets/dashboard/engage-hub-state.js";
@@ -39,8 +37,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "../../components/ui/sheet";
-import { Textarea } from "../../components/ui/textarea";
 import type {
   BoardShell,
   ChatGiveawayPayload,
@@ -49,10 +45,6 @@ import type {
   GiveawayPageDependencies,
   GiveawayRules,
   GiveawayWinner,
-  Prediction,
-  PredictionsPayload,
-  Raffle,
-  RafflesPayload,
 } from "./types";
 
 declare global {
@@ -75,7 +67,7 @@ const HUB_UNAVAILABLE = {
   meta: "Couldn't load status. Open the page to check.",
 };
 
-type ActiveTab = "chat" | "raffles" | "preds" | "hub" | "tournaments";
+type ActiveTab = "chat" | "hub" | "tournaments";
 type ApiErrorData = ChatGiveawayPayload & { error?: string; code?: string };
 type EngageRowState = {
   tone: string;
@@ -90,9 +82,6 @@ type Confirmation = {
   cancelLabel?: string;
   destructive?: boolean;
 };
-type RaffleConfirmation = Confirmation & { kind: "draw" | "cancel" };
-type DrawerDraft = Record<string, string>;
-
 type PageDependencies = GiveawayPageDependencies;
 type GiveawayPageProps = {
   initialTab?: string;
@@ -124,73 +113,6 @@ const DEFAULT_RULES: GiveawayRules = {
   responseTimeout: 60,
   autoReroll: false,
 };
-const RAFFLE_DRAFT_DEFAULTS: DrawerDraft = {
-  "rf-title": "",
-  "rf-desc": "",
-  "rf-cost": "30",
-  "rf-max": "10",
-};
-const PREDICTION_DRAFT_DEFAULTS: DrawerDraft = {
-  "pred-title": "",
-  "pred-opt-1": "Yes",
-  "pred-opt-2": "No",
-  "pred-min-bet": "10",
-  "pred-max-bet": "500",
-  "pred-lock-min": "5",
-};
-
-function drawerDraftKey(formId: string) {
-  const siteId = new URLSearchParams(window.location.search).get("siteId") || "default";
-  return `yr-engage-draft:${siteId}:${formId}`;
-}
-
-function readDrawerDraft(formId: string, defaults: DrawerDraft): DrawerDraft {
-  try {
-    const parsed: unknown = JSON.parse(window.sessionStorage.getItem(drawerDraftKey(formId)) || "{}");
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return { ...defaults };
-    const stored = parsed as Record<string, unknown>;
-    return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [
-      key,
-      typeof stored[key] === "string" ? stored[key] : fallback,
-    ]));
-  } catch {
-    return { ...defaults };
-  }
-}
-
-function useDrawerDraft(formId: string, defaults: DrawerDraft) {
-  const storageKey = drawerDraftKey(formId);
-  const [draft, setDraft] = useState(() => readDrawerDraft(formId, defaults));
-  const currentStorageKey = useRef(storageKey);
-  const skipNextWrite = useRef(false);
-
-  useEffect(() => {
-    if (currentStorageKey.current === storageKey) return;
-    currentStorageKey.current = storageKey;
-    skipNextWrite.current = true;
-    setDraft(readDrawerDraft(formId, defaults));
-  }, [defaults, formId, storageKey]);
-
-  useEffect(() => {
-    if (skipNextWrite.current) {
-      skipNextWrite.current = false;
-      return;
-    }
-    try { window.sessionStorage.setItem(storageKey, JSON.stringify(draft)); } catch { /* storage unavailable */ }
-  }, [draft, storageKey]);
-
-  const discardDraft = useCallback(() => {
-    try { window.sessionStorage.removeItem(storageKey); } catch { /* storage unavailable */ }
-  }, [storageKey]);
-
-  const clearDraftAfterSubmit = useCallback(() => {
-    skipNextWrite.current = true;
-    discardDraft();
-  }, [discardDraft]);
-
-  return { draft, setDraft, discardDraft, clearDraftAfterSubmit };
-}
-
 function post(body: object): RequestInit {
   return { method: "POST", body: JSON.stringify(body) };
 }
@@ -387,7 +309,7 @@ export function GiveawaysPage({ initialTab, dependencies }: GiveawayPageProps) {
   const deps = useMemo(() => ({ ...DEFAULT_DEPENDENCIES, ...dependencies }), [dependencies]);
   const [tab, setTab] = useState<ActiveTab>(() => {
     const routeTab = initialTab || document.getElementById("giveaway-root")?.getAttribute("data-tab") || "chat";
-    return (["chat", "raffles", "preds", "hub", "tournaments"].includes(routeTab) ? routeTab : "chat") as ActiveTab;
+    return (["chat", "hub", "tournaments"].includes(routeTab) ? routeTab : "chat") as ActiveTab;
   });
   const [siteId, setSiteId] = useState("");
   const [siteName, setSiteName] = useState("");
@@ -412,7 +334,7 @@ export function GiveawaysPage({ initialTab, dependencies }: GiveawayPageProps) {
 
   const setTabFromRoot = useCallback(() => {
     const routeTab = document.getElementById("giveaway-root")?.getAttribute("data-tab") || initialTab || "chat";
-    if (["chat", "raffles", "preds", "hub", "tournaments"].includes(routeTab)) setTab(routeTab as ActiveTab);
+    if (["chat", "hub", "tournaments"].includes(routeTab)) setTab(routeTab as ActiveTab);
   }, [initialTab]);
 
   useEffect(() => {
@@ -454,21 +376,15 @@ export function GiveawaysPage({ initialTab, dependencies }: GiveawayPageProps) {
     );
   }
 
-  const activeLabel = GIVEAWAY_TABS.find(([key]) => key === tab)?.[1] || "Chat Giveaway";
-  const description = {
-    chat: "Collect chat entries, draw a winner, and confirm the result live.",
-    raffles: "Sell Credit tickets, draw a winner, and keep completed raffles together.",
-    preds: "Run live prediction pools and settle them when the outcome is known.",
-  }[tab];
+  const activeLabel = GIVEAWAY_TABS[0][1];
+  const description = "Collect chat entries, draw a winner, and confirm the result live.";
 
   return (
     <div className="space-y-6">
       <PageHeading title="Giveaways" description={`${activeLabel} · ${description}`} />
       <GiveawaysSubnav active={tab} />
       {pageAlert && <StatusMessage id="gw-page-alert" tone="error" role="alert">{pageAlert}</StatusMessage>}
-      {tab === "chat" && <ChatGiveaway apiClient={deps.api} siteId={siteId} onAlert={alert} onClearAlert={clearAlert} />}
-      {tab === "raffles" && <Raffles apiClient={deps.api} siteId={siteId} onAlert={alert} onClearAlert={clearAlert} />}
-      {tab === "preds" && <Predictions apiClient={deps.api} siteId={siteId} onAlert={alert} onClearAlert={clearAlert} />}
+      <ChatGiveaway apiClient={deps.api} siteId={siteId} onAlert={alert} onClearAlert={clearAlert} />
     </div>
   );
 }
@@ -487,8 +403,8 @@ function PageHeading({ title, description, scopeName }: { title: string; descrip
   );
 }
 
-function GiveawaysSubnav({ active }: { active: "chat" | "raffles" | "preds" }) {
-  const hrefs = { chat: "/dashboard/giveaways/chat", raffles: "/dashboard/giveaways/raffles", preds: "/dashboard/giveaways/predictions" };
+function GiveawaysSubnav({ active }: { active: "chat" }) {
+  const hrefs = { chat: "/dashboard/giveaways/chat" };
   return (
     <nav className="v3-tabs gw-subnav" aria-label="Giveaways">
       {GIVEAWAY_TABS.map(([key, label]) => (
@@ -513,14 +429,12 @@ function EngageHub({ apiClient, siteId }: { apiClient: PageDependencies["api"]; 
     void Promise.all([
       settle(apiClient("/api/activities?state=open&limit=100", {}, siteId)),
       settle(apiClient<ChatGiveawayPayload>("/api/giveaways/chat", {}, siteId)),
-      settle(apiClient<RafflesPayload>("/api/events/raffles", {}, siteId)),
-      settle(apiClient<PredictionsPayload>("/api/predictions", {}, siteId)),
       settle(apiClient("/api/tournaments", {}, siteId)),
-    ]).then(([activities, chat, raffles, predictions, tournaments]) => {
+    ]).then(([activities, chat, tournaments]) => {
       if (!active) return;
       const next: Record<string, EngageRowState> = {};
       next.activities = activities ? engageCardState("activities", activities) as EngageRowState : HUB_UNAVAILABLE;
-      next.giveaways = engageCardState("giveaways", { chat, raffles, predictions }) as EngageRowState || HUB_UNAVAILABLE;
+      next.giveaways = engageCardState("giveaways", { chat }) as EngageRowState || HUB_UNAVAILABLE;
       next.tournaments = tournaments ? engageCardState("tournaments", tournaments) as EngageRowState : HUB_UNAVAILABLE;
       setStates(next);
     });
@@ -541,7 +455,7 @@ function EngageHub({ apiClient, siteId }: { apiClient: PageDependencies["api"]; 
             label: "Checking…",
             meta: feature.idle.meta,
           };
-          const Icon = feature.feature === "activities" ? Gift : feature.feature === "giveaways" ? Ticket : Trophy;
+          const Icon = feature.feature === "activities" || feature.feature === "giveaways" ? Gift : Trophy;
           return (
             <li key={feature.feature} className="engage-row" data-feature={feature.feature} data-status={state.status}>
               <a className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:px-6" href={feature.href}>
@@ -603,9 +517,9 @@ function ChatGiveaway({
   const [savingResponseRules, setSavingResponseRules] = useState(false);
   const [adding, setAdding] = useState(false);
   const [isRolling, setIsRolling] = useState(false);
-  const [rouletteNames, setRouletteNames] = useState<string[]>([]);
-  const [roulettePosition, setRoulettePosition] = useState(0);
-  const [rouletteBlur, setRouletteBlur] = useState(false);
+  const [revealNames, setRevealNames] = useState<string[]>([]);
+  const [revealPosition, setRevealPosition] = useState(0);
+  const [revealBlur, setRevealBlur] = useState(false);
   const [winnerOpen, setWinnerOpen] = useState(false);
   const [winnerJustDrawn, setWinnerJustDrawn] = useState(false);
   const [winnerAction, setWinnerAction] = useState("");
@@ -935,7 +849,7 @@ function ChatGiveaway({
         session.rules?.winnerRepeat === "again"
           || (!drawnUsernames.has(entry.username.trim().toLowerCase()) && entry.id !== session.winner_entry_id),
       );
-      await runRoulette(visualPool, result.winner);
+      await runWinnerReveal(visualPool, result.winner);
       applyState(result);
       setClock(Date.now());
       setWinnerJustDrawn(true);
@@ -949,7 +863,7 @@ function ChatGiveaway({
     }
   };
 
-  const runRoulette = async (pool: GiveawayEntrant[], drawnWinner: GiveawayWinner) => {
+  const runWinnerReveal = async (pool: GiveawayEntrant[], drawnWinner: GiveawayWinner) => {
     const names = [...new Set(pool.map((entry) => entry.username))];
     if (!names.includes(drawnWinner.username)) names.push(drawnWinner.username);
     const pick = () => names[Math.floor(Math.random() * names.length)];
@@ -964,15 +878,15 @@ function ChatGiveaway({
     let decoy = pick();
     while (names.length > 1 && decoy === drawnWinner.username) decoy = pick();
     sequence.push(decoy, drawnWinner.username);
-    setRouletteNames(sequence);
-    setRoulettePosition(0);
-    setRouletteBlur(false);
+    setRevealNames(sequence);
+    setRevealPosition(0);
+    setRevealBlur(false);
 
     const winnerIndex = sequence.length - 1;
     const decoyIndex = winnerIndex - 1;
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) {
-      setRoulettePosition(winnerIndex);
+      setRevealPosition(winnerIndex);
       await new Promise((resolve) => window.setTimeout(resolve, 500));
       return;
     }
@@ -986,13 +900,13 @@ function ChatGiveaway({
           const progress = Math.min(1, (time - start) / duration);
           const position = from + (to - from) * easing(progress);
           const velocity = Math.abs(position - lastProgress) / Math.max(1, time - lastTime) * 1_000;
-          setRouletteBlur(velocity > 6);
-          setRoulettePosition(position);
+          setRevealBlur(velocity > 6);
+          setRevealPosition(position);
           lastTime = time;
           lastProgress = position;
           if (progress < 1) window.requestAnimationFrame(step);
           else {
-            setRouletteBlur(false);
+            setRevealBlur(false);
             resolve();
           }
         };
@@ -1342,17 +1256,17 @@ function ChatGiveaway({
               <div className="h-[28rem] overflow-y-auto rounded-lg border">
                 <div className="min-h-full space-y-3 p-3">
                   {isRolling && (
-                    <div id="gw-roulette" className="space-y-3 rounded-xl border bg-muted/30 p-5 text-center" role="status" aria-live="polite">
-                      {rouletteNames.length ? (
+                    <div id="gw-winner-reveal" className="space-y-3 rounded-xl border bg-muted/30 p-5 text-center" role="status" aria-live="polite">
+                      {revealNames.length ? (
                         <div className="relative mx-auto h-[92px] max-w-md overflow-hidden rounded-lg border bg-card">
                           <div
                             id="gw-roller-track"
                             aria-hidden="true"
-                            className={cn("will-change-transform", rouletteBlur && "blur-[1px]")}
-                            style={{ transform: `translateY(${(1 - roulettePosition) * 46}px)` }}
+                            className={cn("will-change-transform", revealBlur && "blur-[1px]")}
+                            style={{ transform: `translateY(${(1 - revealPosition) * 46}px)` }}
                           >
-                            {rouletteNames.map((name, index) => (
-                              <div key={`${index}-${name}`} className="gw-roulette-item flex h-[46px] items-center justify-center font-semibold">
+                            {revealNames.map((name, index) => (
+                              <div key={`${index}-${name}`} className="gw-winner-reveal-item flex h-[46px] items-center justify-center font-semibold">
                                 @{name}
                               </div>
                             ))}
@@ -1813,603 +1727,6 @@ function DrawHistory({
           );
         })}
       </ul>
-    </div>
-  );
-}
-
-function EmptyState({ id, title, description }: { id: string; title: string; description: string }) {
-  return (
-    <div id={id} className="rounded-xl border border-dashed px-5 py-8 text-center" role="status">
-      <p className="font-semibold">{title}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-    </div>
-  );
-}
-
-function Raffles({
-  apiClient,
-  siteId,
-  onAlert,
-  onClearAlert,
-}: {
-  apiClient: PageDependencies["api"];
-  siteId: string;
-  onAlert: (message: string) => void;
-  onClearAlert: () => void;
-}) {
-  const [raffles, setRaffles] = useState<Raffle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [formError, setFormError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const { draft, setDraft, discardDraft, clearDraftAfterSubmit } = useDrawerDraft("rf-drawer", RAFFLE_DRAFT_DEFAULTS);
-  const title = draft["rf-title"];
-  const description = draft["rf-desc"];
-  const ticketCost = draft["rf-cost"];
-  const maxTickets = draft["rf-max"];
-  const [drawId, setDrawId] = useState("");
-  const [cancelId, setCancelId] = useState("");
-  const [confirmation, setConfirmation] = useState<RaffleConfirmation | null>(null);
-  const [drawResult, setDrawResult] = useState<RafflesPayload | null>(null);
-
-  const loadRaffles = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await apiClient<RafflesPayload>("/api/events/raffles", {}, siteId);
-      setRaffles(result.raffles || []);
-      setLoadError("");
-    } catch (error) {
-      setLoadError(errorMessage(error, "Network error. Check your connection and try again."));
-    } finally {
-      setLoading(false);
-    }
-  }, [apiClient, siteId]);
-
-  useEffect(() => { void loadRaffles(); }, [loadRaffles]);
-
-  const activeRaffles = raffles.filter((raffle) => raffle.status === "active");
-  const pastRaffles = raffles.filter((raffle) => raffle.status !== "active");
-
-  const createRaffle = async (event: FormEvent) => {
-    event.preventDefault();
-    onClearAlert();
-    setFormError("");
-    const errors: Record<string, string> = {};
-    if (!title.trim()) errors["rf-title"] = "Enter a prize title.";
-    if (!/^\d+$/.test(ticketCost) || Number(ticketCost) < 0) errors["rf-cost"] = "Enter a ticket cost of 0 or more.";
-    if (!/^\d+$/.test(maxTickets) || Number(maxTickets) < 1) errors["rf-max"] = "Enter at least 1 ticket.";
-    setFieldErrors(errors);
-    if (Object.keys(errors).length) {
-      document.getElementById(Object.keys(errors)[0])?.focus();
-      return;
-    }
-    setCreating(true);
-    try {
-      await apiClient("/api/events/raffles", post({
-        title: title.trim(),
-        description: description.trim(),
-        ticketCost: Number.parseInt(ticketCost, 10) || 0,
-        maxTickets: Number.parseInt(maxTickets, 10) || 10,
-      }), siteId);
-      setDrawerOpen(false);
-      clearDraftAfterSubmit();
-      setDraft({ ...RAFFLE_DRAFT_DEFAULTS });
-      await loadRaffles();
-    } catch (error) {
-      setFormError(errorMessage(error, "Network error creating raffle."));
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const drawRaffle = async () => {
-    if (!drawId) return;
-    setConfirmation(null);
-    onClearAlert();
-    try {
-      const result = await apiClient<RafflesPayload>("/api/events/raffles/draw", post({ raffleId: drawId }), siteId);
-      if (!result.winnerName) {
-        onAlert("No winner was drawn — no tickets were sold.");
-      } else {
-        setDrawResult(result);
-        playWinnerSound();
-      }
-      setDrawId("");
-      await loadRaffles();
-    } catch (error) {
-      onAlert(errorMessage(error, "Network error drawing raffle."));
-    }
-  };
-
-  const cancelRaffle = async () => {
-    if (!cancelId) return;
-    setConfirmation(null);
-    onClearAlert();
-    try {
-      const result = await apiClient<{ refundedViewers: number; refundedCredits: number; message?: string }>(
-        "/api/events/raffles/cancel",
-        post({ raffleId: cancelId }),
-        siteId,
-      );
-      onAlert(result.message || `Raffle cancelled. Refunded ${result.refundedCredits} Credits to ${result.refundedViewers} viewers.`);
-      setCancelId("");
-      await loadRaffles();
-    } catch (error) {
-      onAlert(errorMessage(error, "Network error cancelling raffle."));
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-lg font-semibold">Raffles</h2><p className="mt-1 text-sm text-muted-foreground">Create a prize raffle and draw from sold tickets.</p></div>
-        <Button id="btn-create-raffle" onClick={() => { setFormError(""); setFieldErrors({}); setDrawerOpen(true); }}><Ticket /> Create Raffle</Button>
-      </div>
-      {loadError ? (
-        <StatusMessage tone="error" role="alert" className="flex flex-wrap items-center justify-between gap-3">
-          <span><strong>Couldn't load raffles.</strong> {loadError}</span>
-          <Button type="button" variant="outline" size="sm" onClick={() => void loadRaffles()}>Retry</Button>
-        </StatusMessage>
-      ) : loading ? (
-        <StatusMessage>Loading raffles…</StatusMessage>
-      ) : (
-        <>
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Active raffles</CardTitle><CardDescription>View tickets sold and draw a winner when you are ready.</CardDescription></CardHeader>
-            <CardContent id="rf-active-list" className="space-y-3">
-              {!activeRaffles.length ? <EmptyState id="rf-empty-active" title="No active raffles" description="Create a raffle so viewers can buy tickets with Credits." /> : activeRaffles.map((raffle) => (
-                <article key={raffle.id} data-raffle-id={raffle.id} className="grid gap-4 rounded-lg border p-4 lg:grid-cols-[1fr_auto]">
-                  <div>
-                    <Badge className="mb-2 rounded-full border-emerald-700/25 bg-emerald-600/5 text-emerald-800">Selling tickets</Badge>
-                    <h3 className="font-semibold">{raffle.title}</h3>
-                    {raffle.description && <p className="mt-1 text-sm text-muted-foreground">{raffle.description}</p>}
-                    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                      <Metric label="Ticket" value={raffle.ticket_cost === 0 ? "Free" : `${raffle.ticket_cost} Credits`} />
-                      <Metric label="Sold" value={String(raffle.total_tickets || 0)} />
-                      <Metric label="Viewers" value={String(raffle.participant_count || 0)} />
-                      <Metric label="Limit" value={`${raffle.max_tickets_per_viewer || 10} each`} />
-                    </dl>
-                  </div>
-                  <div className="flex flex-col items-start justify-between gap-3 lg:items-end">
-                    <span className="text-xs text-muted-foreground">{(raffle.total_tickets || 0) > 0 ? "Ready to draw" : "Waiting for tickets"}</span>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        className="btn--draw-raffle"
-                        type="button"
-                        size="sm"
-                        disabled={!raffle.total_tickets}
-                        onClick={() => {
-                          setDrawId(raffle.id);
-                          setConfirmation({ kind: "draw", title: "Draw raffle winner", description: "Are you ready to draw the random winning ticket on stream?", action: "Draw winner" });
-                        }}
-                      >
-                        Draw winner
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setCancelId(raffle.id);
-                          setConfirmation({
-                            kind: "cancel",
-                            title: "Cancel this raffle?",
-                            description: "Everyone who bought tickets gets their Credits back.",
-                            action: "Cancel raffle",
-                            cancelLabel: "Keep raffle",
-                            destructive: true,
-                          });
-                        }}
-                      >
-                        Cancel raffle
-                      </Button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Past raffles</CardTitle><CardDescription>Completed raffles stay together here.</CardDescription></CardHeader>
-            <CardContent id="rf-past-list">
-              {!pastRaffles.length ? <EmptyState id="rf-empty-past" title="No past raffles yet" description="Completed raffles will appear here." /> : (
-                <div className="overflow-x-auto rounded-lg border">
-                  <table className="w-full min-w-[620px] text-left text-sm">
-                    <thead className="bg-muted/50 text-xs uppercase text-muted-foreground"><tr><th className="px-3 py-3">Prize</th><th className="px-3 py-3">Ticket cost</th><th className="px-3 py-3">Tickets</th><th className="px-3 py-3">Winner</th><th className="px-3 py-3">Drawn</th></tr></thead>
-                    <tbody className="divide-y">{pastRaffles.map((raffle) => (
-                      <tr key={raffle.id}>
-                        <td className="px-3 py-3 font-semibold" data-label="Prize">{raffle.title}</td>
-                        <td className="px-3 py-3" data-label="Ticket cost">{raffle.ticket_cost === 0 ? "Free" : `${raffle.ticket_cost} Credits`}</td>
-                        <td className="px-3 py-3" data-label="Tickets">{raffle.total_tickets || 0} tickets</td>
-                        <td className="px-3 py-3" data-label="Winner">{raffle.status === "cancelled" ? "Cancelled · Credits refunded" : raffle.winner_name ? <><strong>{raffle.winner_name}</strong><span className="block text-xs text-muted-foreground">Ticket #{raffle.winner_ticket_number}</span></> : "No winner drawn"}</td>
-                        <td className="px-3 py-3" data-label="Drawn">{raffle.drawn_at ? new Date(raffle.drawn_at).toLocaleString() : "—"}</td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
-
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent id="rf-drawer" className="max-h-dvh overflow-hidden">
-          <SheetHeader>
-            <SheetTitle id="rf-drawer-title" className="flex items-center gap-2">
-              <Ticket className="h-4 w-4" aria-hidden="true" />
-              Create Ticket Raffle
-            </SheetTitle>
-          </SheetHeader>
-          <form id="rf-form" className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => void createRaffle(event)}>
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
-              <Field label="Prize Title *" id="rf-title" error={fieldErrors["rf-title"]}>
-                <Input id="rf-title" placeholder="e.g. $100 Amazon Gift Card or VIP Role" value={title} onChange={(event) => setDraft((current) => ({ ...current, "rf-title": event.target.value }))} maxLength={120} required />
-                <p className="text-xs text-muted-foreground">What will the winner receive?</p>
-              </Field>
-              <Field label="Description (Optional)" id="rf-desc">
-                <Textarea id="rf-desc" placeholder="Rules or details for claiming this prize…" value={description} onChange={(event) => setDraft((current) => ({ ...current, "rf-desc": event.target.value }))} maxLength={500} rows={2} />
-              </Field>
-              <Field label="Ticket Cost (in Credits)" id="rf-cost" error={fieldErrors["rf-cost"]}>
-                <Input id="rf-cost" type="number" min="0" placeholder="e.g. 30" value={ticketCost} onChange={(event) => setDraft((current) => ({ ...current, "rf-cost": event.target.value }))} required />
-                <PresetButtons values={[["Free (0 Credits)", "0"], ["25 Credits", "25"], ["50 Credits", "50"], ["100 Credits", "100"]]} onSelect={(value) => setDraft((current) => ({ ...current, "rf-cost": value }))} />
-                <p className="text-xs text-muted-foreground">How many Credits a viewer pays per ticket. Set 0 for free community entries.</p>
-              </Field>
-              <Field label="Max Tickets per Viewer" id="rf-max" error={fieldErrors["rf-max"]}>
-                <Input id="rf-max" type="number" min="1" placeholder="e.g. 5" value={maxTickets} onChange={(event) => setDraft((current) => ({ ...current, "rf-max": event.target.value }))} required />
-                <PresetButtons values={[["1 ticket", "1"], ["5 tickets", "5"], ["10 tickets", "10"], ["25 tickets", "25"]]} onSelect={(value) => setDraft((current) => ({ ...current, "rf-max": value }))} />
-                <p className="text-xs text-muted-foreground">Prevents one viewer from buying all tickets.</p>
-              </Field>
-              {formError && <StatusMessage tone="error" role="alert">{formError}</StatusMessage>}
-            </div>
-            <SheetFooter className="shrink-0">
-              <Button type="button" variant="outline" id="rf-cancel" onClick={() => { discardDraft(); setDrawerOpen(false); }}>Cancel</Button>
-              <Button id="rf-submit" type="submit" disabled={creating}>{creating && <Loader2 className="animate-spin" />}Create Raffle</Button>
-            </SheetFooter>
-          </form>
-        </SheetContent>
-      </Sheet>
-
-      <ConfirmAction
-        confirmation={confirmation}
-        onCancel={() => { setConfirmation(null); setDrawId(""); setCancelId(""); }}
-        onConfirm={() => void (confirmation?.kind === "cancel" ? cancelRaffle() : drawRaffle())}
-      />
-      <Dialog open={Boolean(drawResult)} onOpenChange={(open) => { if (!open) setDrawResult(null); }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Raffle winner</DialogTitle><DialogDescription>{drawResult?.message || "Winner drawn"}</DialogDescription></DialogHeader>
-          <div className="space-y-2 text-center">
-            <Trophy className="mx-auto size-8 text-amber-500" aria-hidden="true" />
-            <p className="text-xl font-bold">{drawResult?.winnerName}</p>
-            <p className="text-sm text-muted-foreground">Winning ticket <strong>#{drawResult?.winnerTicketNumber}</strong> · {drawResult?.totalTickets} tickets</p>
-          </div>
-          <Button type="button" onClick={() => setDrawResult(null)}>Close</Button>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-semibold">{value}</dd></div>;
-}
-
-function Field({ label, id, error, children }: { label: string; id: string; error?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-      {error && <p className="text-sm text-destructive" role="alert" aria-live="polite">{error}</p>}
-    </div>
-  );
-}
-
-function PresetButtons({ values, onSelect }: { values: Array<[string, string]>; onSelect: (value: string) => void }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {values.map(([label, value]) => <Button key={value} type="button" size="sm" variant="outline" className="gw-chip" data-val={value} onClick={() => onSelect(value)}>{label}</Button>)}
-    </div>
-  );
-}
-
-function Predictions({
-  apiClient,
-  siteId,
-  onAlert,
-  onClearAlert,
-}: {
-  apiClient: PageDependencies["api"];
-  siteId: string;
-  onAlert: (message: string) => void;
-  onClearAlert: () => void;
-}) {
-  const [predictions, setPredictions] = useState<Prediction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [enabled, setEnabled] = useState(true);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [settleOpen, setSettleOpen] = useState(false);
-  const [settlingPrediction, setSettlingPrediction] = useState<Prediction | null>(null);
-  const [selectedOption, setSelectedOption] = useState("");
-  const { draft, setDraft, discardDraft, clearDraftAfterSubmit } = useDrawerDraft("pred-drawer", PREDICTION_DRAFT_DEFAULTS);
-  const title = draft["pred-title"];
-  const optionOne = draft["pred-opt-1"];
-  const optionTwo = draft["pred-opt-2"];
-  const minBet = draft["pred-min-bet"];
-  const maxBet = draft["pred-max-bet"];
-  const lockMinutes = draft["pred-lock-min"];
-  const [creating, setCreating] = useState(false);
-  const [settling, setSettling] = useState(false);
-  const [statusError, setStatusError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
-  const [pendingAction, setPendingAction] = useState<"cancel" | "settle" | null>(null);
-  const [pendingPrediction, setPendingPrediction] = useState<Prediction | null>(null);
-
-  const loadPredictions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await apiClient<PredictionsPayload>("/api/predictions", {}, siteId);
-      setPredictions(result.predictions || []);
-      setEnabled(result.entitlement?.enabled !== false);
-      setLoadError("");
-    } catch (error) {
-      setLoadError(errorMessage(error, "Network error. Check your connection and try again."));
-    } finally {
-      setLoading(false);
-    }
-  }, [apiClient, siteId]);
-
-  useEffect(() => { void loadPredictions(); }, [loadPredictions]);
-
-  const activePredictions = predictions.filter((prediction) => prediction.status === "open" || prediction.status === "locked");
-  const pastPredictions = predictions.filter((prediction) => prediction.status === "settled" || prediction.status === "cancelled");
-
-  const submitPrediction = async (event: FormEvent) => {
-    event.preventDefault();
-    setStatusError("");
-    onClearAlert();
-    const errors: Record<string, string> = {};
-    if (!title.trim()) errors["pred-title"] = "Enter a prediction question.";
-    if (!optionOne.trim()) errors["pred-opt-1"] = "Enter option A.";
-    if (!optionTwo.trim()) errors["pred-opt-2"] = "Enter option B.";
-    if (optionOne.trim().toLowerCase() === optionTwo.trim().toLowerCase()) errors["pred-opt-2"] = "Options must be different from each other.";
-    if (!/^\d+$/.test(minBet) || Number(minBet) < 1) errors["pred-min-bet"] = "Enter a minimum bet of at least 1 Credit.";
-    if (!/^\d+$/.test(maxBet) || Number(maxBet) < 1) errors["pred-max-bet"] = "Enter a maximum bet of at least 1 Credit.";
-    if (/^\d+$/.test(maxBet) && /^\d+$/.test(minBet) && Number(maxBet) < Number(minBet)) errors["pred-max-bet"] = "Max bet must be at least the minimum bet.";
-    setFieldErrors(errors);
-    if (Object.keys(errors).length) {
-      document.getElementById(Object.keys(errors)[0])?.focus();
-      return;
-    }
-    const parsedLock = Number.parseInt(lockMinutes, 10);
-    const boundedLock = Number.isNaN(parsedLock) || parsedLock < 0 ? 5 : Math.min(parsedLock, 1_440);
-    setCreating(true);
-    try {
-      await apiClient<PredictionsPayload>("/api/predictions", post({
-        title: title.trim(),
-        options: [{ id: "yes", label: optionOne.trim() || "Yes" }, { id: "no", label: optionTwo.trim() || "No" }],
-        minBet: Number.parseInt(minBet, 10) || 10,
-        maxBet: Number.parseInt(maxBet, 10) || 500,
-        lockMinutes: boundedLock,
-      }), siteId);
-      setCreateOpen(false);
-      clearDraftAfterSubmit();
-      setDraft((current) => ({ ...current, "pred-title": "" }));
-      await loadPredictions();
-    } catch (error) {
-      const data = errorData(error);
-      if (errorStatus(error) === 403 && data.code === "entitlement_required") {
-        setStatusError(data.error || "Predictions are unavailable on your current plan.");
-        setEnabled(false);
-      } else {
-        setStatusError(errorMessage(error, "Network error creating prediction."));
-      }
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const lockPrediction = async (prediction: Prediction) => {
-    onClearAlert();
-    try {
-      await apiClient(`/api/predictions/${encodeURIComponent(prediction.id)}/lock`, post({ predictionId: prediction.id }), siteId);
-      await loadPredictions();
-    } catch (error) {
-      onAlert(errorMessage(error, "Network error locking prediction."));
-    }
-  };
-
-  const openSettlement = (prediction: Prediction) => {
-    setSettlingPrediction(prediction);
-    setSelectedOption(prediction.options[0]?.id || "");
-    setStatusError("");
-    setSettleOpen(true);
-  };
-
-  const confirmSettling = async () => {
-    if (!settlingPrediction || !selectedOption) return;
-    setConfirmation(null);
-    setSettling(true);
-    setStatusError("");
-    try {
-      await apiClient(`/api/predictions/${encodeURIComponent(settlingPrediction.id)}/settle`, post({
-        predictionId: settlingPrediction.id,
-        winningOptionId: selectedOption,
-      }), siteId);
-      setSettleOpen(false);
-      await loadPredictions();
-    } catch (error) {
-      setStatusError(errorMessage(error, "Network error settling prediction."));
-    } finally {
-      setSettling(false);
-    }
-  };
-
-  const confirmCancel = async () => {
-    if (!pendingPrediction || pendingAction !== "cancel") return;
-    setConfirmation(null);
-    onClearAlert();
-    try {
-      await apiClient(`/api/predictions/${encodeURIComponent(pendingPrediction.id)}/cancel`, post({ predictionId: pendingPrediction.id }), siteId);
-      setSettleOpen(false);
-      await loadPredictions();
-    } catch (error) {
-      onAlert(errorMessage(error, "Network error cancelling prediction."));
-    } finally {
-      setPendingAction(null);
-      setPendingPrediction(null);
-    }
-  };
-
-  const handleConfirm = () => {
-    if (pendingAction === "cancel") void confirmCancel();
-    else if (pendingAction === "settle") void confirmSettling();
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-lg font-semibold">Predictions</h2><p className="mt-1 text-sm text-muted-foreground">Run a live pool and settle it when the outcome is known.</p></div>
-        <Button id="btn-open-event-drawer" disabled={!enabled} aria-describedby={!enabled ? "pred-plan-lock" : undefined} onClick={() => { if (!enabled) return; setStatusError(""); setFieldErrors({}); setCreateOpen(true); }}><Users /> Create Event</Button>
-      </div>
-      {!enabled && (
-        <StatusMessage id="pred-plan-lock" className="flex flex-wrap items-center justify-between gap-3">
-          <span data-plan-lock="predictions">Predictions are available on Starter and higher plans.</span>
-          <a className="font-semibold underline underline-offset-4" href="/dashboard/settings/billing?from=predictions">Upgrade your plan</a>
-        </StatusMessage>
-      )}
-      {loadError ? (
-        <StatusMessage tone="error" role="alert" className="flex flex-wrap items-center justify-between gap-3"><span><strong>Couldn't load predictions.</strong> {loadError}</span><Button variant="outline" size="sm" onClick={() => void loadPredictions()}>Retry</Button></StatusMessage>
-      ) : loading ? <StatusMessage>Loading predictions…</StatusMessage> : (
-        <>
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Active predictions</CardTitle><CardDescription>Open or locked pools currently available to viewers.</CardDescription></CardHeader>
-            <CardContent id="pred-active-list" className="space-y-4">
-              {!activePredictions.length ? <EmptyState id="pred-empty-active" title="No active predictions" description="Launch a live prediction to let viewers wager their Credits on your stream match outcomes." /> : activePredictions.map((prediction) => (
-                <article key={prediction.id} data-pred-id={prediction.id} className="rounded-xl border p-4 md:p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div><Badge className={cn("mb-2 rounded-full", prediction.status === "open" ? "border-emerald-700/25 bg-emerald-600/5 text-emerald-800" : "border-amber-700/25 bg-amber-500/10 text-amber-900")}>{prediction.status === "open" ? "Betting open" : "Betting locked"}</Badge><h3 className="text-lg font-semibold">{prediction.title}</h3></div>
-                    <div className="text-right"><strong className="text-lg">{prediction.total_pool || 0} Credits</strong><span className="block text-xs text-muted-foreground">in the pool</span></div>
-                  </div>
-                  <div className="mt-5 space-y-3">
-                    {prediction.options.map((option) => {
-                      const pool = prediction.total_pool || 0;
-                      const points = option.total_points || 0;
-                      const percent = pool > 0 ? Math.round(points / pool * 100) : 0;
-                      const leading = pool > 0 && points === Math.max(...prediction.options.map((item) => item.total_points || 0));
-                      return (
-                        <div key={option.id} className={cn("rounded-lg border p-3", leading && "border-primary/40 bg-primary/5")}>
-                          <div className="flex justify-between gap-3 text-sm"><span className="font-medium">{option.label}</span><span className="text-muted-foreground"><strong>{percent}%</strong> · {points} Credits</span></div>
-                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} /></div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
-                    <Metric label="Bettors" value={String(prediction.participant_count || 0)} />
-                    <Metric label="Bet limits" value={`${prediction.min_bet}–${prediction.max_bet}`} />
-                    <Metric label="Locks at" value={prediction.lock_at ? new Date(prediction.lock_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Manual"} />
-                  </div>
-                  <div className="mt-4 flex flex-wrap justify-between gap-2">
-                    <Button className="btn--cancel-pred" size="sm" variant="ghost" onClick={() => {
-                      setPendingAction("cancel");
-                      setPendingPrediction(prediction);
-                      setConfirmation({ title: "Cancel prediction", description: "Cancel this prediction? All bets will be fully refunded to viewers.", action: "Cancel prediction", destructive: true });
-                    }}>Cancel &amp; refund</Button>
-                    <div className="flex flex-wrap gap-2">
-                      {prediction.status === "open" && <Button className="btn--lock-pred" size="sm" variant="outline" onClick={() => void lockPrediction(prediction)}>Lock betting</Button>}
-                      <Button className="btn--open-settle" size="sm" onClick={() => openSettlement(prediction)}>Settle &amp; pay out</Button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Past predictions</CardTitle><CardDescription>Settled and cancelled pools.</CardDescription></CardHeader>
-            <CardContent id="pred-past-list">
-              {!pastPredictions.length ? <EmptyState id="pred-empty-past" title="No predictions created yet" description="Completed predictions will appear here." /> : (
-                <div className="overflow-x-auto rounded-lg border">
-                  <table className="w-full min-w-[620px] text-left text-sm">
-                    <thead className="bg-muted/50 text-xs uppercase text-muted-foreground"><tr><th className="px-3 py-3">Prediction</th><th className="px-3 py-3">Total Pool</th><th className="px-3 py-3">Participants</th><th className="px-3 py-3">Outcome</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Created</th></tr></thead>
-                    <tbody className="divide-y">{pastPredictions.map((prediction) => (
-                      <tr key={prediction.id}>
-                        <td className="px-3 py-3 font-semibold">{prediction.title}</td>
-                        <td className="px-3 py-3">{prediction.total_pool || 0} Credits</td>
-                        <td className="px-3 py-3">{prediction.participant_count || 0} bettors</td>
-                        <td className="px-3 py-3">{prediction.winning_option_id || "—"}</td>
-                        <td className="px-3 py-3"><Badge>{prediction.status}</Badge></td>
-                        <td className="px-3 py-3">{new Date(prediction.created_at).toLocaleString()}</td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
-      {statusError && <StatusMessage id="pred-status" tone="error" role="alert">{statusError}{!enabled && <a className="ml-2 font-semibold underline underline-offset-4" href="/dashboard/settings/billing?from=predictions">Upgrade your plan</a>}</StatusMessage>}
-
-      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent id="pred-drawer" className="max-h-dvh overflow-hidden">
-          <SheetHeader><SheetTitle id="pred-drawer-title">Create Live Prediction</SheetTitle><SheetDescription>Ask a question with outcomes your viewers can choose.</SheetDescription></SheetHeader>
-          <form id="pred-form" className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => void submitPrediction(event)}>
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
-              <Field label="Prediction Question *" id="pred-title" error={fieldErrors["pred-title"]}><Input id="pred-title" value={title} onChange={(event) => setDraft((current) => ({ ...current, "pred-title": event.target.value }))} required placeholder="e.g. Will I clutch this 1v3 round?" /></Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Option A (Yes)" id="pred-opt-1" error={fieldErrors["pred-opt-1"]}><Input id="pred-opt-1" value={optionOne} onChange={(event) => setDraft((current) => ({ ...current, "pred-opt-1": event.target.value }))} required /></Field>
-                <Field label="Option B (No)" id="pred-opt-2" error={fieldErrors["pred-opt-2"]}><Input id="pred-opt-2" value={optionTwo} onChange={(event) => setDraft((current) => ({ ...current, "pred-opt-2": event.target.value }))} required /></Field>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Minimum bet (Credits)" id="pred-min-bet" error={fieldErrors["pred-min-bet"]}><Input id="pred-min-bet" type="number" min="1" value={minBet} onChange={(event) => setDraft((current) => ({ ...current, "pred-min-bet": event.target.value }))} required /></Field>
-                <Field label="Maximum bet (Credits)" id="pred-max-bet" error={fieldErrors["pred-max-bet"]}><Input id="pred-max-bet" type="number" min="1" value={maxBet} onChange={(event) => setDraft((current) => ({ ...current, "pred-max-bet": event.target.value }))} required /></Field>
-              </div>
-              <Field label="Lock betting after (minutes)" id="pred-lock-min"><Input id="pred-lock-min" type="number" min="0" max="1440" value={lockMinutes} onChange={(event) => setDraft((current) => ({ ...current, "pred-lock-min": event.target.value }))} /></Field>
-              {statusError && <StatusMessage tone="error" role="alert">{statusError}{!enabled && <a className="ml-2 font-semibold underline underline-offset-4" href="/dashboard/settings/billing?from=predictions">Upgrade your plan</a>}</StatusMessage>}
-            </div>
-            <SheetFooter className="shrink-0">
-              <Button type="button" id="pred-cancel" variant="outline" onClick={() => { discardDraft(); setCreateOpen(false); }}>Cancel</Button>
-              <Button id="pred-submit" type="submit" disabled={creating || !enabled}>{creating && <Loader2 className="animate-spin" />}Launch Prediction</Button>
-            </SheetFooter>
-          </form>
-        </SheetContent>
-      </Sheet>
-
-      <Sheet open={settleOpen} onOpenChange={(open) => { setSettleOpen(open); if (!open) setSettlingPrediction(null); }}>
-        <SheetContent id="settle-drawer" className="max-h-dvh overflow-hidden">
-          <SheetHeader><SheetTitle>Settle prediction</SheetTitle><SheetDescription id="settle-pred-title">Question: “{settlingPrediction?.title}” — Total Pool: {settlingPrediction?.total_pool || 0} Credits</SheetDescription></SheetHeader>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5" id="settle-options-container">
-            {settlingPrediction?.options.map((option) => (
-              <label key={option.id} className="flex cursor-pointer items-center gap-3 rounded-lg border p-3">
-                <input type="radio" name="settle_opt" value={option.id} checked={selectedOption === option.id} onChange={() => setSelectedOption(option.id)} />
-                <span><strong>{option.label}</strong><span className="block text-xs text-muted-foreground">({option.total_points || 0} Credits wagered)</span></span>
-              </label>
-            ))}
-          </div>
-          {statusError && <p id="settle-status" className="px-6 text-sm text-destructive" role="alert">{statusError}</p>}
-          <SheetFooter className="shrink-0">
-            <Button id="settle-btn-cancel-pred" type="button" variant="ghost" onClick={() => {
-              setPendingAction("cancel");
-              setPendingPrediction(settlingPrediction);
-              setConfirmation({ title: "Cancel prediction", description: "Cancel this prediction? All bets will be fully refunded to viewers.", action: "Cancel prediction", destructive: true });
-            }}>Cancel &amp; refund</Button>
-            <Button id="settle-btn-confirm" type="button" disabled={!selectedOption || settling} onClick={() => {
-              setPendingAction("settle");
-              setConfirmation({ title: "Settle prediction", description: `Declare "${selectedOption.toUpperCase()}" as the winning outcome? Points will be distributed immediately.`, action: "Settle and pay" });
-            }}>{settling && <Loader2 className="animate-spin" />}Settle and pay</Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
-      <ConfirmAction
-        confirmation={confirmation}
-        onCancel={() => { setConfirmation(null); setPendingAction(null); setPendingPrediction(null); }}
-        onConfirm={handleConfirm}
-      />
     </div>
   );
 }

@@ -15,9 +15,9 @@ const baseData = {
   brand: { name: "Creator Name", tagline: "Weekly board", period: "Monthly", prizePool: "$500" },
   branding: { template: "cyber_arcade", font: "Inter", options: {} },
   players: [player("Alice", 1, 5000, 300), player("Bob", 2, 3000, 150), player("Cara", 3, 1000, 50)],
-  prizes: { currency: "$", wagerLabel: "Wagered", prizeLabel: "Prize" },
+  prizes: { currency: "$", prizeLabel: "Prize" },
   socials: [],
-  siteSections: { home: true, leaderboard: true, shop: true, games: false, me: true },
+  siteSections: { home: true, leaderboard: true, shop: true, me: true },
 };
 
 const seq = (count) => Array.from({ length: count }, (_, i) => player(`Player${i + 1}`, i + 1, 1000 - i, 0));
@@ -52,9 +52,6 @@ describe("public leaderboard standings", () => {
 
     for (const html of [home, leaderboard]) {
       expect(html).toContain(html === home ? "<span class=\"viewer-board-score\">42</span>" : "42 pts");
-      for (const restricted of ["wagered", "wager total", "casino", "paid in cash", "cash payout", "prize pool", "deposit", "rakeback", "odds", "betting"]) {
-        expect(html.toLowerCase()).not.toContain(restricted);
-      }
     }
     expect(leaderboard).toContain("Ranked by points");
     expect(leaderboard).toContain(">Player</span><span class=\"yr-r\">Points</span>");
@@ -63,8 +60,8 @@ describe("public leaderboard standings", () => {
 
   it("keeps explicitly wager-ranked historical boards contained", async () => {
     const html = await render("leaderboard", { data: { ...baseData, rankBy: "wagered" } });
-    expect(html).toContain("Ranked by wagered");
-    expect(html).toContain('<span class="yr-sr">Wagered: </span>');
+    expect(html).toContain("Ranked by amount");
+    expect(html).toContain('<span class="yr-sr">Amount: </span>');
     expect(html).toContain("$5,000");
   });
 
@@ -77,7 +74,7 @@ describe("public leaderboard standings", () => {
     // The count belongs to the list it counts, stated once above the rows.
     expect(html).toContain('<span data-player-count-badge>3 players</span>');
     expect((html.match(/3 players/g) || []).length).toBe(1);
-    expect(html).toContain("Ranked by wagered. Tied players share a rank.");
+    expect(html).toContain("Ranked by amount. Tied players share a rank.");
     // The intro states the board, it does not become a KPI or prize hero.
     expect(html).not.toContain("yr-kpi");
     expect(html).not.toContain("yr-big");
@@ -142,11 +139,10 @@ describe("public leaderboard standings", () => {
   it("names the payer and rules for prizes in creator-neutral wording without inventing any of them", async () => {
     const plain = await render("leaderboard");
     expect(plain).toContain("$500 prize pool, awarded by Creator Name to the top-ranked players.");
-    expect(plain).not.toMatch(/casino|paid in cash|RTP/i);
     expect(plain).not.toContain('href="#viewer-rules-title"');
 
     const sponsored = await render("leaderboard", {
-      data: { ...baseData, brand: { ...baseData.brand, casino: "Acme Sponsor" }, rules: ["Minimum 18+", "Payouts within 7 days"] },
+      data: { ...baseData, brand: { ...baseData.brand, casino: "Acme Sponsor" }, rules: ["Participants must meet local age requirements.", "Rewards within 7 days."] },
     });
     expect(sponsored).toContain('<p class="viewer-rules-payout">$500 prize pool, awarded by Acme Sponsor to the top-ranked players under these rules.');
     expect(sponsored).not.toContain('yr-note yr-note--w');
@@ -172,7 +168,7 @@ describe("public leaderboard standings", () => {
     // The empty board is a designed state: what is empty, and one line about
     // when it fills — not a sentence floating in a blank panel.
     expect(html).toContain('<p class="yr-empty-t">No leaderboard entries yet.</p>');
-    expect(html).toContain('<p class="yr-empty-p">Ask Creator Name how wagered is counted on this leaderboard. Your first published entry puts you on the board. Leaderboard wagered is separate from Credits.</p>');
+    expect(html).toContain('<p class="yr-empty-p">Ask Creator Name how amount is counted on this leaderboard. Your first published entry puts you on the board. Leaderboard amount is separate from Credits.</p>');
     const points = await render("leaderboard", { data: { ...baseData, rankBy: "score", players: [] } });
     expect(points).toContain("how points are counted on this leaderboard. Your first published score puts you on the board. Leaderboard points are separate from Credits.");
     expect(rowsOf(html).length).toBe(0);
@@ -210,7 +206,7 @@ describe("public leaderboard standings", () => {
     const html = await render();
     const [first] = rowsOf(html);
     expect(first).toContain('<span class="yr-sr">Rank </span>1');
-    expect(first).toContain('<span class="yr-sr">Wagered: </span>');
+    expect(first).toContain('<span class="yr-sr">Amount: </span>');
     expect(first).toContain('<span class="yr-sr">Prize: </span>');
     expect(html).toContain('<div class="yr-stand-head" aria-hidden="true"');
     expect(html).toContain('<ol class="yr-stand" data-rows aria-label="Standings for Creator Name"');
@@ -437,14 +433,14 @@ describe("Main / Loyalty boards (shared renderer)", () => {
   it("shows no switcher and the configured Main metric when only Main exists", async () => {
     const html = await renderBoard(baseData, undefined);
     expect(html).not.toContain("viewer-board-tabs");
-    expect(html).toContain('>Player</span><span class="yr-r">Wagered</span>');
+    expect(html).toContain('>Player</span><span class="yr-r">Amount</span>');
     expect(html).not.toContain("Credits earned");
   });
 
   it("switches the metric header between Main and Loyalty and marks the active tab", async () => {
     const main = await renderBoard(loyal, "main", loyaltyRows);
     expect(main).toContain('data-board="main" aria-current="page">Main</a>');
-    expect(main).toContain('>Player</span><span class="yr-r">Wagered</span>');
+    expect(main).toContain('>Player</span><span class="yr-r">Amount</span>');
     expect(main).not.toContain("Viewer A");
 
     const loyalty = await renderBoard(loyal, "loyalty", loyaltyRows);

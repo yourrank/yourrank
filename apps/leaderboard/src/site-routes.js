@@ -16,7 +16,6 @@ import { generateCsrfToken, csrfCookie } from "./middleware/csrf.js";
 import { renderPasswordGate as defaultRenderPasswordGate } from "./password-gate.js";
 import { renderSite as defaultRenderSite, effectivePublicSections, parsePublicBoard, publicLeaderboardBoards, PUBLIC_BOARD_PAGE_SIZE, siteSectionFromPath, siteSectionHref, siteSectionPath } from "@yourrank/shared/site-render";
 import { getViewerSiteData as defaultGetViewerSiteData, getShopItem as defaultGetShopItem, getLoyaltyBoard as defaultGetLoyaltyBoard } from "./site-data.js";
-import { gamesIslandHead, gamesIslandMount } from "@yourrank/shared/games-embed";
 import {
   cachedPublicBoardResponse,
   getPublicBoardCache,
@@ -29,7 +28,7 @@ import {
 import { setRequestMetrics } from "@yourrank/shared/request-id";
 import { canUseFeature } from "@yourrank/shared/plans";
 
-const SECTIONS = new Set(["home", "leaderboard", "shop", "games", "me"]);
+const SECTIONS = new Set(["home", "leaderboard", "shop", "me"]);
 // Former public segments; requests using them resolve to the section and carry
 // `redirectTo`, the canonical path, so old links and bookmarks keep working.
 const LEGACY_SEGMENTS = new Map([["me", "me"]]);
@@ -152,7 +151,7 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     }
 
     const siteSections = effectivePublicSections(r.data);
-    if (!siteSections[section] && !(section === "games" && isDemo)) {
+    if (!siteSections[section]) {
       // A disabled leaderboard is not a public section at all: send visitors
       // (and stale bookmarks) to Home rather than rendering standings or
       // answering a bare 404. Other disabled sections keep the 404 contract.
@@ -209,12 +208,11 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
       const opts = section === "home"
         ? { shop: true, claims: !!viewer, ledger: !!viewer }
         : section === "shop"
-          ? { shop: true, raffles: true, claims: !!viewer }
+          ? { shop: true, claims: !!viewer }
           : { shop: siteSections.shop !== false, claims: !!viewer, ledger: !!viewer, participation: !!viewer, checkin: !!viewer };
       viewerData = await getViewerSiteData(r.id, viewer?.id || null, opts);
     } else if (viewer) {
-      // The viewer overview reads membership Claims; Games keeps its balance-only contract.
-      viewerData = await getViewerSiteData(r.id, viewer.id, section === "games" ? {} : { shop: siteSections.shop !== false, claims: true });
+      viewerData = await getViewerSiteData(r.id, viewer.id, { shop: siteSections.shop !== false, claims: true });
     }
 
     // The detail page reads its reward directly so a withdrawn (inactive) reward
@@ -231,34 +229,6 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     }
 
     const loyalty = board === "loyalty" ? await getLoyaltyBoard(r.id) : [];
-
-    if (section === "games" && (url.searchParams.get("embed") === "1" || url.searchParams.get("isolated") === "1")) {
-      const b = r.data?.brand || {};
-      const mount = gamesIslandMount({
-        slug,
-        nonce,
-        siteName: b.name || slug,
-        logoUrl: logoUrl || null,
-        creditsUrl: `/${slug}/credits`,
-        signInUrl: r.viewerKickAuthEnabled
-          ? `/api/viewer/auth/kick?returnTo=${encodeURIComponent(isCustomDomain ? "/games" : `/${slug}/games`)}`
-          : (r.viewerDiscordAuthEnabled
-            ? `/api/viewer/auth/discord?returnTo=${encodeURIComponent(isCustomDomain ? "/games" : `/${slug}/games`)}`
-            : "/me"),
-        header: false,
-      });
-      const embedHtml = `<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Mini-games preview</title>
-${gamesIslandHead()}
-<style nonce="${nonce}">
-  html, body { margin: 0; padding: 0; background: #0c1017; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; }
-  .gx-embed-wrap { max-width: 100%; margin: 0 auto; padding: 12px; }
-</style>
-</head><body><div class="gx-embed-wrap">${mount}</div></body></html>`;
-      return new Response(embedHtml, { headers: { ...Object.fromEntries(respHeaders.entries()), "content-type": "text/html; charset=utf-8" } });
-    }
 
     const html = await renderSite({
       r,

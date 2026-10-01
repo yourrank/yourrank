@@ -18,7 +18,7 @@ Date: 2026-09-06. Implements the accepted findings in `yourrank-roles-ux-feature
 
 The existing local Home verification-specific next action was already implemented; it was rebuilt and its existing setup regression checks passed. Production onboarding drift remains a deployment validation item. No second onboarding implementation was added.
 
-Role and feature strategy remains the audit decision: keep Owner/Moderator, separate Viewer Account/Membership/Player/Telegram identities, retain gated and background capabilities and required aliases, and keep deferred capabilities out of navigation. No role, entitlement, database or restricted legacy feature was redesigned.
+Role and feature strategy remains the audit decision: keep Owner/Moderator, separate Viewer Account/Membership/Player/Telegram identities, retain gated and background capabilities and required aliases, and keep deferred capabilities out of navigation. No role, entitlement, or database behavior was redesigned.
 
 ## Verified
 

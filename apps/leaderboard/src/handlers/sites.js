@@ -862,9 +862,7 @@ export async function handleDomainVerify(request, env) {
   }
 }
 
-const GAME_KEYS = new Set(["mines", "plinko", "dice", "limbo"]);
-
-// POST /api/site/sections — toggle public viewer sections (shop, credits, games).
+// POST /api/site/sections — toggle public viewer sections.
 export async function handlePostSiteSections(request, env) {
   const { user, res } = await requireUser(request, env);
   if (res) return res;
@@ -881,69 +879,4 @@ export async function handlePostSiteSections(request, env) {
   const r = await saveSite(env, user, { siteSections: payload.siteSections }, siteId, request);
   if (r.denial) return denied(r.denial, { actorId: user.id, request });
   return r.error ? bad(r.error, 400) : json({ ok: true, updatedAt: r.updatedAt, siteId: r.siteId });
-}
-
-// GET /api/site/games/settings
-export async function handleGetSiteGameSettings(request, env) {
-  const { user, res } = await requireUser(request, env);
-  if (res) return res;
-  const url = new URL(request.url);
-  const siteId = url.searchParams.get("siteId");
-  const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
-  if (!site) return bad("no site", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageBot");
-  if (authorization.res) return authorization.res;
-  const rows = await query(
-    `SELECT game, enabled, min_bet AS "minBet", max_bet AS "maxBet", house_edge_bps AS "houseEdgeBps", daily_loss_cap AS "dailyLossCap"
-     FROM site_game_settings WHERE site_id=$1`,
-    [site.id]
-  );
-  return json({ ok: true, settings: rows || [] });
-}
-
-// POST /api/site/games/settings
-export async function handlePostSiteGameSettings(request, env) {
-  const { user, res } = await requireUser(request, env);
-  if (res) return res;
-  if (user.status === "suspended") return bad("This account is suspended.", 403);
-  if (!(await rateLimit(env, `save-game-settings:${user.id}`, 30, 60)).ok) return bad("Too many requests. Try again shortly.", 429);
-  const body = await readJson(request);
-  if (!body || !body.siteId || !body.game) return bad("siteId and game required");
-  const site = await getBoardById(env, user.id, body.siteId);
-  if (!site) return bad("no site", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageBot");
-  if (authorization.res) return authorization.res;
-  if (!GAME_KEYS.has(body.game)) return bad("invalid game", 400);
-
-  const minBet = Number.isInteger(body.minBet) && body.minBet > 0 ? body.minBet : 1;
-  let maxBet = Number.isInteger(body.maxBet) && body.maxBet > 0 ? body.maxBet : minBet;
-  if (maxBet < minBet) maxBet = minBet;
-  const houseEdgeBps = Number.isInteger(body.houseEdgeBps) && body.houseEdgeBps >= 0 && body.houseEdgeBps <= 1000 ? body.houseEdgeBps : 100;
-  const dailyLossCap = body.dailyLossCap === null || body.dailyLossCap === undefined
-    ? null
-    : (Number.isInteger(body.dailyLossCap) && body.dailyLossCap > 0 ? body.dailyLossCap : null);
-  const enabled = body.enabled === true;
-
-  await exec(
-    `INSERT INTO site_game_settings (site_id, game, enabled, min_bet, max_bet, house_edge_bps, daily_loss_cap)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (site_id, game) DO UPDATE SET
-       enabled = EXCLUDED.enabled,
-       min_bet = EXCLUDED.min_bet,
-       max_bet = EXCLUDED.max_bet,
-       house_edge_bps = EXCLUDED.house_edge_bps,
-       daily_loss_cap = EXCLUDED.daily_loss_cap`,
-    [site.id, body.game, enabled, minBet, maxBet, houseEdgeBps, dailyLossCap]
-  );
-
-  await logAudit({
-    actorId: user.id,
-    action: "game_settings_update",
-    entityType: "site",
-    entityId: site.id,
-    request,
-    details: { board_id: site.id, board_slug: site.slug, game: body.game, enabled, minBet, maxBet, houseEdgeBps, dailyLossCap },
-  });
-
-  return json({ ok: true });
 }

@@ -30,7 +30,7 @@ const postbackData = {
   ok: true,
   status: "pending",
   postback: {
-    signedEndpoint: "https://api.example.test/deposit?key=signed",
+    signedEndpoint: "https://api.example.test/conversion?key=signed",
     key: "private-key",
     legacyUrl: "https://api.example.test/legacy?key=legacy",
     createdAt: "2026-02-01T00:00:00Z",
@@ -126,9 +126,9 @@ describe("Settings React account and connection actions", () => {
 
     await actAndFlush(() => document.getElementById("postbackCopyManager").click());
     expect(copied).toBe(
-      "Deposit tracking link: https://api.example.test/deposit?key=signed\n" +
+      "Conversion tracking link: https://api.example.test/conversion?key=signed\n" +
       "Method: POST\n" +
-      "Sign the raw query string with HMAC-SHA256 using your deposit tracking key, then send the hex signature in the X-Postback-Signature header.\n" +
+      "Sign the raw query string with HMAC-SHA256 using your conversion tracking key, then send the hex signature in the X-Postback-Signature header.\n" +
       "Also include X-Postback-Key with your key.\n" +
       "Legacy unsigned link: https://api.example.test/legacy?key=legacy (sunset 2026-10-01)",
     );

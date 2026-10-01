@@ -8,7 +8,7 @@ import worker from "../index.js";
 
 describe("dashboard routes", () => {
   it("round-trips every section and sub-tab", () => {
-    for (const [page, tab] of [["home", ""], ["board", "players"], ["boards", ""], ["games", ""], ["performance", "referrals"], ["site", ""]]) {
+    for (const [page, tab] of [["home", ""], ["board", "players"], ["boards", ""], ["performance", "referrals"], ["site", ""]]) {
       expect(parseDashboardPath(dashboardPath(page, tab))).toEqual({ page, tab });
     }
   });
@@ -44,7 +44,6 @@ describe("dashboard routes", () => {
     expect(dashboardTitleForPath("/dashboard")).toBe("Home · YourRank");
     expect(dashboardTitleForPath("/dashboard/leaderboard/players")).toBe("Standings · Community · YourRank");
     expect(dashboardTitleForPath("/dashboard/leaderboard/design")).toBe("Appearance · Community · YourRank");
-    expect(dashboardTitleForPath("/dashboard/games")).toBe("Games · YourRank");
   });
 
   it("leaves the account settings document to the Worker", () => {
@@ -91,7 +90,6 @@ describe("dashboard routes", () => {
       ["/dashboard/settings/integrations", "/dashboard/site/connections"],
       ["/dashboard/settings/plan", "/dashboard/settings/billing"],
       ["/dashboard/billing", "/dashboard/settings/billing"],
-      ["/dashboard/giveaways/preds", "/dashboard/giveaways/predictions"],
     ]) {
       const response = await worker.fetch(new Request(`https://yourrank.site${legacy}?viewer=GhostSniperr`), {}, {});
       expect(response.status, legacy).toBe(301);

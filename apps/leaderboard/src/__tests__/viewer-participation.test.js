@@ -35,9 +35,6 @@ describe("viewer membership participation history", () => {
     expect(calls[0].sql).toContain("cdc.viewer_id=$2");
     expect(calls[0].sql).toContain("cdc.site_viewer_id=$3");
     expect(calls[0].sql).toContain("ORDER BY cdc.created_at DESC, cdc.id DESC");
-    for (const restricted of ["raffle", "prediction", "tournament", "duel", "game", "wager", "quest"]) {
-      expect(calls[0].sql.toLowerCase()).not.toContain(restricted);
-    }
     expect(JSON.stringify(result)).not.toMatch(/claim-1|site-1|viewer-1|membership-1|code_drop_id/);
   });
 

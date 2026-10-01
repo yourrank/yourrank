@@ -30,7 +30,6 @@ export function preserveSiteContextLinks(activeSiteId = "") {
   ]);
   const siteDestinations = new Set([
     "/dashboard",
-    "/dashboard/games",
     "/dashboard/analytics/activity",
     "/dashboard/site",
     "/dashboard/leaderboards",

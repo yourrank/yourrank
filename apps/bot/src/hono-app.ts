@@ -302,18 +302,18 @@ export function buildHonoApp({
   });
 
   // =================================================================
-  // 2b) CASINO POSTBACKS
+  // 2b) PARTNER POSTBACKS
   //     Two equivalent paths to the same recordConversion():
   //       - SIGNED (preferred): POST /pb
   //           X-Postback-Key: <postback_key>
   //           X-Postback-Signature: <hex HMAC-SHA256 of the raw query string,
   //                                  keyed by the postback_key>
-  //           ?event=deposit&amount=50&click_ref=x
+  //           ?event=conversion&amount=50&click_ref=x
   //         The key never rides the URL (no access-log/Referer leakage) and the
   //         HMAC means a logged/intercepted request can't be forged or replayed
   //         with new params. Use this once your affiliate networks support it.
-  //       - LEGACY (still works, for casinos already configured): GET|POST
-  //         /pb/:key?event=deposit&amount=50&click_ref=x — key in the URL path.
+  //       - LEGACY (still works, for existing integrations): GET|POST
+  //         /pb/:key?event=conversion&amount=50&click_ref=x — key in the URL path.
   //         Rate-limited per key + amount clamped; no signature. Safe to keep
   //         until every integration migrates, then deprecate.
   // =================================================================

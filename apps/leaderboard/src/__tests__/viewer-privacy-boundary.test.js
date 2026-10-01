@@ -18,10 +18,10 @@ function siteData() {
     brand: { name: "Creator", tagline: "Community", period: "Monthly", prizePool: "" },
     branding: { template: "cyber_arcade", font: "Inter", options: {} },
     players: [],
-    prizes: { currency: "$", wagerLabel: "Score", prizeLabel: "Prize" },
+    prizes: { currency: "$", prizeLabel: "Prize" },
     shopItems: [{ id: "item-1", name: "Shoutout", cost: 10, active: true }],
     socials: [],
-    siteSections: { home: true, leaderboard: true, shop: true, games: true, me: true },
+    siteSections: { home: true, leaderboard: true, shop: true, me: true },
   };
 }
 

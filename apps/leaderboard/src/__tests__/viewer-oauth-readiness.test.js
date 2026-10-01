@@ -8,7 +8,6 @@ import {
 } from "../handlers/viewer-auth.js";
 import { handleViewerMe } from "../handlers/viewer-dashboard.js";
 import { viewerDashboardPage } from "../pages/viewer-dashboard.js";
-import { renderSite } from "@yourrank/shared/site-render";
 import { maskViewerAuthProviders } from "../site.js";
 
 const request = (path = "/me") => new Request(`https://yourrank.site${path}`);
@@ -240,22 +239,4 @@ describe("Viewer provider availability rendering", () => {
     expect(none).toContain("Viewer sign-in is not available on this site right now");
   });
 
-  test("games selects the available provider and falls back to /me", async () => {
-    const base = { data: { brand: { name: "Demo" }, siteSections: { games: true } }, plan: "pro" };
-    const discord = await renderSite({
-      r: { ...base, viewerKickAuthEnabled: false, viewerDiscordAuthEnabled: true },
-      section: "games", viewer: null, viewerData: null,
-      opts: { nonce: "n", homeUrl: "https://yourrank.site", slug: "demo", isCustomDomain: false, watermark: false },
-    });
-    expect(discord).toContain("/api/viewer/auth/discord?");
-    expect(discord).not.toContain("/api/viewer/auth/kick?");
-
-    const none = await renderSite({
-      r: { ...base, viewerKickAuthEnabled: false, viewerDiscordAuthEnabled: false },
-      section: "games", viewer: null, viewerData: null,
-      opts: { nonce: "n", homeUrl: "https://yourrank.site", slug: "demo", isCustomDomain: false, watermark: false },
-    });
-    expect(none).toContain('href="/me"');
-    expect(none).not.toContain("/api/viewer/auth/kick?");
-  });
 });

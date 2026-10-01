@@ -1,6 +1,6 @@
 // Tests for the public multi-section site shell.
 // Covers route parsing, section visibility enforcement, and the logged-out vs
-// logged-in rendering split for Home, Leaderboard, Shop, Games and My activity.
+// logged-in rendering split for Home, Leaderboard, Shop and My activity.
 //
 // Run: bun test src/__tests__/site-routes.test.js
 
@@ -26,7 +26,7 @@ const DEFAULT_EXTRA = {
   playerFields: { score: true, hands: true, netProfit: true, winRate: true, change: true },
   legal: {
     terms: "", termsEnabled: true, privacy: "", privacyEnabled: true,
-    responsible: "", responsibleEnabled: true, cookies: "", cookiesEnabled: true,
+    cookies: "", cookiesEnabled: true,
     refund: "", refundEnabled: true, contact: "", contactEnabled: true,
   },
 };
@@ -44,7 +44,7 @@ const SHOP_ITEMS = [
   { id: "item-2", name: "Discord role", description: "Custom role for one month.", cost: 500, stock: null, active: true },
 ];
 
-function baseSiteData(siteSections = { home: true, leaderboard: true, shop: true, games: true, me: true }) {
+function baseSiteData(siteSections = { home: true, leaderboard: true, shop: true, me: true }) {
   return {
     brand: {
       name: "TestStreamer",
@@ -91,7 +91,7 @@ const routeSite = {
     if (slug === "suspended") return { id: "site-s", suspended: true, data: {} };
     if (slug === "password") return { id: "site-p", slug, requiresPassword: true, name: "Private Board", data: {} };
     if (slug === "error") throw new Error("render failure");
-    if (slug === "disabled") return makeSite("disabled", { home: true, leaderboard: true, shop: false, games: false, me: false });
+    if (slug === "disabled") return makeSite("disabled", { home: true, leaderboard: true, shop: false, me: false });
     // Show Leaderboard = OFF: the sections block toggle is false while the
     // legacy siteSections.leaderboard flag stays stale-true.
     if (slug === "nolb") {
@@ -200,7 +200,6 @@ describe("parseSitePath", () => {
   it("maps /<slug>/<section> to the named section", () => {
     expect(parseSitePath("/foo/leaderboard", false)).toEqual({ slug: "foo", section: "leaderboard" });
     expect(parseSitePath("/foo/shop", false)).toEqual({ slug: "foo", section: "shop" });
-    expect(parseSitePath("/foo/games", false)).toEqual({ slug: "foo", section: "games" });
     expect(parseSitePath("/foo/activity", false)).toEqual({ slug: "foo", section: "me" });
   });
 
@@ -244,9 +243,7 @@ describe("parseSitePath", () => {
     expect(isCustomViewerApiPath("POST", "/api/viewer/membership/join")).toBe(true);
     expect(isCustomViewerApiPath("POST", "/api/events/drops/claim")).toBe(true);
     expect(isCustomViewerApiPath("POST", "/api/viewer/checkin")).toBe(true);
-    expect(isCustomViewerApiPath("POST", "/api/viewer/raffles/buy")).toBe(true);
     expect(isCustomViewerApiPath("GET", "/api/events/drops/claim")).toBe(false);
-    expect(isCustomViewerApiPath("POST", "/api/events/raffles")).toBe(false);
     expect(isCustomViewerApiPath("POST", "/api/viewer/redeem")).toBe(false);
   });
 
@@ -345,9 +342,6 @@ describe("section visibility", () => {
 
     const shop = await renderSiteRoute({ request: req("https://example.com/disabled/shop"), env, ctx, nonce: "n", slug: "disabled", section: "shop", isCustomDomain: false });
     expect(shop.status).toBe(404);
-
-    const games = await renderSiteRoute({ request: req("https://example.com/disabled/games"), env, ctx, nonce: "n", slug: "disabled", section: "games", isCustomDomain: false });
-    expect(games.status).toBe(404);
 
     const me = await renderSiteRoute({ request: req("https://example.com/disabled/activity"), env, ctx, nonce: "n", slug: "disabled", section: "me", isCustomDomain: false });
     expect(me.status).toBe(404);
@@ -479,28 +473,12 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     const dataCall = routeSiteData.calls.find((call) => call.opts);
-    expect(dataCall.opts).toMatchObject({ shop: true, raffles: true });
+    expect(dataCall.opts).toMatchObject({ shop: true });
     expect(html).toContain("Shoutout");
     expect(html).toContain("/streamer/activity?intent=reward&reward=");
     expect(html).toContain("Sign in to claim");
     expect(html).not.toContain("/api/viewer/auth/");
     expect(html).not.toContain(">Claim<");
-  });
-
-  it("games shows a locked panel with a sign-in CTA when logged out", async () => {
-    const res = await renderSiteRoute({ request: req("https://example.com/streamer/games"), env, ctx, nonce: "n", slug: "streamer", section: "games", isCustomDomain: false });
-    expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain("Sign in to play originals");
-    expect(html).toContain("Sign in with Kick");
-  });
-
-  it("uses a custom-domain-served return path for the games sign-in CTA", async () => {
-    const res = await renderSiteRoute({ request: req("https://streamer.example/games"), env, ctx, nonce: "n", slug: "streamer", section: "games", isCustomDomain: true });
-    expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain("returnTo=https%3A%2F%2Fstreamer.example%2Fgames");
-    expect(html).not.toContain("returnTo=https%3A%2F%2Fstreamer.example%2Fstreamer%2Fgames");
   });
 
   it("My activity explains membership when logged out", async () => {

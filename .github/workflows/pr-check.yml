@@ -73,7 +73,7 @@ jobs:
 
       - name: Typecheck leaderboard
         working-directory: apps/leaderboard
-        run: bun run typecheck:games
+        run: bun run typecheck:react
 
       - name: Typecheck monitor
         working-directory: apps/monitor
@@ -260,16 +260,6 @@ jobs:
           N1_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
         run: bun run verify:n1-compatibility
 
-      # The wagering money-safety tests (atomic debit, no negative balance under
-      # concurrency, idempotency, authorization matrix) need a real Postgres, so
-      # they run here against the freshly migrated database. They self-skip in
-      # the plain `test` job where GAMES_TEST_DATABASE_URL is unset.
-
-      - name: Games wagering tests (against migrated schema)
-        env:
-          GAMES_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
-        run: bun test packages/shared/src/__tests__/games-wagering.test.ts
-
       - name: Rollup tests (against migrated schema)
         env:
           ROLLUP_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
@@ -447,8 +437,8 @@ jobs:
           echo "E2E_BASE_URL=$BASE_URL" >> "$GITHUB_ENV"
           echo "E2E_DB_URL=postgresql://$PGUSER:$PGPASSWORD@$PGHOST:$PGPORT/$PGDATABASE" >> "$GITHUB_ENV"
 
-      # There is no headless Kick/Telegram OAuth, so the viewer session the
-      # wagering scenarios need is minted directly in the ephemeral database.
+      # There is no headless Kick/Telegram OAuth, so the viewer session is
+      # minted directly in the ephemeral database.
       - name: Mint a viewer session
         working-directory: e2e
         run: MINT_VIEWER_ENV_FILE="$GITHUB_ENV" bun scripts/mint-viewer.ts

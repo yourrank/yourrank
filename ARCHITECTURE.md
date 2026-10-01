@@ -63,9 +63,8 @@ an index and does not aggregate these histories.
 
 The Leaderboard Worker owns one narrow creator automation path inside the
 existing Activities product. `safe_code_drop` is the only server-allowlisted
-kind. Manual and scheduled creation share `code-drop-service.js`; restricted
-Games, wagering, predictions, paid chance, raffles, tournament operations,
-payout, and settlement handlers are not reachable through the scheduler.
+kind. Manual and scheduled creation share `code-drop-service.js`; excluded
+mechanics are not reachable through the scheduler.
 
 `activity_templates` stores inert selected-site configuration. A schedule copies
 the validated template name and configuration, so later template edits do not

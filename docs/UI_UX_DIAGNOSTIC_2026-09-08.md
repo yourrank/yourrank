@@ -175,7 +175,7 @@ Canonical scope source: `packages/shared/src/dashboard-routes.ts`, including ali
 | Telegram | Overview, no-bot onboarding, cross-Worker navigation | Commands/broadcasts/offers and connection actions |
 | Viewer | Preview content at desktop/mobile device selection | Public published site, sign-in, membership and claims journeys |
 
-Restricted legacy Games, wagering, predictions and chance-based flows were intentionally excluded under AGENTS.md. Sensitive account/billing/permission mutations were outside this diagnostic.
+Removed chance-based activities were outside this diagnostic. Sensitive account/billing/permission mutations were also outside its scope.
 
 **PASSED:** desktop Cancel/Discard focus/inert release; editor discard restored original five players; mobile drawer opened and closed through destination navigation; mobile Home fit the inspected viewport; Settings account data completed loading; actual preview rendered after device selection. Representative console reads returned no error/warning entries. Console silence does not invalidate the reproduced bugs.
 

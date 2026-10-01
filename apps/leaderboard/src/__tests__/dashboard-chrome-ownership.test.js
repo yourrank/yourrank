@@ -182,7 +182,7 @@ function deriveRenderableRoutes() {
   }
   routes.push({ path: "/dashboard/giveaways", render: "giveaways", tab: "hub", hasSubnav: false, hasBreadcrumbs: false });
   for (const [tab] of GIVEAWAY_TABS) {
-    routes.push({ path: `/dashboard/giveaways/${tab === "preds" ? "predictions" : tab}`, render: "giveaways", tab, hasSubnav: true, hasBreadcrumbs: true });
+    routes.push({ path: `/dashboard/giveaways/${tab}`, render: "giveaways", tab, hasSubnav: true, hasBreadcrumbs: true });
   }
   // Tournaments is an Engage rail child with no Giveaways subnav.
   routes.push({ path: "/dashboard/giveaways/tournaments", render: "giveaways", tab: "tournaments", hasSubnav: false, hasBreadcrumbs: true });
@@ -371,7 +371,6 @@ describe("dashboard chrome ownership", () => {
     expect(uncoveredWorkerRoutes).toEqual([]);
     for (const path of [
       "/dashboard/giveaways/chat",
-      "/dashboard/giveaways/predictions",
       "/dashboard/site/connections",
       "/dashboard/rewards/rules",
       "/dashboard/settings/data",
@@ -481,7 +480,7 @@ describe("dashboard chrome ownership", () => {
     const giveaways = PAGES.giveaways.Component({ user }).toString();
     expect(giveaways).toContain('id="giveaway-root"');
     expect(giveaways).toContain('data-tab="chat"');
-    expect(GIVEAWAY_TABS.map(([, label]) => label)).toEqual(["Chat Giveaway", "Raffle", "Prediction"]);
+    expect(GIVEAWAY_TABS.map(([, label]) => label)).toEqual(["Chat Giveaway"]);
     const giveawaysPageSource = readFileSync(new URL("../react/pages/giveaways/page.tsx", import.meta.url), "utf8");
     expect(giveawaysPageSource).toContain('<nav className="v3-tabs gw-subnav" aria-label="Giveaways">');
     expect(giveawaysPageSource).toContain('aria-current={active === key ? "page" : undefined}');

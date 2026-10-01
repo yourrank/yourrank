@@ -95,7 +95,7 @@ export function leaderboardPageHtml(opts: LeaderboardPageOpts): string {
   <div class="gm-shell-inner">
     <a class="gm-brand" href="${footerBrandHref}"><span class="gm-brand-mark">${brandMarkSvg()}</span><span class="gm-brand-word">YourRank</span></a>
     <nav class="gm-shell-footer-links" aria-label="Legal">
-      <a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/contact">Contact</a><a href="/responsible">Responsible Play</a>
+      <a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/contact">Contact</a>
     </nav>
     <span class="gm-shell-footer-copy">© {{YEAR}} YourRank</span>
   </div>

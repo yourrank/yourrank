@@ -59,7 +59,7 @@ only read and arrange it.
    no bare selectors — templates must never leak into each other (preview
    compare, live switching).
 3. **Keep the client contract.** `leaderboard.js` drives countdown, rows,
-   top-3, payouts, socials, and live updates via `data-*` hooks.
+   top-3, reward details, socials, and live updates via `data-*` hooks.
    Single-element hooks (`data-rows`, `data-top3`, `data-timer-grid`,
    `data-countdown`, `data-count`, `data-payouts`, `data-find-rank`,
    `data-find-result`, `data-rules`, `data-past-grid`, `data-socials`,

@@ -120,8 +120,7 @@ identity ownership.
 - `credit_ledger.kick_event_id`, `credit_reward_mappings.kick_reward_*` (read through
   `reward-mappings.ts` as `externalReward*`; writes still target the `kick_reward_*` names).
 - Remaining inline `kick_username || discord_username` fallbacks: `assets/credits.js` (dashboard
-  member/redemption rows), `feedback.js` (persists `kick_username` into `viewer_feedback`),
-  `duels.js` (legacy games scope, out of bounds).
+  member/redemption rows) and `feedback.js` (persists `kick_username` into `viewer_feedback`).
 
 ## C. Provider-specific code (correctly provider-specific)
 
@@ -216,9 +215,8 @@ Readers that hard-code a provider where the concept is generic:
 
 - Display name: `viewer.kick_username || viewer.discord_username` in
   `packages/shared/src/site-render.ts`, `apps/leaderboard/src/handlers/people.js`,
-  `apps/leaderboard/src/handlers/viewer-dashboard.js`, `apps/leaderboard/src/handlers/feedback.js`
-  (persists `kick_username` into `viewer_feedback`), `apps/leaderboard/src/handlers/duels.js`
-  (looks viewers up by `lower(kick_username)` — legacy games scope, not touched).
+  `apps/leaderboard/src/handlers/viewer-dashboard.js`, and `apps/leaderboard/src/handlers/feedback.js`
+  (persists `kick_username` into `viewer_feedback`).
 - Provider labels: inline `provider === "kick" ? "Kick" : …` ternaries in
   `apps/leaderboard/src/assets/viewer-dashboard.js`, `people.js`.
 - `ViewerRecord` type in `packages/shared/src/viewer-session.ts` exposes `kick_*` / `discord_*`.

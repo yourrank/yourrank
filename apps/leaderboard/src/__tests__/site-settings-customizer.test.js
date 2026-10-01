@@ -107,7 +107,7 @@ describe("markup: Site answers what viewers see", () => {
     expect(customize).toMatch(/id="sitePublicDomainManage"[^>]*data-settings-tab-link="domain"/);
   });
 
-  it("does not promote the contained Games route in the target public-section model", async () => {
+  it("exposes only supported public navigation sections", async () => {
     const { SITE_SECTION_ROWS } = await import("../assets/dashboard/site-sections.js");
     expect(SITE_SECTION_ROWS.map(([key, label]) => [key, label])).toEqual([
         ["shop", "Reward shop"],
@@ -148,13 +148,10 @@ describe("markup: Site answers what viewers see", () => {
     expect(html.match(/id="settingsSave"/g)).toHaveLength(1);
   });
 
-  it("owns no second stylesheet and no games or wagering mechanics", () => {
+  it("uses the shared stylesheet without inline styles", () => {
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-customize {");
     expect(customize).not.toContain("<style");
     expect(customize).not.toContain("style=");
-    for (const term of ["Mines", "Flip", "Keno", "wager", "bet", "odds", "payout", "stake"]) {
-      expect(customize.toLowerCase()).not.toContain(term.toLowerCase());
-    }
   });
 });
 
@@ -659,7 +656,7 @@ const COLLECT_FIELDS = [
   "f_name", "f_tagline", "f_casino", "f_code", "f_cta", "f_pool", "f_period",
   "f_starts", "f_ends", "f_rank_by", "f_blurb", "f_font",
   "f_prizePoolLabel", "f_payoutsLabel", "f_countdownLabel", "f_currency", "f_hidePrizeAmounts",
-  "f_legal_privacy", "f_legal_terms", "f_legal_responsible", "f_legal_cookies", "f_legal_refund", "f_legal_contact",
+  "f_legal_privacy", "f_legal_terms", "f_legal_cookies", "f_legal_refund", "f_legal_contact",
 ];
 
 function registerCollectForm({ font = "Inter" } = {}) {

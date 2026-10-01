@@ -1,8 +1,6 @@
 import { describe, it, expect, mock, beforeEach } from "bun:test";
 import {
-  handleExportRaffleWinnersCsv,
   handleExportDropClaimsCsv,
-  handleExportPredictionsCsv,
 } from "../handlers/exports.js";
 
 function mockEnv() {
@@ -28,32 +26,6 @@ describe("Enterprise Exports & Streamer Reports", () => {
       one: mockOne,
       query: mockQuery,
     };
-  });
-
-  it("exports raffle winners report as CSV with correct headers and escaping", async () => {
-    mockQuery.mockResolvedValueOnce([
-      {
-        title: "Gaming Mouse, Wireless",
-        ticket_cost: 50,
-        status: "completed",
-        winner_name: "pro_gamer",
-        total_tickets: 42,
-        drawn_at: "2026-08-16T12:00:00Z",
-        created_at: "2026-08-15T12:00:00Z",
-      },
-    ]);
-
-    const req = new Request("http://localhost/api/export/raffle-winners.csv?siteId=site-456");
-    const res = await handleExportRaffleWinnersCsv(req, mockEnv(), deps);
-
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/csv");
-    expect(res.headers.get("Content-Disposition")).toContain("attachment; filename=");
-
-    const csvText = await res.text();
-    expect(csvText).toContain('"Raffle Title","Ticket Cost (Pts)","Status","Winner Username","Total Tickets Sold","Drawn Date","Created Date"');
-    expect(csvText).toContain('"Gaming Mouse, Wireless"');
-    expect(csvText).toContain('"pro_gamer"');
   });
 
   it("exports flash drop claims report as CSV", async () => {
@@ -85,29 +57,4 @@ describe("Enterprise Exports & Streamer Reports", () => {
     expect(claimsSql).not.toContain("cdc.claimed_at");
   });
 
-  it("exports predictions and payouts report as CSV", async () => {
-    mockQuery.mockResolvedValueOnce([
-      {
-        title: "Will we ace this round?",
-        status: "settled",
-        winning_option_id: "yes",
-        total_pool: 1250,
-        total_bettors: 18,
-        settled_at: "2026-08-16T18:00:00Z",
-        created_at: "2026-08-16T17:45:00Z",
-      },
-    ]);
-
-    const req = new Request("http://localhost/api/export/predictions.csv?siteId=site-456");
-    const res = await handleExportPredictionsCsv(req, mockEnv(), deps);
-
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/csv");
-
-    const csvText = await res.text();
-    expect(csvText).toContain('"Prediction Question","Status","Winning Outcome","Total Pool (Pts)","Total Bettors","Settled Date","Created Date"');
-    expect(csvText).toContain('"Will we ace this round?"');
-    expect(csvText).toContain('"YES"');
-    expect(csvText).toContain('"1250"');
-  });
 });

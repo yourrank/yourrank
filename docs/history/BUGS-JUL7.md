@@ -107,7 +107,7 @@ Sweep method: curl, web_fetch, source code review. No browser automation (Playwr
 
 ## Not Bugs (verified working)
 
-- ✅ All public pages return 200 (/, /terms, /privacy, /responsible, /demo, /<slug>)
+- ✅ All public pages return 200 (/, /terms, /privacy, /demo, /<slug>)
 - ✅ Auth pages render correctly (login, signup, forgot, reset)
 - ✅ Dashboard redirects to /login when unauthenticated (302)
 - ✅ All asset files load (CSS, JS)

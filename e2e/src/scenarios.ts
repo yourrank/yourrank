@@ -56,16 +56,6 @@ export const SCENARIOS: Scenario[] = [
     tier: "required",
   },
   {
-    key: "games-config",
-    title: "Games settings saved by the owner are the settings the public config serves",
-    tier: "required",
-  },
-  {
-    key: "raffle-zero-ticket-refusal",
-    title: "Drawing a raffle with zero tickets is refused and the raffle stays undrawn",
-    tier: "required",
-  },
-  {
     key: "tournament-kick-channel",
     title: "Tournament Kick channel persists and signup preconditions are enforced",
     tier: "required",
@@ -99,28 +89,6 @@ export const SCENARIOS: Scenario[] = [
     requires: ["E2E_DB_URL", "E2E_VIEWER_SESSION"],
     reason: "Drives the scheduler via /__scheduled, which only exists under wrangler dev --test-scheduled.",
     localOnly: true,
-  },
-  {
-    key: "games-bet-placement",
-    title: "A viewer bet debits balance and returns a settled round",
-    tier: "conditional",
-    requires: ["E2E_VIEWER_SESSION"],
-    reason:
-      "Placing a bet needs a viewer session, which is created by Kick/Telegram OAuth. Provide a captured yr_viewer token in E2E_VIEWER_SESSION to execute it.",
-  },
-  {
-    key: "games-round-readback",
-    title: "Round params and outcome read back from the server match what was played",
-    tier: "conditional",
-    requires: ["E2E_VIEWER_SESSION"],
-    reason: "Depends on a placed round, so it needs the same viewer session.",
-  },
-  {
-    key: "games-mines-reveal-cashout",
-    title: "Mines reveal and cashout settle server-side",
-    tier: "conditional",
-    requires: ["E2E_VIEWER_SESSION"],
-    reason: "Depends on a placed round, so it needs the same viewer session.",
   },
   {
     key: "password-reset-email-token",

@@ -73,7 +73,6 @@ const AUTHENTICATED_DASHBOARD_ROUTES = [
   ["/dashboard/leaderboard/setup", "board"],
   ["/dashboard/leaderboard/players", "board"],
   ["/dashboard/leaderboard/design", "board"],
-  ["/dashboard/games", "board"],
   ["/dashboard/leaderboard/share", "board"],
   ["/dashboard/leaderboard/history", "board"],
   ["/dashboard/leaderboards", "board"],
@@ -446,11 +445,11 @@ describe("YourRank E2E smoke", () => {
 
     it("POST /bot/dash/api/offers creates a tracked offer", async () => {
       const res = await client.post("/bot/dash/api/offers", {
-        casino: "E2E Casino",
+        casino: "E2E Sponsor",
         label: "E2E Offer",
         referral_url: "https://example.com/?ref={click_ref}",
         promo_code: "E2E2025",
-        bonus_text: "Test bonus",
+        bonus_text: "Test message",
       });
       expect(res.status).toBe(200);
       expect(res.json?.offer_id).toBeDefined();

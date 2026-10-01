@@ -81,4 +81,4 @@ Maintain one public renderer and one dashboard route model. A redesign does not 
 
 Anonymous root/signup behavior was not fully observed because the existing browser session redirects to dashboard. No production publishing, payment, account changes or destructive actions were performed. Performance metrics, exhaustive screen-reader testing, user-study outcomes and production-to-local revision equivalence were not established. Source findings explain the inspected local implementation and are not proof of an exact deployed commit.
 
-Games, wagers, paid chance, settlement and gambling-specific Telegram behavior remain outside this redesign. No schema, billing or identity consolidation is proposed. The existing worktree contains extensive user changes; implementation must preserve them and establish a focused change boundary before editing.
+Unsupported mechanics remain outside this redesign. No schema, billing or identity consolidation is proposed. The existing worktree contains extensive user changes; implementation must preserve them and establish a focused change boundary before editing.

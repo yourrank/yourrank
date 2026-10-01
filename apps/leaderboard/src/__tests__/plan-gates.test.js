@@ -5,7 +5,7 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import postgres from "postgres";
 
-import { denied } from "../auth.js";
+import { denied, requireSiteFeature } from "../auth.js";
 import { featureDenial, limitDenial } from "@yourrank/shared/entitlements";
 import { getPlanLimit } from "@yourrank/shared/plans";
 
@@ -120,6 +120,25 @@ describeDb("site plan gates (real PostgreSQL)", () => {
   });
 });
 
+describe("requireSiteFeature uses the site owner's plan", () => {
+  it("denies a moderator acting on a Free owner's site, allows on Pro", async () => {
+    const freeSite = { user_id: "owner-1" };
+    const res = await requireSiteFeature(freeSite, "custom_domain", {
+      actorId: "mod-1",
+      oneImpl: async () => ({ plan: "free", plan_expires_at: null, status: "active" }),
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("entitlement_required");
+    expect(body.feature).toBe("custom_domain");
+
+    const ok = await requireSiteFeature({ user_id: "owner-2" }, "custom_domain", {
+      oneImpl: async () => ({ plan: "pro", plan_expires_at: null, status: "active" }),
+    });
+    expect(ok).toBeNull();
+  });
+});
+
 // ── handleBillingFunnel: allowlist + auth + logAudit (injected deps) ──
 import { handleBillingFunnel } from "../handlers/billing.js";
 import { attachRouteContext } from "../middleware/handler.js";
@@ -140,10 +159,10 @@ describe("billing funnel endpoint", () => {
   it("accepts allowlisted events and audits billing.<event>", async () => {
     const calls = [];
     const deps = funnelDeps({ logAuditImpl: async (e) => calls.push(e) });
-    const res = await handleBillingFunnel(funnelReq({ event: "paywall_viewed", feature: "wheel" }), {}, deps);
+    const res = await handleBillingFunnel(funnelReq({ event: "paywall_viewed", feature: "credits" }), {}, deps);
     expect(res.status).toBe(200);
     expect(calls[0].action).toBe("billing.paywall_viewed");
-    expect(calls[0].details.feature).toBe("wheel");
+    expect(calls[0].details.feature).toBe("credits");
     expect((await handleBillingFunnel(funnelReq({ event: "upgrade_clicked" }), {}, deps)).status).toBe(200);
     expect(calls[1].action).toBe("billing.upgrade_clicked");
   });
@@ -160,27 +179,5 @@ describe("billing funnel endpoint", () => {
       requireUserImpl: async () => ({ user: null, res: new Response(JSON.stringify({ ok: false, error: "auth" }), { status: 401 }) }),
     }));
     expect(res.status).toBe(401);
-  });
-});
-
-// ── requireSiteFeature: site-scoped gates use the OWNER's plan ───────
-import { requireSiteFeature } from "../auth.js";
-
-describe("requireSiteFeature uses the site owner's plan", () => {
-  it("denies a moderator acting on a Free owner's site, allows on Pro", async () => {
-    const freeSite = { user_id: "owner-1" };
-    const res = await requireSiteFeature(freeSite, "wheel", {
-      actorId: "mod-1",
-      oneImpl: async () => ({ plan: "free", plan_expires_at: null, status: "active" }),
-    });
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.code).toBe("entitlement_required");
-    expect(body.feature).toBe("wheel");
-
-    const ok = await requireSiteFeature({ user_id: "owner-2" }, "wheel", {
-      oneImpl: async () => ({ plan: "pro", plan_expires_at: null, status: "active" }),
-    });
-    expect(ok).toBeNull();
   });
 });

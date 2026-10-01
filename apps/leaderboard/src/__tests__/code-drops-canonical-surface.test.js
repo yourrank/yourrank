@@ -21,10 +21,10 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
   it("no longer models Giveaways → Drops as a dashboard route or tab", () => {
     expect(DASHBOARD_ROUTES.find((r) => r.id === "giveaways.drops")).toBeUndefined();
     expect(DASHBOARD_ROUTES.find((r) => r.canonicalPath === LEGACY_DROPS)).toBeUndefined();
-    expect(DYNAMIC_SECTIONS.giveaways.tabs).toEqual(["hub", "chat", "raffles", "preds", "tournaments"]);
-    // The subnav carries the three Giveaways subtypes; tournaments renders
+    expect(DYNAMIC_SECTIONS.giveaways.tabs).toEqual(["hub", "chat", "tournaments"]);
+    // Tournaments renders
     // its own pane and has a rail child of its own.
-    expect(GIVEAWAY_TABS.map(([tab]) => tab)).toEqual(["chat", "raffles", "preds"]);
+    expect(GIVEAWAY_TABS.map(([tab]) => tab)).toEqual(["chat"]);
     expect(parseDynamicPath(LEGACY_DROPS)).toBeNull();
     expect(resolveFragment(LEGACY_DROPS)).toBeNull();
     expect(dashboardChromeStateForLocation(ACTIVITIES, "?siteId=site-42").documentTitle).toBe("Engage · YourRank");
@@ -57,7 +57,7 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
   });
 
   it("removes the duplicate Drops pane, drawer and controller from Giveaways", () => {
-    for (const tab of ["chat", "raffles", "preds", "tournaments", "drops"]) {
+    for (const tab of ["chat", "tournaments", "drops"]) {
       const html = renderGiveawaysContentHtml(tab);
       expect(html, tab).not.toContain('data-tab="drops"');
       expect(html, tab).not.toContain('id="pane-drops"');

@@ -11,7 +11,7 @@ import { rateLimit as defaultRateLimit } from "@yourrank/shared/ratelimit";
 const DEFAULT_DAILY_QUEST_TEMPLATES = [
   { quest_key: "watch_30m", title: "⏱️ Watch stream for 30 minutes", target_count: 30, reward_xp: 60, reward_points: 25 },
   { quest_key: "chat_5_msgs", title: "💬 Send 5 active chat messages", target_count: 5, reward_xp: 40, reward_points: 15 },
-  { quest_key: "event_participate", title: "🔮 Enter a Prediction, Raffle or Wheel", target_count: 1, reward_xp: 50, reward_points: 30 },
+  { quest_key: "event_participate", title: "Join a community event", target_count: 1, reward_xp: 50, reward_points: 30 },
 ];
 
 /**

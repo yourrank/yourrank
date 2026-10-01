@@ -221,11 +221,8 @@ try {
     expectNoErrors(name);
   }
 
-  // 6b. Giveaways subtype subnav: Chat Giveaway → Raffle → Prediction through
-  // the page subnav, asserting rail child and subnav state on each.
+  // 6b. Giveaways subtype subnav: assert the retained page subnav state.
   for (const [name, path] of [
-    ['subtype-raffle', '/dashboard/giveaways/raffles'],
-    ['subtype-prediction', '/dashboard/giveaways/predictions'],
     ['subtype-chat', '/dashboard/giveaways/chat'],
   ]) {
     errors = [];
@@ -319,8 +316,6 @@ try {
   const deepLinks = [
     ['dl-giveaways', '/dashboard/giveaways', 'overview', null],
     ['dl-chat', '/dashboard/giveaways/chat', 'giveaways', '/dashboard/giveaways/chat'],
-    ['dl-raffles', '/dashboard/giveaways/raffles', 'giveaways', '/dashboard/giveaways/raffles'],
-    ['dl-predictions', '/dashboard/giveaways/predictions', 'giveaways', '/dashboard/giveaways/predictions'],
     ['dl-tournaments', '/dashboard/giveaways/tournaments', 'tournaments', null],
     ['dl-activities', '/dashboard/activities', 'activities', null],
     ['dl-rewards', '/dashboard/rewards', 'rewards', null],
@@ -348,7 +343,7 @@ try {
   // 8b. Giveaways subnav at 390px: no page-level horizontal overflow and the
   // active tab stays inside the viewport on direct load and reload.
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const path of ['/dashboard/giveaways/chat', '/dashboard/giveaways/raffles', '/dashboard/giveaways/predictions']) {
+  for (const path of ['/dashboard/giveaways/chat']) {
     errors = [];
     await page.goto(origin + path, { waitUntil: 'networkidle' });
     await page.waitForTimeout(300);

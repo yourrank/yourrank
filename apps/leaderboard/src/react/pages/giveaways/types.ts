@@ -80,59 +80,6 @@ export type ChatGiveawayPayload = {
   excluded?: string[];
 };
 
-export type Raffle = {
-  id: string;
-  title: string;
-  description?: string | null;
-  ticket_cost: number;
-  max_tickets_per_viewer: number;
-  status: string;
-  winner_name?: string | null;
-  winner_ticket_number?: number | null;
-  total_tickets?: number;
-  participant_count?: number;
-  ends_at?: string | null;
-  drawn_at?: string | null;
-  created_at: string;
-};
-
-export type RafflesPayload = {
-  raffles?: Raffle[];
-  message?: string;
-  winnerName?: string | null;
-  winnerTicketNumber?: number | null;
-  totalTickets?: number;
-};
-
-export type PredictionOption = {
-  id: string;
-  label: string;
-  total_points?: number;
-  total_bets?: number;
-};
-
-export type Prediction = {
-  id: string;
-  title: string;
-  options: PredictionOption[];
-  status: "open" | "locked" | "settled" | "cancelled" | string;
-  winning_option_id?: string | null;
-  total_pool?: number;
-  min_bet?: number;
-  max_bet?: number;
-  lock_at?: string | null;
-  settled_at?: string | null;
-  created_at: string;
-  participant_count?: number;
-  total_bets_count?: number;
-};
-
-export type PredictionsPayload = {
-  predictions?: Prediction[];
-  entitlement?: { enabled?: boolean };
-  message?: string;
-};
-
 export type BoardShell = {
   activeSiteId?: string;
   board?: {

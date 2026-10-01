@@ -58,7 +58,7 @@ The audit of the 12 tracked support files for the Leaderboard Worker reveals a s
 
 ### [LOW] Hardcoded Branding in Demo Data
 - **File**: `apps/leaderboard/src/demo-data.js`
-- **Finding**: Specific brand names ("Stake", "StakeDrop") are hardcoded in the shared demo helper.
+- **Finding**: Specific partner names are hardcoded in the shared demo helper.
 - **Root Cause**: Marketing data coupled with source code.
 - **Fix**: Externalize demo content to a JSON configuration file.
 

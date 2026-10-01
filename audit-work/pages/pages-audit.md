@@ -31,7 +31,6 @@
 | `apps/leaderboard/src/pages/privacy.js` | Read |
 | `apps/leaderboard/src/pages/refund.js` | Read |
 | `apps/leaderboard/src/pages/reset.js` | Read |
-| `apps/leaderboard/src/pages/responsible.js` | Read |
 | `apps/leaderboard/src/pages/security.js` | Read |
 | `apps/leaderboard/src/pages/setup.js` | Read |
 | `apps/leaderboard/src/pages/signup.js` | Read |
@@ -43,10 +42,6 @@
 | `apps/leaderboard/src/templates/arena.js` | Read |
 | `apps/leaderboard/src/templates/broadcast.js` | Read |
 | `apps/leaderboard/src/templates/cards.js` | Read |
-| `apps/leaderboard/src/templates/casino-full.js` | Read |
-| `apps/leaderboard/src/templates/casino-high-rollers.js` | Read |
-| `apps/leaderboard/src/templates/casino-text.js` | Read |
-| `apps/leaderboard/src/templates/casino.js` | Read |
 | `apps/leaderboard/src/templates/champion.js` | Read |
 | `apps/leaderboard/src/templates/copper.js` | Read |
 | `apps/leaderboard/src/templates/esports.js` | Read |
@@ -91,7 +86,7 @@
 *   **Repro**: 
     1. Set currency symbol to `<u>$` in the dashboard.
     2. View the public page.
-    3. Observe that wagered amounts are underlined because the `<u>` tag was rendered as HTML.
+    3. Observe that amount values are underlined because the `<u>` tag was rendered as HTML.
 *   **Root Cause**: Insufficient sanitization of theme-level text tokens during template composition.
 *   **Best Fix**: Wrap the currency symbol in the `esc()` helper before prepending it to values in the formatting functions.
 
@@ -120,7 +115,7 @@
 *   **Severity**: Low
 *   **Location**: `apps/leaderboard/src/site.js:611-646`
 *   **Affected Page(s)**: Dashboard "Close out period" action.
-*   **Why**: The player list for the archive snapshot is fetched at line 615, but the database transaction to create the archive record starts at line 628. Any wager updates occurring in that small window are lost from the archive.
+*   **Why**: The player list for the archive snapshot is fetched at line 615, but the database transaction to create the archive record starts at line 628. Any player-value updates occurring in that small window are lost from the archive.
 *   **Root Cause**: Snapshot data is captured outside the atomic transaction that creates the archive and resets the board.
 *   **Best Fix**: Move the `getPlayers` query inside the `withTransaction` block to ensure the snapshot matches the state exactly at the moment of the reset.
 

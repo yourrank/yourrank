@@ -81,11 +81,8 @@ describe("features", () => {
   });
 
   it("canUseFeature honours the tier ladder", () => {
-    expect(canUseFeature("starter", "predictions")).toBe(true);
     expect(canUseFeature("starter", "tournaments")).toBe(true);
-    expect(canUseFeature("starter", "wheel")).toBe(false);
     expect(canUseFeature("starter", "quests")).toBe(false);
-    expect(canUseFeature("starter", "duels")).toBe(false);
     expect(canUseFeature("starter", "battlepass")).toBe(false);
     expect(canUseFeature("starter", "remove_branding")).toBe(false);
     expect(canUseFeature("starter", "signed_api")).toBe(false);

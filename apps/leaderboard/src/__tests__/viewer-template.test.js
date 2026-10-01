@@ -41,7 +41,6 @@ describe("optional viewer template", () => {
     expect((board.match(/data-player-name="alex"/g) || [])).toHaveLength(1);
     expect(board).toContain('data-position="1"');
     expect(await render("spotlight", "leaderboard", "free")).not.toContain('data-viewer-template="spotlight"');
-    expect(await render("spotlight", "games")).not.toContain('data-viewer-template="spotlight"');
   });
 
   it("reads a saved template through the public site data model", () => {

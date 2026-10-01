@@ -36,7 +36,7 @@ export const DEFAULT_SECTIONS = {
 };
 
 const PLAN_ORDER = PLAN_TIERS;
-const DEFAULT_PRIZES = { prizePoolLabel: "Prize pool", payoutsLabel: "Payouts", countdownLabel: "", currency: "$", hidePrizeAmounts: false, payoutNote: "" };
+const DEFAULT_PRIZES = { prizePoolLabel: "Prize pool", payoutsLabel: "Rewards", countdownLabel: "", currency: "$", hidePrizeAmounts: false, payoutNote: "" };
 
 export function isPro() {
   const plan = state.ME?.plan;
@@ -742,8 +742,6 @@ export function collect({ reportPlayerErrors = true } = {}) {
       termsEnabled: $("f_legal_terms_enabled")?.checked ?? true,
       privacy: ($("f_legal_privacy")?.value || "").trim(),
       privacyEnabled: $("f_legal_privacy_enabled")?.checked ?? true,
-      responsible: ($("f_legal_responsible")?.value || "").trim(),
-      responsibleEnabled: $("f_legal_responsible_enabled")?.checked ?? true,
       cookies: ($("f_legal_cookies")?.value || "").trim(),
       cookiesEnabled: $("f_legal_cookies_enabled")?.checked ?? true,
       refund: ($("f_legal_refund")?.value || "").trim(),
@@ -2284,7 +2282,6 @@ export function renderLegal() {
   const pages = [
     { key: "terms", label: "Terms of Service" },
     { key: "privacy", label: "Privacy Policy" },
-    { key: "responsible", label: "Responsible Play" },
     { key: "cookies", label: "Cookie Policy" },
     { key: "refund", label: "Refund Policy" },
   ];
@@ -2822,7 +2819,7 @@ export async function closeOutPeriod({
   };
   if (![...$("rows").children].length) { setStatusText("The board is empty — nothing to close out.", "info"); return; }
   const clear = $("a_clear").value;
-  const warn = clear === "players" ? "save the current board as past winners, then CLEAR the player list" : clear === "wagers" ? "save the current board as past winners, then reset every wager to 0" : "save the current board as past winners";
+  const warn = clear === "players" ? "save the current board as past winners, then CLEAR the player list" : clear === "wagers" ? "save the current board as past winners, then reset every amount to 0" : "save the current board as past winners";
   if (!await confirmImpl("Close out period", `This will ${warn}. Continue?`, "Close out", true)) return;
   btn.disabled = true; btn.textContent = "Closing out…";
   try {

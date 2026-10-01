@@ -598,10 +598,10 @@ function ConnectionsPanel({ deps }: { deps: SettingsDependencies }) {
   const loadPostbacks = useCallback(async () => {
     try {
       const result = await deps.request<PostbackData>("GET", "/api/account/postbacks");
-      setPostbacks(result.ok ? result.data : { error: statusMessage(result.data, "Could not load deposit tracking.") });
+      setPostbacks(result.ok ? result.data : { error: statusMessage(result.data, "Could not load conversion tracking.") });
     } catch (error) {
       logError("loadPostbacks", error);
-      setPostbacks({ error: "Could not load deposit tracking. Try again." });
+      setPostbacks({ error: "Could not load conversion tracking. Try again." });
     } finally {
       setPostbacksLoading(false);
     }
@@ -646,13 +646,13 @@ function ConnectionsPanel({ deps }: { deps: SettingsDependencies }) {
   const healthRows: Array<[string, { status?: string; issueHref?: string | null } | undefined]> = [["Kick reward ingest", health.kickIngest], ["Discord delivery health", health.discordDelivery], ["Telegram delivery health", health.telegramDelivery]];
 
   async function rotatePostback() {
-    if (!await deps.confirm("Rotate deposit tracking key", "This will revoke the existing key immediately. Any sign-up updates using the old key will fail.", "Rotate", true)) return;
+    if (!await deps.confirm("Rotate conversion tracking key", "This will revoke the existing key immediately. Updates sent with the old key will fail.", "Rotate", true)) return;
     setPostbackBusy(true);
     try {
       const result = await deps.request<PostbackData>("POST", "/api/account/postbacks/rotate");
       if (result.ok) {
         setPostbacks((old) => ({ ...(old || {}), ...result.data, status: "pending" }));
-        showToast("Deposit tracking key rotated.", "success");
+        showToast("Conversion tracking key rotated.", "success");
       } else showToast(statusMessage(result.data, "Could not rotate key."), "error");
     } catch {
       showToast("Could not rotate key.", "error");
@@ -661,13 +661,13 @@ function ConnectionsPanel({ deps }: { deps: SettingsDependencies }) {
     }
   }
   async function revokePostback() {
-    if (!await deps.confirm("Revoke deposit tracking key", "Score updates will stop until a new key is created.", "Revoke", true)) return;
+    if (!await deps.confirm("Revoke conversion tracking key", "Score updates will stop until a new key is created.", "Revoke", true)) return;
     setPostbackBusy(true);
     try {
       const result = await deps.request("DELETE", "/api/account/postbacks");
       if (result.ok) {
         setPostbacks({ postback: null, status: "not_configured", conversions: [] });
-        showToast("Deposit tracking key revoked.", "success");
+        showToast("Conversion tracking key revoked.", "success");
       } else showToast(statusMessage(result.data, "Could not revoke key."), "error");
     } catch {
       showToast("Could not revoke key.", "error");
@@ -733,9 +733,9 @@ function PostbacksPanel({ data, loading, testBusy, testStatus, testError, action
   const copy = async (value: string, button: HTMLButtonElement) => { const ok = await deps.copy(value); flashButton(button, ok ? "Copied!" : "Copy failed"); };
   const conversions = data?.conversions || [];
   const active = data?.status === "active";
-  const managerGuide = `Deposit tracking link: ${postback?.signedEndpoint || ""}
+  const managerGuide = `Conversion tracking link: ${postback?.signedEndpoint || ""}
 Method: POST
-Sign the raw query string with HMAC-SHA256 using your deposit tracking key, then send the hex signature in the X-Postback-Signature header.
+Sign the raw query string with HMAC-SHA256 using your conversion tracking key, then send the hex signature in the X-Postback-Signature header.
 Also include X-Postback-Key with your key.
 Legacy unsigned link: ${postback?.legacyUrl || "deprecated"} (sunset ${postback?.legacyUrl ? "2026-10-01" : ""})`;
   return (
@@ -743,7 +743,7 @@ Legacy unsigned link: ${postback?.legacyUrl || "deprecated"} (sunset ${postback?
       <summary>Sponsor score updates</summary>
       <div className="account-settings-disclosure-body">
         <p className="card-sub">Connect a sponsor so confirmed activity can update player scores automatically.</p>
-        {loading ? <p className="hint" aria-live="polite">Loading deposit tracking…</p> : data?.error ? <p className="error" role="alert">{data.error}</p> : data?.upgrade ? (
+        {loading ? <p className="hint" aria-live="polite">Loading conversion tracking…</p> : data?.error ? <p className="error" role="alert">{data.error}</p> : data?.upgrade ? (
           <div id="postbackUpgrade">
             <p className="hint">Automatic score updates are a paid feature. Upgrade to Pro to create connection keys and view live score updates.</p>
             <a className="btn btn--accent" href="/dashboard/settings/billing">See billing</a>
@@ -755,23 +755,23 @@ Legacy unsigned link: ${postback?.legacyUrl || "deprecated"} (sunset ${postback?
                 <span className={`status-dot ${postback ? active ? "status-dot--ok" : "status-dot--pending" : "status-dot--off"}`} id="postbackStatusDot" />
                 <b id="postbackStatusText">{postback ? active ? "Active — receiving conversions" : "Pending — no conversion received yet" : "Not configured"}</b>
               </div>
-              <p className="hint" id="postbackStatusHint">{postback ? active ? `Last conversion received: ${fmtDateTime(postback.lastUsedAt)}` : `Key created: ${fmtDateTime(postback.createdAt)}. Send the setup block below to your affiliate manager.` : "Create a deposit tracking key to start receiving sign-up updates."}</p>
+              <p className="hint" id="postbackStatusHint">{postback ? active ? `Last conversion received: ${fmtDateTime(postback.lastUsedAt)}` : `Key created: ${fmtDateTime(postback.createdAt)}. Send the setup block below to your sponsor or integration partner.` : "Create a conversion tracking key to start receiving updates."}</p>
             </div>
             {postback && (
               <>
                 <div id="postbackShareCard">
                   <h3>What to send your sponsor or affiliate manager</h3>
-                  <p className="hint">Give this secure deposit tracking link to your affiliate manager or sponsor developer. It connects to your leaderboard without exposing your private account password.</p>
+                  <p className="hint">Give this secure conversion tracking link to your sponsor or integration partner. It connects to your leaderboard without exposing your private account password.</p>
                   <div className="field">
-                    <Label>Deposit tracking link</Label>
+                    <Label>Conversion tracking link</Label>
                     <div className="d-flex gap-8 items-center flex-wrap">
                       <code id="postbackSigned">{postback.signedEndpoint}</code>
                       <button className="btn btn--sm btn--accent" id="postbackCopySigned" type="button" onClick={(event) => void copy(postback.signedEndpoint || "", event.currentTarget)}>Copy link</button>
                     </div>
                   </div>
                   <div className="field">
-                    <Label>Deposit tracking setup guide</Label>
-                    <p className="hint">Your sponsor uses this guide to send confirmed deposit information to your leaderboard.</p>
+                    <Label>Conversion tracking setup guide</Label>
+                    <p className="hint">Your sponsor uses this guide to send confirmed activity updates to your leaderboard.</p>
                     <button className="btn btn--sm btn--ghost" id="postbackCopyManager" type="button" onClick={(event) => void copy(managerGuide, event.currentTarget)}>Copy full setup guide for sponsor</button>
                   </div>
                   <div className="field">
@@ -817,7 +817,7 @@ Legacy unsigned link: ${postback?.legacyUrl || "deprecated"} (sunset ${postback?
             <tbody id="conversionsBody">{conversions.map((conversion, index) => <tr key={`${conversion.at || "row"}-${index}`}><td>{conversion.at || "—"}</td><td>{conversion.event || "—"}</td><td>{conversion.amount == null ? "—" : Number(conversion.amount).toFixed(2)}</td><td>{conversion.currency || "—"}</td><td>{conversion.offer || "—"}</td></tr>)}</tbody>
           </table>
         </div>
-        <p className="empty" id="conversionsEmpty" hidden={Boolean(conversions.length) || Boolean(data?.error)}>{loading ? "Loading sponsor activity…" : "No sponsor activity yet. Connect deposit tracking to see updates here."}</p>
+        <p className="empty" id="conversionsEmpty" hidden={Boolean(conversions.length) || Boolean(data?.error)}>{loading ? "Loading sponsor activity…" : "No sponsor activity yet. Connect conversion tracking to see updates here."}</p>
       </div>
     </details>
   );
