@@ -746,6 +746,7 @@ describe("Giveaways React migration", () => {
     const dialog = document.querySelector('[role="alertdialog"]');
     expect(dialog.textContent).toContain("Cancel this raffle?");
     expect(dialog.textContent).toContain("Everyone who bought tickets gets their Credits back.");
+    expect([...dialog.querySelectorAll("button")].map((button) => button.textContent.trim())).toEqual(["Keep raffle", "Cancel raffle"]);
     clickGiveaways([...dialog.querySelectorAll("button")].find((button) => button.textContent.trim() === "Cancel raffle"));
     await actGiveaways();
 

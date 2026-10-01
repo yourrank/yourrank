@@ -290,9 +290,12 @@ describe("shared public board renderer", () => {
 
   it("renders free raffles as buyable and omits the raffle section when empty", async () => {
     const free = await renderShopRaffles({ raffles: [raffle({ ticket_cost: 0 })] });
-    expect(free).toContain("Free per ticket");
+    expect(free).toContain("Free tickets");
     expect(free).toContain('data-raffle-cost="0"');
     expect(free).toContain('id="yr-raffle-confirm"');
+
+    const singular = await renderShopRaffles({ raffles: [raffle({ total_tickets: 1 })] });
+    expect(singular).toContain("1 ticket sold");
 
     const empty = await renderShopRaffles({ raffles: [] });
     expect(empty).not.toContain('aria-labelledby="viewer-raffles-title"');

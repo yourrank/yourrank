@@ -648,8 +648,8 @@ function raffleRow({ raffle, viewer, member, balance, blocked, unavailable, memb
 ${raffle.description ? `<p class="yr-rwd-p">${esc(raffle.description)}</p>` : ""}
 </div>
 <div class="yr-rwd-side">
-<p class="yr-rwd-c">${viewerIcon('coins')}${cost === 0 ? "Free" : `${formatNumber(cost)} credits`} per ticket</p>
-<p class="yr-rwd-state" data-raffle-sold>${formatNumber(sold)} tickets sold</p>
+<p class="yr-rwd-c">${viewerIcon('coins')}${cost === 0 ? "Free tickets" : `${formatNumber(cost)} credits per ticket`}</p>
+<p class="yr-rwd-state" data-raffle-sold>${formatNumber(sold)} ${sold === 1 ? "ticket" : "tickets"} sold</p>
 ${viewer && member ? `<p class="yr-rwd-state" data-raffle-owned>You have ${formatNumber(owned)} of ${formatNumber(maximum)}</p>` : ""}
 ${action}
 </div>

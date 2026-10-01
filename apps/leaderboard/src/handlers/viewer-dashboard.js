@@ -402,6 +402,15 @@ export async function handleViewerBuyRaffleTickets(request, env, deps = {}) {
       );
       if (existing) return rafflePurchaseResult(existing, raffleId);
 
+      const raffle = await tx.one(
+        `SELECT id, title, ticket_cost, max_tickets_per_viewer, total_tickets,
+                ends_at, COALESCE(ends_at <= now(), false) AS ended, status
+           FROM raffles
+          WHERE id = $1 AND site_id = $2
+          FOR UPDATE`,
+        [raffleId, site.id],
+      );
+
       const member = await tx.one(
         `SELECT id, balance, blocked
            FROM site_viewers
@@ -412,14 +421,6 @@ export async function handleViewerBuyRaffleTickets(request, env, deps = {}) {
       if (!member) return { error: "Join this community first.", status: 400 };
       if (member.blocked) return { error: "viewer blocked", status: 400 };
 
-      const raffle = await tx.one(
-        `SELECT id, title, ticket_cost, max_tickets_per_viewer, total_tickets,
-                ends_at, COALESCE(ends_at <= now(), false) AS ended, status
-           FROM raffles
-          WHERE id = $1 AND site_id = $2
-          FOR UPDATE`,
-        [raffleId, site.id],
-      );
       if (!raffle) return { error: "raffle not found", status: 404 };
       if (raffle.status !== "active") return { error: "This raffle is closed.", status: 400 };
       if (raffle.ended) return { error: "This raffle has ended.", status: 400 };

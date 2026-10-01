@@ -87,6 +87,7 @@ type Confirmation = {
   title: string;
   description: string;
   action: string;
+  cancelLabel?: string;
   destructive?: boolean;
 };
 type RaffleConfirmation = Confirmation & { kind: "draw" | "cancel" };
@@ -369,7 +370,7 @@ function ConfirmAction({
           <AlertDialogDescription>{confirmation?.description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel onClick={onCancel}>{confirmation?.cancelLabel || "Cancel"}</AlertDialogCancel>
           <AlertDialogAction
             className={confirmation?.destructive ? "bg-destructive text-white hover:bg-destructive/90" : ""}
             onClick={onConfirm}
@@ -1997,6 +1998,7 @@ function Raffles({
                             title: "Cancel this raffle?",
                             description: "Everyone who bought tickets gets their Credits back.",
                             action: "Cancel raffle",
+                            cancelLabel: "Keep raffle",
                             destructive: true,
                           });
                         }}

@@ -47,6 +47,7 @@ function makeHarness(options = {}) {
     purchases: [],
     ledger: [],
     activeMarks: [],
+    lockOrder: [],
   };
   let nextPurchaseId = 1;
 
@@ -70,10 +71,14 @@ function makeHarness(options = {}) {
     async one(statement, params = []) {
       const sql = statement.replace(/\s+/g, " ").toLowerCase();
       if (sql.includes("from raffle_ticket_purchases p")) return lookupPurchase(params[2]);
-      if (sql.includes("from site_viewers") && sql.includes("for update")) return state.member;
       if (sql.startsWith("select id, title, ticket_cost")) {
+        state.lockOrder.push("raffle");
         const raffle = state.raffles.get(params[0]);
         return raffle?.site_id === params[1] ? raffle : null;
+      }
+      if (sql.includes("from site_viewers") && sql.includes("for update")) {
+        state.lockOrder.push("member");
+        return state.member;
       }
       if (sql.startsWith("select count(*)::int as count from raffle_tickets")) {
         return {
@@ -205,6 +210,7 @@ describe("handleViewerBuyRaffleTickets", () => {
       metadata: { raffle_id: RAFFLE_ID, purchase_id: "purchase-1", quantity: 3 },
     }]);
     expect(harness.state.raffles.get(RAFFLE_ID).total_tickets).toBe(3);
+    expect(harness.state.lockOrder).toEqual(["raffle", "member"]);
     expect(harness.state.activeMarks).toEqual([[SITE_ID, VIEWER_ID]]);
     expect(harness.state.rateLimit).toEqual({ key: `viewer-raffle:${SITE_ID}:${VIEWER_ID}`, limit: 10, window: 60 });
   });
