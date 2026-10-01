@@ -166,6 +166,27 @@ describe("giveaway draw and timeout", () => {
     expect(await drawGiveaway(run, { ...session, rules: {} })).toHaveProperty("error");
     expect(await drawGiveaway(async () => [eligible], { ...session, rules: { entryMode: "members" } })).toHaveProperty("error");
   });
+  it("draws a previously verified entrant when VPN detection is enabled", async () => {
+    const verifiedEntry = {
+      ...eligible,
+      verified_at: "2026-09-28T00:00:00Z",
+      viewer_id: "viewer",
+      linked_viewer_id: "viewer",
+      ip_hash: "hashed-ip",
+      previous_winner: false,
+      already_drawn: false,
+      linked_restricted: false,
+    };
+    const run = async (sql) => {
+      if (sql.startsWith("SELECT")) return [verifiedEntry];
+      return sql.includes("UPDATE chat_giveaway_sessions") ? [{ id }] : [];
+    };
+    const result = await drawGiveaway(run, {
+      ...session,
+      rules: { entryMode: "verified", vpnDetection: true, onePerIp: true },
+    });
+    expect(result).toMatchObject({ winnerId: "e1" });
+  });
   it("excludes this giveaway's winners when winnerRepeat is once and reports no alternatives", async () => {
     const run = async () => [{ ...eligible, already_drawn: true }];
     expect(await drawGiveaway(run, { ...session, rules: {} })).toEqual({ error: "No other eligible entrants remain." });
