@@ -9,15 +9,17 @@ const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = path.resolve(TEST_DIR, "..");
 
 describe("Audience members body", () => {
-  it("keeps member identity first and lifetime totals secondary", () => {
+  it("keeps member identity first and credit totals secondary", () => {
     const html = AudienceMembersPage({ fragment: true }).toString();
     const source = readFileSync(path.join(SRC_ROOT, "react/pages/audience/page.tsx"), "utf8");
     expect(html).toContain('<div id="audience-app" data-audience-tab="viewers"></div>');
     expect(html).toContain(">Members</a>");
-    expect(source).toContain("Members in this site");
+    expect(source).not.toContain("<h2>Members in this site</h2>");
     expect(source).toContain('id="cr-viewer-toolbar"');
-    expect(source).toContain("<th>Member</th><th>Membership</th><th>Account connection</th><th>Credits</th>");
+    expect(source).toContain("<th>Member</th><th>Last active</th><th>Account</th><th className=\"ta-r\">Credits</th><th className=\"ta-r\">View</th>");
     expect(source).not.toContain("<th class=\"num\">Total earned</th>");
+    expect(source).toContain("No sign-in");
+    expect(source).toContain(">View</Button>");
     expect(source).toContain("Looking for visitor trends?");
     expect(source).toContain("Anonymous visits and traffic sources live in Insights.");
     expect(source).toContain(">Open Insights</a>");

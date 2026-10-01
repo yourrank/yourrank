@@ -1,7 +1,7 @@
 .yr-react.cr-react-rewards {
   display: grid;
   gap: 1rem;
-  color: var(--ws-ink, #17211f);
+  color: var(--ws-text);
 }
 
 .yr-react.cr-react-rewards [hidden] {

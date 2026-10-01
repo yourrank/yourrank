@@ -136,6 +136,75 @@ describe("React Audience page", () => {
     expect(document.getElementById("people-reviews-list")?.textContent).toContain("SPA review signup");
   });
 
+  it("keeps one page heading and exposes count-bearing segmented filters", async () => {
+    await mountAudiencePage();
+    let page = document.querySelector(".audience-react");
+    expect(page.querySelectorAll("h1")).toHaveLength(1);
+    expect(page.querySelector("h1").textContent).toBe("Members");
+    expect(page.querySelector(".audience-page-head__main .hint").textContent).toBe("People who joined this site, with their Credits.");
+    expect(page.querySelector(".audience-header-count").textContent).toBe("1 member");
+    expect([...page.querySelectorAll("h2")].map((heading) => heading.textContent)).not.toContain("Members in this site");
+
+    await unmountAudiencePage();
+    await mountAudiencePage({
+      tab: "history",
+      url: "http://localhost/dashboard/audience/activity?siteId=site-1",
+    });
+    page = document.querySelector(".audience-react");
+    expect(page.querySelectorAll("h1")).toHaveLength(1);
+    expect(page.querySelector("h1").textContent).toBe("Activity");
+    expect(page.querySelector(".audience-page-head__main .hint").textContent).toBe("Every Credit earned or spent on this site.");
+    expect(page.querySelector(".audience-header-count").textContent).toBe("0 entries");
+
+    await unmountAudiencePage();
+    await mountAudiencePage({
+      tab: "reviews",
+      url: "http://localhost/dashboard/audience/reviews?siteId=site-1",
+      deps: {
+        api: async (path) => path.startsWith("/api/people/reviews?")
+          ? { reviews: [], counts: { pending: 3, resolved: 5 } }
+          : {},
+      },
+    });
+    page = document.querySelector(".audience-react");
+    expect(page.querySelectorAll("h1")).toHaveLength(1);
+    expect(page.querySelector("h1").textContent).toBe("Reviews");
+    expect(page.querySelector(".audience-page-head__main .hint").textContent).toBe("Signups that need your decision before they count.");
+    expect([...page.querySelectorAll("h2")].map((heading) => heading.textContent)).not.toContain("Needs review");
+    expect([...page.querySelectorAll("h2")].map((heading) => heading.textContent)).not.toContain("Resolved reviews");
+    const reviewFilter = page.querySelector('[role="group"][aria-label="Review status"]');
+    const reviewButtons = [...reviewFilter.querySelectorAll("button")];
+    expect(reviewButtons.map((button) => button.getAttribute("aria-pressed"))).toEqual(["true", "false"]);
+    expect(reviewButtons.map((button) => button.textContent.trim())).toEqual(["Needs review3", "Resolved5"]);
+    expect(page.querySelector("#people-reviews-pending-count").textContent).toBe("3");
+    expect(page.querySelector("#people-reviews-empty h3").textContent).toBe("You're all caught up");
+    await clickReactTarget(reviewButtons[1]);
+    expect(page.querySelector("#people-reviews-empty h3").textContent).toBe("No resolved reviews yet");
+
+    await unmountAudiencePage();
+    await mountAudiencePage({
+      tab: "linked",
+      url: "http://localhost/dashboard/audience/linked?siteId=site-1",
+      deps: {
+        api: async (path) => path.startsWith("/api/people/linked-accounts?")
+          ? { groups: [], counts: { pending: 4, watching: 0, restricted: 0, dismissed: 2 } }
+          : {},
+      },
+    });
+    page = document.querySelector(".audience-react");
+    expect(page.querySelectorAll("h1")).toHaveLength(1);
+    expect(page.querySelector("h1").textContent).toBe("Linked accounts");
+    expect(page.querySelector(".audience-page-head__main .hint").textContent).toBe("Accounts that may belong to the same person. Signals only — they don't prove identity.");
+    expect([...page.querySelectorAll("h2")].map((heading) => heading.textContent)).not.toContain("Account links");
+    const linkedFilter = page.querySelector('[role="group"][aria-label="Linked account status"]');
+    const linkedButtons = [...linkedFilter.querySelectorAll("button")];
+    expect(linkedButtons.map((button) => button.getAttribute("aria-pressed"))).toEqual(["true", "false"]);
+    expect(linkedButtons.map((button) => button.textContent.trim())).toEqual(["Active4", "Dismissed2"]);
+    expect(page.querySelector(".people-review-empty h3").textContent).toBe("No linked accounts to check");
+    await clickReactTarget(linkedButtons[1]);
+    expect(page.querySelector(".people-review-empty h3").textContent).toBe("No dismissed account links");
+  });
+
   it("opens the site-scoped member drawer from ?member=", async () => {
     const calls = [];
     await mountAudiencePage({
@@ -186,6 +255,19 @@ describe("React Audience page", () => {
     expect(downloads[0].content).toContain("\uFEFFname,credits,total_earned,total_spent,blocked,last_active_at");
     expect(downloads[0].content).toContain("Alice,15,25,10,no,2026-07-02T12:00:00.000Z");
     expect(downloads[0].filename).toContain("members-site-1-");
+  });
+
+  it("keeps successful member bulk feedback visible", async () => {
+    await mountAudiencePage();
+    await clickReactTarget(document.querySelector('button[data-member-select="member-1"]'));
+    await setReactInputValue(document.getElementById("cr-bulk-reason"), "Community support");
+    await clickReactTarget(document.getElementById("cr-bulk-award"));
+
+    const status = document.querySelector(".audience-members .audience-status[role=\"status\"]");
+    expect(status).toBeTruthy();
+    expect(status.textContent).not.toBe("");
+    expect(status.classList.contains("error")).toBe(false);
+    expect(status.classList.contains("sr-only")).toBe(false);
   });
 
   it("blocks bulk awards above 25 selected recipients", async () => {
@@ -253,6 +335,10 @@ describe("React Audience page", () => {
         },
       },
     });
+    expect(document.querySelector(".audience-header-count").textContent).toBe("1 entry");
+    const status = document.querySelector(".audience-activity .audience-status[role=\"status\"]");
+    expect(status.textContent).toBe("1 entries loaded.");
+    expect(status.classList.contains("sr-only")).toBe(true);
     await clickReactTarget(document.getElementById("cr-history-load-more"));
 
     const activityCalls = calls.filter((call) => call.path.startsWith("/api/credits/activity"));
@@ -260,6 +346,24 @@ describe("React Audience page", () => {
     expect(new URL(`http://localhost${activityCalls[1].path}`).searchParams.get("cursor")).toBe("cursor-2");
     expect(document.getElementById("cr-history-feed-list").textContent).toContain("First");
     expect(document.getElementById("cr-history-feed-list").textContent).toContain("Second");
+  });
+
+  it("keeps Activity load errors visible instead of screen-reader-only", async () => {
+    await mountAudiencePage({
+      tab: "history",
+      url: "http://localhost/dashboard/audience/activity?siteId=site-1",
+      deps: {
+        api: async (path) => {
+          if (path.startsWith("/api/credits/activity")) throw new Error("Activity unavailable");
+          return {};
+        },
+      },
+    });
+
+    const status = document.querySelector(".audience-activity .audience-status[role=\"alert\"]");
+    expect(status).toBeTruthy();
+    expect(status.classList.contains("error")).toBe(true);
+    expect(status.classList.contains("sr-only")).toBe(false);
   });
 
   it("uses and consumes the one-shot Activity ?viewer= query", async () => {
@@ -362,6 +466,9 @@ describe("React Audience page", () => {
     ]);
     expect(decision.siteId).toBe("site-1");
     expect(JSON.parse(decision.options.body)).toEqual({ decision: "allow" });
+    const status = document.querySelector(".people-review-feedback .audience-status[role=\"status\"]");
+    expect(status.textContent).toBe("Signup allowed for this tournament.");
+    expect(status.classList.contains("sr-only")).toBe(false);
   });
 
   it("confirms linked-account actions and keeps their existing request contract", async () => {
@@ -397,7 +504,7 @@ describe("React Audience page", () => {
       },
     });
     expect(document.querySelector(".people-linked-pill").textContent).toBe("New");
-    expect(document.querySelector('.people-review-filters[aria-label="Linked account status"] button').textContent.trim()).toMatch(/^Active/);
+    expect(document.querySelector('.audience-segmented-filter[aria-label="Linked account status"] button').textContent.trim()).toMatch(/^Active/);
     await clickReactTarget([...document.querySelectorAll("button")].find((button) => button.textContent === "Watch"));
 
     const decision = calls.find((call) => call.path === "/api/people/linked-accounts/decision");
@@ -409,6 +516,9 @@ describe("React Audience page", () => {
     ]);
     expect(decision.siteId).toBe("site-1");
     expect(JSON.parse(decision.options.body)).toEqual({ linkIds: ["link-1", "link-2"], action: "watch" });
+    const status = document.querySelector(".people-linked-content .audience-status[role=\"status\"]");
+    expect(status.textContent).toBe("Saved.");
+    expect(status.classList.contains("sr-only")).toBe(false);
   });
 
   it("offers only remove-restriction and dismiss actions for restricted links", async () => {
