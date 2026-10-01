@@ -76,17 +76,99 @@
   grid-template-areas: "main facts availability actions";
   align-items: center;
   gap: 1rem;
-  padding: 1rem;
-  border: 1px solid var(--ws-line, #e5e7eb);
-  border-radius: var(--ws-radius, 0.75rem);
-  background: var(--ws-surface, white);
+  padding: 1rem 1.125rem;
+  border-bottom: 1px solid var(--ws-line, #e5e7eb);
+}
+
+.yr-react.cr-react-rewards .cr-react-shop-row:last-child {
+  border-bottom: 0;
 }
 
 .yr-react.cr-react-rewards .cr-react-shop-row.is-inactive {
   opacity: 0.72;
 }
 
+.yr-react.cr-react-rewards .cr-shop-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
+}
+
+.yr-react.cr-react-rewards .cr-shop-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.yr-react.cr-react-rewards .cr-shop-row-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.yr-react.cr-react-rewards .cr-shop-row-heading .cr-shop-review-chip {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.yr-react.cr-react-rewards .cr-shop-layout {
+  gap: 1rem;
+}
+
+.yr-react.cr-react-rewards .cr-shop-layout > .v3-section-head {
+  align-items: center;
+  padding-block: 0;
+}
+
+.yr-react.cr-react-rewards .cr-react-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: fit-content;
+}
+
+.yr-react.cr-react-rewards .cr-react-toolbar,
+.yr-react.cr-react-rewards #cr-shop-controls.cr-react-toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin: 0;
+}
+
+.yr-react.cr-react-rewards .cr-react-toolbar-search {
+  flex: 1 1 18rem;
+  max-width: 28rem;
+}
+
+.yr-react.cr-react-rewards .cr-react-toolbar-sort {
+  flex: 0 0 12rem;
+}
+
+.yr-react.cr-react-rewards select.cr-react-select {
+  width: 100%;
+  height: 2.5rem;
+  padding: 0 2rem 0 0.75rem;
+  border: 1px solid var(--input);
+  border-radius: calc(var(--radius) - 2px);
+  background-color: var(--background);
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.yr-react.cr-react-rewards select.cr-react-select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.yr-react.cr-react-rewards .v3-table th.num,
+.yr-react.cr-react-rewards .v3-table th.ta-r {
+  text-align: right;
+}
+
 .yr-react.cr-react-rewards .cr-react-shop-image {
+  flex-shrink: 0;
   width: 3.75rem;
   height: 2.5rem;
   object-fit: cover;
@@ -658,6 +740,12 @@
 
   .yr-react.cr-react-rewards .cr-react-field--full {
     grid-column: auto;
+  }
+
+  .yr-react.cr-react-rewards .cr-react-toolbar-search,
+  .yr-react.cr-react-rewards .cr-react-toolbar-sort {
+    flex-basis: 100%;
+    max-width: none;
   }
 
   .yr-react.cr-react-rewards .cr-react-shop-row {

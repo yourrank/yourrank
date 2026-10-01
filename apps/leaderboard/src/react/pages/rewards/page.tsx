@@ -831,9 +831,9 @@ function ShopTab({
         </p>
         {canManage && <Button id="cr-shop-new" type="button" size="sm" onClick={(event) => openEditor(undefined, event.currentTarget)} disabled={shopAtLimit} title={shopAtLimit ? "Upgrade your plan to add more items" : undefined}>Create item</Button>}
       </div>
-      {items.length > 0 && <div id="cr-shop-controls" className="cr-react-grid cr-react-grid--two">
-        <div className="cr-react-field"><Label htmlFor="cr-shop-search">Search shop items</Label><Input id="cr-shop-search" type="search" placeholder="Search…" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></div>
-        <div className="cr-react-field"><Label htmlFor="cr-shop-sort">Sort</Label><select id="cr-shop-sort" className="v3-select" value={sort} onChange={(event) => setSort(event.target.value as SortDirection)}><option value="cost">Cost</option><option value="stock">Stock</option><option value="active">Active first</option></select></div>
+      {items.length > 0 && <div id="cr-shop-controls" className="cr-react-toolbar">
+        <div className="cr-react-field cr-react-toolbar-search"><Label htmlFor="cr-shop-search">Search shop items</Label><Input id="cr-shop-search" type="search" placeholder="Search…" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></div>
+        <div className="cr-react-field cr-react-toolbar-sort"><Label htmlFor="cr-shop-sort">Sort by</Label><select id="cr-shop-sort" className="cr-react-select" value={sort} onChange={(event) => setSort(event.target.value as SortDirection)}><option value="cost">Cost</option><option value="stock">Stock</option><option value="active">Active first</option></select></div>
       </div>}
       {visibleItems.length > 0 ? <div className="cr-shop-grid">
         <div className="cr-shop-cards">
@@ -842,9 +842,13 @@ function ShopTab({
             return <article className={cn("cr-react-shop-row", !item.active && "is-inactive")} key={item.id}>
               <div className="cr-shop-row-main">
                 {item.has_image && <img className="cr-react-shop-image" src={sitePath(`/api/credits/shop/${encodeURIComponent(item.id)}/image`, siteId)} alt={`Picture for ${item.name}`} width={60} height={40} loading="lazy" decoding="async" />}
-                <button className="cr-shop-row-title" type="button" onClick={(event) => openEditor(item, event.currentTarget)}>{item.name}</button>
-                {item.active && !itemReview.ready && <button className="v3-chip v3-chip--pending cr-shop-review-chip" type="button" onClick={(event) => openEditor(item, event.currentTarget)} aria-label={`Review ${item.name}: live with incomplete details`}>Needs review</button>}
-                <p>{item.description || "No description"}</p>
+                <div className="cr-shop-row-text">
+                  <div className="cr-shop-row-heading">
+                    <button className="cr-shop-row-title" type="button" onClick={(event) => openEditor(item, event.currentTarget)}>{item.name}</button>
+                    {item.active && !itemReview.ready && <button className="v3-chip v3-chip--pending cr-shop-review-chip" type="button" onClick={(event) => openEditor(item, event.currentTarget)} aria-label={`Review ${item.name}: live with incomplete details`}>Needs review</button>}
+                  </div>
+                  <p>{item.description || "No description"}</p>
+                </div>
               </div>
               <dl className="cr-shop-row-facts">
                 <div><dt>Cost</dt><dd>{item.cost} Credits</dd></div>
@@ -1547,18 +1551,20 @@ function RulesTab({
       <CardHeader><CardTitle>Daily check-in</CardTitle><p className="v3-head-sub">Signed-in members can check in once a day (UTC) to earn credits. Works without Kick.</p></CardHeader>
       <CardContent>
         <form className="grid gap-4" onSubmit={(event) => void saveCheckin(event)}>
-          <label className="cr-auth-option" htmlFor="cr-checkin-active">
-            <Checkbox id="cr-checkin-active" checked={checkinActive} disabled={!canManage} onCheckedChange={(checked) => setCheckinActive(checked === true)} />
-            <span>Turn on daily check-in</span>
-          </label>
+          <div className="cr-react-toggle">
+            <Switch id="cr-checkin-active" checked={checkinActive} disabled={!canManage} onCheckedChange={setCheckinActive} />
+            <Label htmlFor="cr-checkin-active">Turn on daily check-in</Label>
+          </div>
           <div className="cr-react-field max-w-sm">
             <Label htmlFor="cr-checkin-amount">Credits per check-in</Label>
             <Input id="cr-checkin-amount" type="number" min={1} max={1_000} step={1} value={checkinAmount} disabled={!canManage} onChange={(event) => setCheckinAmount(event.target.value)} required />
             <span className="hint">Credits awarded once per UTC day.</span>
           </div>
           <p className="hint">Want to reward someone directly? <a href="/dashboard/audience/members">Award credits from Members.</a></p>
-          <StatusText error={checkinError}>{checkinStatus}</StatusText>
-          {canManage && <Button className="w-fit" type="submit" disabled={checkinBusy}>{checkinBusy ? "Saving…" : "Save daily check-in"}</Button>}
+          <div className="cr-react-actions">
+            <StatusText className="order-last" error={checkinError}>{checkinStatus}</StatusText>
+            {canManage && <Button className="w-fit" type="submit" disabled={checkinBusy}>{checkinBusy ? "Saving…" : "Save daily check-in"}</Button>}
+          </div>
         </form>
       </CardContent>
     </Card>
@@ -1578,16 +1584,16 @@ function RulesTab({
           action={canManage && <Button type="button" onClick={() => openForm(canCreateKickReward ? "kick" : "manual", true)} disabled={rewardAtLimit}>
             {canCreateKickReward ? "Create Kick reward" : "Add way to earn"}
           </Button>} /> : <>
-          <div className="cr-react-grid cr-react-grid--two">
-            <div className="cr-react-field"><Label htmlFor="cr-mapping-search">Search ways to earn</Label><Input id="cr-mapping-search" value={query} placeholder="Search ways to earn…" onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></div>
-            <div className="cr-react-field"><Label htmlFor="cr-mapping-sort">Sort by</Label>
-              <select id="cr-mapping-sort" className="v3-select" value={sort} onChange={(event) => setSort(event.target.value as SortDirection)}>
+          <div className="cr-react-toolbar">
+            <div className="cr-react-field cr-react-toolbar-search"><Label htmlFor="cr-mapping-search">Search ways to earn</Label><Input id="cr-mapping-search" value={query} placeholder="Search ways to earn…" onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></div>
+            <div className="cr-react-field cr-react-toolbar-sort"><Label htmlFor="cr-mapping-sort">Sort by</Label>
+              <select id="cr-mapping-sort" className="cr-react-select" value={sort} onChange={(event) => setSort(event.target.value as SortDirection)}>
                 <option value="cost">Kick cost</option><option value="stock">Credits</option><option value="active">Active first</option>
               </select>
             </div>
           </div>
           {visibleMappings.length ? <DataTable label="Ways to earn">
-            <thead><tr><th>Kick reward</th><th>Type / condition</th><th>Credits awarded</th><th>Status</th><th className="ta-r">Actions</th></tr></thead>
+            <thead><tr><th>Kick reward</th><th>Type / condition</th><th className="num">Credits awarded</th><th>Status</th><th className="ta-r">Actions</th></tr></thead>
             <tbody>{visibleMappings.map((mapping) => <tr key={mapping.id}>
               <td data-label="Kick reward"><b>{mapping.kick_reward_title}</b><br /><span className="hint">{mapping.kick_reward_id}</span></td>
               <td data-label="How it works" className="hint">Kick reward used · {mapping.kick_reward_cost} points</td>
@@ -1596,8 +1602,7 @@ function RulesTab({
                 <Switch id={`reward-toggle-${mapping.id}`} checked={mapping.active} disabled={!canManage || busy === mapping.id} onCheckedChange={(checked) => void toggleMapping(mapping, checked)} />
               </td>
               <td data-label="Actions" className="ta-r"><div className="cr-row-actions">
-                {canManage && <><Button type="button" size="sm" variant="outline" onClick={() => editMapping(mapping)}>Edit</Button>
-                  <Button type="button" size="sm" variant="destructive" onClick={() => void toggleMapping(mapping, false)}>Disable</Button></>}
+                {canManage && <Button type="button" size="sm" variant="outline" onClick={() => editMapping(mapping)}>Edit</Button>}
               </div></td>
             </tr>)}</tbody>
           </DataTable> : <EmptyState title="No matching ways to earn" body="No way to earn matches this search." />}
