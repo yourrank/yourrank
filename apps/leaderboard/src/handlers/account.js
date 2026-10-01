@@ -2,6 +2,7 @@
 import { json, bad, denied, requireUser, rateLimit } from "../auth.js";
 import { loadCreatorConnection } from "@yourrank/shared/provider-connections";
 import { one, query } from "@yourrank/shared/db";
+import { logAudit } from "@yourrank/shared/audit";
 import { effectivePlan } from "@yourrank/shared/plans";
 import { assertFeature } from "@yourrank/shared/entitlements";
 import { handlePostback } from "./attribution.js";
@@ -60,6 +61,49 @@ async function signQueryString(secret, payload) {
   return Array.from(new Uint8Array(mac))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+export async function handleAccountProfile(request, env, {
+  requireUserImpl = requireUser,
+  queryImpl = query,
+  logAuditImpl = logAudit,
+} = {}) {
+  try {
+    const { user, res } = await requireUserImpl(request, env);
+    if (res) return res;
+    if (!user) return bad("Unauthorized.", 401);
+
+    const body = await request.json().catch(() => ({}));
+    const rawName = typeof body?.displayName === "string" ? body.displayName : "";
+    const hasControlCharacters = Array.from(rawName).some((character) => {
+      const codePoint = character.codePointAt(0);
+      return codePoint !== undefined && (codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f));
+    });
+    if (hasControlCharacters) {
+      return bad("Name cannot contain control characters.", 400);
+    }
+    const displayName = rawName.trim().replace(/\s+/gu, " ");
+    if (!displayName) return bad("Enter a name.", 400);
+    if (Array.from(displayName).length > 40) return bad("Use 40 characters or fewer.", 400);
+
+    await queryImpl(
+      "UPDATE users SET display_name=$1, updated_at=now() WHERE id=$2",
+      [displayName, user.id],
+    );
+    await logAuditImpl({
+      actorId: user.id,
+      action: "account.profile_updated",
+      entityType: "user",
+      entityId: user.id,
+      details: { display_name: displayName },
+      request,
+    });
+
+    return json({ ok: true, displayName });
+  } catch (error) {
+    console.error("[handleAccountProfile] failed:", String(error?.message || error));
+    return bad("Couldn't update your name. Try again.", 500);
+  }
 }
 
 // GET /api/account/postbacks
