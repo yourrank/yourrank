@@ -306,7 +306,8 @@ describe("Chat Giveaways (Postgres)", () => {
             winner_finalized_at = NULL, winner_finalized_by = NULL,
             winner_response_required = $4::boolean, winner_response_timeout_seconds = $5::int,
             winner_response_deadline = CASE WHEN $4::boolean THEN stamp.new_drawn_at + make_interval(secs => $5::int) ELSE NULL END,
-            status = 'completed', stopped_at = COALESCE(s.stopped_at, now())`;
+            status = CASE WHEN s.status = 'active' THEN 'active' ELSE 'completed' END,
+            stopped_at = CASE WHEN s.status = 'active' THEN s.stopped_at ELSE COALESCE(s.stopped_at, now()) END`;
   const initialDraw = (sessionId, winnerId, required = false, timeout = null) => run(
     `${STAMP}
      UPDATE chat_giveaway_sessions s ${DRAW_SET}
@@ -327,14 +328,30 @@ describe("Chat Giveaways (Postgres)", () => {
     [sessionId, winnerId, siteC, required, timeout, expectedId, expectedDrawnAt],
   );
   const finalize = (sessionId, winnerId, drawnAt) => run(
-    `UPDATE chat_giveaway_sessions
-        SET winner_finalized_at = now(), winner_finalized_by = $3
-      WHERE id = $1 AND site_id = $2
-        AND winner_entry_id = $4
-        AND date_trunc('milliseconds', drawn_at) = date_trunc('milliseconds', $5::timestamptz)
-        AND winner_finalized_at IS NULL
-        AND (winner_response_required IS NOT TRUE OR winner_confirmed_at IS NOT NULL)
-      RETURNING id`,
+    `WITH finalized AS (
+       UPDATE chat_giveaway_sessions
+          SET winner_finalized_at = now(), winner_finalized_by = $3
+        WHERE id = $1 AND site_id = $2
+          AND winner_entry_id = $4
+          AND date_trunc('milliseconds', drawn_at) = date_trunc('milliseconds', $5::timestamptz)
+          AND winner_finalized_at IS NULL
+          AND (winner_response_required IS NOT TRUE OR winner_confirmed_at IS NOT NULL)
+        RETURNING id, winner_entry_id, winner_finalized_at
+    ), stamped AS (
+       UPDATE chat_giveaway_draws d
+          SET confirmed_at = finalized.winner_finalized_at
+         FROM finalized
+        WHERE d.id = (
+          SELECT latest.id
+            FROM chat_giveaway_draws latest
+           WHERE latest.giveaway_session_id = finalized.id
+             AND latest.entry_id = finalized.winner_entry_id
+           ORDER BY latest.drawn_at DESC, latest.id DESC
+           LIMIT 1
+        )
+        RETURNING d.id
+    )
+    SELECT finalized.id FROM finalized`,
     [sessionId, siteC, ownerC, winnerId, drawnAt],
   );
 
@@ -370,6 +387,35 @@ describe("Chat Giveaways (Postgres)", () => {
     expect(stale).toHaveLength(0);
     const [row] = await sql`SELECT winner_entry_id FROM chat_giveaway_sessions WHERE id = ${session.id}`;
     expect(row.winner_entry_id).toBe(entries[1].id);
+  });
+
+  integrationIt("keeps active sessions open and records finalized next draws", async () => {
+    const { session, entries } = await freshSessionWithEntries("next-a", "next-b");
+    const [locked] = await sql`SELECT * FROM chat_giveaway_sessions WHERE id=${session.id}`;
+    const first = await drawGiveaway(run, locked);
+    expect(first.session.status).toBe("active");
+    const [firstDraw] = await sql`SELECT * FROM chat_giveaway_draws WHERE giveaway_session_id=${session.id} ORDER BY drawn_at DESC, id DESC LIMIT 1`;
+    await sql`UPDATE chat_giveaway_sessions
+      SET winner_finalized_at=now(), winner_finalized_by=${ownerC}
+      WHERE id=${session.id}`;
+    await sql`UPDATE chat_giveaway_draws SET confirmed_at=now() WHERE id=${firstDraw.id}`;
+    const [finalized] = await sql`SELECT * FROM chat_giveaway_sessions WHERE id=${session.id}`;
+    const next = await drawGiveaway(run, finalized, {
+      next: true,
+      expectedWinnerEntryId: first.winnerId,
+      expectedDrawnAt: finalized.drawn_at,
+    });
+    expect(next.session.status).toBe("active");
+    const draws = await sql`SELECT reason, replaced_entry_id, username, confirmed_at FROM chat_giveaway_draws
+      WHERE giveaway_session_id=${session.id} ORDER BY drawn_at, id`;
+    expect(draws).toHaveLength(2);
+    expect(draws[0].confirmed_at).not.toBeNull();
+    expect(draws[1]).toMatchObject({ reason: "draw", replaced_entry_id: null });
+    expect(draws[1].username).toBeTruthy();
+    expect(draws[1].username).not.toBe(draws[0].username);
+    expect(draws[1].replaced_entry_id).toBeNull();
+    expect([entries[0].id, entries[1].id]).toContain(next.winnerId);
+    expect(next.winnerId).not.toBe(first.winnerId);
   });
 
   integrationIt("a same-winner reroll advances the draw identity even within one millisecond", async () => {

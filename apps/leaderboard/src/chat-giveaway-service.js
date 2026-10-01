@@ -28,18 +28,32 @@ const sameInstant = (a, b) => new Date(a).getTime() === new Date(b).getTime();
  * this same eligible pool. Manual draws are a compare-and-swap on the draw
  * identity the client saw: an initial draw requires no winner yet; a re-roll
  * requires the exact winner + drawn_at (millisecond precision, since it
- * round-trips through JSON) and an unfinalized draw. The response rule for the
- * draw comes from the rules persisted at start, never from the request.
+ * round-trips through JSON) and an unfinalized draw. A next draw requires the
+ * exact finalized winner identity. The response rule for the draw comes from
+ * the rules persisted at start, never from the request.
  */
-export async function drawGiveaway(run, session, { automatic = false, expectedWinnerEntryId = null, expectedDrawnAt = null } = {}) {
+export async function drawGiveaway(run, session, {
+  automatic = false,
+  expectedWinnerEntryId = null,
+  expectedDrawnAt = null,
+  next = false,
+} = {}) {
   const rules = giveawayRules(session.rules);
   if (session.status === "cancelled") return { error: "This giveaway was cancelled." };
+  if (next && automatic) return { conflict: true, error: DRAW_CHANGED_ERROR };
   if (automatic) {
     if (!rules.autoReroll || !rules.winnerMustRespond || session.winner_confirmed_at || session.winner_finalized_at ||
         !session.winner_response_deadline || Date.parse(session.winner_response_deadline) > Date.now() ||
         (expectedWinnerEntryId != null && expectedWinnerEntryId !== session.winner_entry_id) ||
         (expectedDrawnAt && !sameInstant(expectedDrawnAt, session.drawn_at))) {
       return { unchanged: true };
+    }
+  } else if (next) {
+    if (!session.winner_finalized_at) {
+      return { conflict: true, error: "Confirm or re-roll the current winner first." };
+    }
+    if (session.winner_entry_id !== expectedWinnerEntryId || !sameInstant(expectedDrawnAt, session.drawn_at)) {
+      return { conflict: true, error: DRAW_CHANGED_ERROR };
     }
   } else if (expectedWinnerEntryId == null) {
     if (session.winner_entry_id) return { conflict: true, error: DRAW_CHANGED_ERROR };
@@ -94,8 +108,10 @@ export async function drawGiveaway(run, session, { automatic = false, expectedWi
   const responseRequired = rules.winnerMustRespond && winner.provider !== "manual";
   const responseTimeoutSeconds = responseRequired ? rules.responseTimeout : null;
   const cas = expectedWinnerEntryId == null && !automatic
-    ? "AND s.winner_entry_id IS NULL"
-    : "AND s.winner_entry_id = $6 AND date_trunc('milliseconds', s.drawn_at) = date_trunc('milliseconds', $7::timestamptz)";
+    ? "AND s.winner_entry_id IS NULL AND s.winner_finalized_at IS NULL"
+    : next
+      ? "AND s.winner_finalized_at IS NOT NULL AND s.winner_entry_id = $6 AND date_trunc('milliseconds', s.drawn_at) = date_trunc('milliseconds', $7::timestamptz)"
+      : "AND s.winner_finalized_at IS NULL AND s.winner_entry_id = $6 AND date_trunc('milliseconds', s.drawn_at) = date_trunc('milliseconds', $7::timestamptz)";
   const params = [session.id, winner.id, session.site_id, responseRequired, responseTimeoutSeconds];
   if (expectedWinnerEntryId != null || automatic) params.push(session.winner_entry_id, session.drawn_at);
   const updated = await run(`WITH stamp AS (
@@ -109,24 +125,25 @@ export async function drawGiveaway(run, session, { automatic = false, expectedWi
            winner_response_required = $4::boolean, winner_response_timeout_seconds = $5::int,
            winner_response_deadline = CASE WHEN $4::boolean THEN stamp.new_drawn_at + make_interval(secs => $5::int) ELSE NULL END,
            auto_reroll_exhausted_at = NULL,
-           status = 'completed', stopped_at = COALESCE(s.stopped_at, now())
+           status = CASE WHEN s.status = 'active' THEN 'active' ELSE 'completed' END,
+           stopped_at = CASE WHEN s.status = 'active' THEN s.stopped_at ELSE COALESCE(s.stopped_at, now()) END
       FROM stamp
-     WHERE s.id = $1 AND s.site_id = $3 AND s.winner_finalized_at IS NULL ${cas}
+     WHERE s.id = $1 AND s.site_id = $3 ${cas}
     RETURNING ${SESSION_COLUMNS}`, params);
   if (!updated.length) return { conflict: true, error: DRAW_CHANGED_ERROR };
   // The history row lands only after the CAS commits the draw itself, so a
   // racing draw never leaves a phantom entry in history.
-  await run(`INSERT INTO chat_giveaway_draws (giveaway_session_id, entry_id, provider_user_id, reason, replaced_entry_id)
-    VALUES ($1,$2,$3,$4,$5)`,
-    [session.id, winner.id, winner.provider_user_id,
-     automatic ? "auto_reroll" : expectedWinnerEntryId != null ? "reroll" : "draw",
-     session.winner_entry_id]);
+  await run(`INSERT INTO chat_giveaway_draws (giveaway_session_id, entry_id, provider_user_id, username, reason, replaced_entry_id)
+    VALUES ($1,$2,$3,$4,$5,$6)`,
+    [session.id, winner.id, winner.provider_user_id, winner.username,
+     next ? "draw" : automatic ? "auto_reroll" : expectedWinnerEntryId != null ? "reroll" : "draw",
+     next ? null : session.winner_entry_id]);
   return { winnerId: winner.id, session: updated[0] };
 }
 
 /** Cron is a fallback when the dashboard is closed; open dashboards request at expiry. */
 export async function runGiveawayTimeouts({ queryImpl = query, transaction = giveawayTransaction } = {}) {
-  const due = await queryImpl(`SELECT id FROM chat_giveaway_sessions WHERE status='completed'
+  const due = await queryImpl(`SELECT id FROM chat_giveaway_sessions WHERE status IN ('active','stopped','completed')
     AND winner_confirmed_at IS NULL AND winner_finalized_at IS NULL
     AND winner_response_deadline <= now() AND rules->>'autoReroll'='true'
     ORDER BY winner_response_deadline LIMIT 100`);

@@ -126,7 +126,7 @@ async function routedSessionsForChannel(
         AND gs.provider = $1
         AND (
           gs.status = 'active'
-          OR (gs.status = 'completed' AND gs.winner_entry_id IS NOT NULL
+          OR (gs.status IN ('stopped','completed') AND gs.winner_entry_id IS NOT NULL
               AND gs.winner_response_required = true
               AND gs.winner_confirmed_at IS NULL AND gs.winner_finalized_at IS NULL
               AND gs.drawn_at IS NOT NULL
@@ -177,30 +177,33 @@ export async function ingestChatGiveawayMessage(
   for (const session of sessions) {
     if (session.status === "active") {
       outcome.sessionId = session.id;
-      if (!chatMessageMatchesKeyword(input.content, session.keyword)) continue;
-      outcome.matched = true;
-      const rules = giveawayRules(session.rules);
-      const facts = await giveawayParticipantFacts(run, session.site_id, input.senderUserId);
-      const eligibility = evaluateGiveawayEligibility({ ...facts, badges: input.badges }, rules);
-      const inserted = (await run(
-        `INSERT INTO chat_giveaway_entries
-           (giveaway_session_id, provider, provider_user_id, username, avatar_url, message, badges, entered_at,
-            eligibility_status, eligibility_reason)
-         SELECT $1, $2, $3, $4, $5, $6, $7::jsonb, COALESCE($8::timestamptz, now()), $9, $10
-           FROM chat_giveaway_sessions gs
-          WHERE gs.id = $1 AND gs.status = 'active'
-          FOR SHARE OF gs
-         ON CONFLICT (giveaway_session_id, provider_user_id) DO NOTHING
-         RETURNING id`,
-        [
-          session.id, input.provider, input.senderUserId, input.senderUsername.slice(0, 120),
-          input.senderAvatarUrl, input.content.slice(0, 500), input.badges ?? [],
-          input.occurredAt || null, eligibility.status, eligibility.reason,
-        ],
-      )) as { id: string }[];
-      if (inserted.length > 0) outcome.entered = true;
-      else outcome.duplicate = true;
-    } else if (session.winner_provider_user_id && session.winner_provider_user_id === input.senderUserId) {
+      if (chatMessageMatchesKeyword(input.content, session.keyword)) {
+        outcome.matched = true;
+        const rules = giveawayRules(session.rules);
+        const facts = await giveawayParticipantFacts(run, session.site_id, input.senderUserId);
+        const eligibility = evaluateGiveawayEligibility({ ...facts, badges: input.badges }, rules);
+        const inserted = (await run(
+          `INSERT INTO chat_giveaway_entries
+             (giveaway_session_id, provider, provider_user_id, username, avatar_url, message, badges, entered_at,
+              eligibility_status, eligibility_reason)
+           SELECT $1, $2, $3, $4, $5, $6, $7::jsonb, COALESCE($8::timestamptz, now()), $9, $10
+             FROM chat_giveaway_sessions gs
+            WHERE gs.id = $1 AND gs.status = 'active'
+            FOR SHARE OF gs
+           ON CONFLICT (giveaway_session_id, provider_user_id) DO NOTHING
+           RETURNING id`,
+          [
+            session.id, input.provider, input.senderUserId, input.senderUsername.slice(0, 120),
+            input.senderAvatarUrl, input.content.slice(0, 500), input.badges ?? [],
+            input.occurredAt || null, eligibility.status, eligibility.reason,
+          ],
+        )) as { id: string }[];
+        if (inserted.length > 0) outcome.entered = true;
+        else outcome.duplicate = true;
+      }
+    }
+    if (session.winner_provider_user_id && session.winner_provider_user_id === input.senderUserId) {
+      outcome.sessionId ||= session.id;
       // The winner's reply counts only while its provider timestamp sits
       // inside the draw's response window [drawn_at, drawn_at + timeout].
       const at = resolveChatEventTime(input.occurredAt).toISOString();
@@ -208,7 +211,7 @@ export async function ingestChatGiveawayMessage(
         `UPDATE chat_giveaway_sessions
             SET winner_confirmed_at = $3::timestamptz, winner_confirmation_message = $2
           WHERE id = $1
-            AND status = 'completed'
+            AND status IN ('active','stopped','completed')
             AND winner_response_required = true
             AND winner_confirmed_at IS NULL
             AND winner_finalized_at IS NULL

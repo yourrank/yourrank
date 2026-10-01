@@ -298,6 +298,7 @@ describe("Giveaways React migration", () => {
       "gw-manual-rules-note",
       "gw-entrants-card",
       "gw-entrants-list",
+      "gw-btn-clear",
       "gw-btn-roll",
       "gw-draw-history-list",
     ]) {
@@ -313,6 +314,7 @@ describe("Giveaways React migration", () => {
     expect(giveawaysPageSource).toContain("max-[960px]:order-4");
     expect(giveawaysPageSource).not.toContain("min-[961px]:sticky");
     expect(giveawaysPageSource).toContain("h-[28rem] overflow-y-auto rounded-lg border");
+    expect(giveawaysPageSource).toContain('aria-label="Clear list" title="Clear list"');
     expect(giveawaysPageSource).toContain('className="w-full text-left text-sm"');
     expect(giveawaysPageSource).toContain("gw-entrant-msg truncate text-xs text-muted-foreground");
     expect(giveawaysPageSource).not.toContain("gw-entrant-msg-inline");
@@ -372,6 +374,8 @@ describe("Giveaways React migration", () => {
     expect(winnersColumn.children).toHaveLength(1);
     expect(winnersColumn.firstElementChild).toBe($id("gw-stage-card"));
     expect($id("gw-entrants-card").contains($id("gw-btn-roll"))).toBe(true);
+    expect($id("gw-btn-clear").getAttribute("aria-label")).toBe("Clear list");
+    expect($id("gw-btn-clear").getAttribute("title")).toBe("Clear list");
     expect($id("gw-setup-card").contains($id("gw-verification-share"))).toBe(true);
     expect($id("gw-entrants-card").contains($id("gw-verification-share"))).toBe(false);
     expect(advancedCard.querySelector("#gw-advanced-settings")).toBeTruthy();
@@ -441,22 +445,23 @@ describe("Giveaways React migration", () => {
     const chat = verificationChat();
     chat.winner = { ...verificationEntries[1], username: "current-winner" };
     chat.draws = [
-      { id: "draw-first", username: "first-winner", reason: "draw", drawn_at: "2026-09-28T00:00:00Z" },
-      { id: "draw-second", username: "second-winner", reason: "auto_reroll", drawn_at: "2026-09-28T00:01:00Z" },
-      { id: "draw-current", username: "current-winner", reason: "reroll", drawn_at: "2026-09-28T00:02:00Z" },
+      { id: "draw-first", username: "first-winner", reason: "draw", drawn_at: "2026-09-28T00:00:00Z", confirmed_at: "2026-09-28T00:00:30Z" },
+      { id: "draw-second", username: "second-winner", reason: "draw", drawn_at: "2026-09-28T00:01:00Z" },
+      { id: "draw-current", username: "current-winner", reason: "auto_reroll", drawn_at: "2026-09-28T00:02:00Z" },
     ];
     await mountChat(chat);
 
     const historyItems = [...$id("gw-draw-history-list").querySelectorAll("li")].map((item) => item.textContent);
-    expect($id("gw-stage-card").textContent).toContain("Winners (3)");
+    expect($id("gw-stage-card").textContent).toContain("Winners (2)");
     expect($id("gw-stage-card").textContent).toContain("Newest first");
     expect($id("gw-stage-card").querySelector('[id^="gw-stat-"]')).toBeNull();
     expect($id("gw-draw-history").tagName).toBe("DIV");
     expect(historyItems).toHaveLength(2);
     expect(historyItems[0]).toContain("second-winner");
-    expect(historyItems[0]).toContain("Re-rolled");
+    expect(historyItems[0]).toContain("Didn't respond");
     expect(historyItems[1]).toContain("first-winner");
-    expect(historyItems[1]).toContain("Didn't respond");
+    expect(historyItems[1]).toContain("Confirmed");
+    expect($id("gw-draw-history-list").querySelectorAll(".text-emerald-700")).toHaveLength(1);
     expect(historyItems.join(" ")).not.toContain("current-winner");
   });
 

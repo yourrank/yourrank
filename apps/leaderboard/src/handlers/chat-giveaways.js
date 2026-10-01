@@ -148,7 +148,8 @@ async function loadSessionView(d, siteId, sessionId = null) {
   const winner = session.winner_entry_id ? entries.find((e) => e.id === session.winner_entry_id) || null : null;
   const draws = await d.query(
     `SELECT d.id, d.entry_id, d.reason, d.drawn_at, d.replaced_entry_id,
-            e.username, re.username AS replaced_username
+            COALESCE(e.username, d.username) AS username, re.username AS replaced_username,
+            d.confirmed_at
        FROM chat_giveaway_draws d
        LEFT JOIN chat_giveaway_entries e ON e.id = d.entry_id
        LEFT JOIN chat_giveaway_entries re ON re.id = d.replaced_entry_id
@@ -313,12 +314,11 @@ export async function handleChatGiveawayUpdateResponseRules(request, env, deps =
   const updated = await d.one(
     `UPDATE chat_giveaway_sessions SET rules = $3::jsonb
       WHERE id = $1 AND site_id = $2 AND provider = 'kick' AND status <> 'cancelled'
-        AND winner_finalized_at IS NULL
       RETURNING ${SESSION_COLUMNS}`,
     [body.sessionId, site.id, parsedRules.data],
   );
   if (!updated) {
-    return bad("Winner verification can't change after the winner is confirmed or the giveaway ends.", 409);
+    return bad("Winner verification can't change after the giveaway ends.", 409);
   }
   const connection = await d.loadChatGiveawayConnection(d.query, site.id, "kick");
   return ok({ connection, ...await loadSessionView(d, site.id, body.sessionId) });
@@ -353,8 +353,10 @@ export async function handleChatGiveawayDraw(request, env, deps = {}) {
   // the arbiter: only the draw identity the client saw (no winner yet, or the
   // exact winner + drawn_at for a re-roll) can be replaced, so concurrent tabs
   // and devices cannot overwrite a winner the client never saw.
+  const next = body.next === true;
   const reroll = body.expectedWinnerEntryId != null;
-  if (reroll && !Number.isFinite(Date.parse(body.expectedDrawnAt))) return bad("Invalid expectedDrawnAt", 400);
+  if ((reroll || next) && !Number.isFinite(Date.parse(body.expectedDrawnAt))) return bad("Invalid expectedDrawnAt", 400);
+  if (next && !reroll) return bad("Missing expectedWinnerEntryId", 400);
 
   const result = await d.transaction(async (run) => {
     const [session] = await run(
@@ -366,6 +368,7 @@ export async function handleChatGiveawayDraw(request, env, deps = {}) {
       automatic: body.automatic === true,
       expectedWinnerEntryId: reroll ? String(body.expectedWinnerEntryId) : null,
       expectedDrawnAt: reroll ? body.expectedDrawnAt : null,
+      next,
     });
   });
   if (result.conflict || result.exhausted) {
@@ -395,14 +398,30 @@ export async function handleChatGiveawayFinalize(request, env, deps = {}) {
   // timestamp round-trips through JSON), so a re-roll between the client's
   // load and this click cannot be confirmed blindly.
   const updated = await d.one(
-    `UPDATE chat_giveaway_sessions
-        SET winner_finalized_at = now(), winner_finalized_by = $3
-      WHERE id = $1 AND site_id = $2
-        AND winner_entry_id = $4
-        AND date_trunc('milliseconds', drawn_at) = date_trunc('milliseconds', $5::timestamptz)
-        AND winner_finalized_at IS NULL
-        AND (winner_response_required IS NOT TRUE OR winner_confirmed_at IS NOT NULL)
-      RETURNING ${SESSION_COLUMNS}`,
+    `WITH finalized AS (
+       UPDATE chat_giveaway_sessions
+          SET winner_finalized_at = now(), winner_finalized_by = $3
+        WHERE id = $1 AND site_id = $2
+          AND winner_entry_id = $4
+          AND date_trunc('milliseconds', drawn_at) = date_trunc('milliseconds', $5::timestamptz)
+          AND winner_finalized_at IS NULL
+          AND (winner_response_required IS NOT TRUE OR winner_confirmed_at IS NOT NULL)
+        RETURNING ${SESSION_COLUMNS}
+    ), stamped AS (
+       UPDATE chat_giveaway_draws d
+          SET confirmed_at = finalized.winner_finalized_at
+         FROM finalized
+        WHERE d.id = (
+          SELECT latest.id
+            FROM chat_giveaway_draws latest
+           WHERE latest.giveaway_session_id = finalized.id
+             AND latest.entry_id = finalized.winner_entry_id
+           ORDER BY latest.drawn_at DESC, latest.id DESC
+           LIMIT 1
+        )
+        RETURNING d.id
+    )
+    SELECT finalized.* FROM finalized`,
     [body.sessionId, site.id, user.id, String(body.winnerEntryId), body.drawnAt],
   );
 
@@ -432,6 +451,49 @@ export async function handleChatGiveawayFinalize(request, env, deps = {}) {
     return conflict("The winner must respond in chat before you can confirm.");
   }
   return conflict("Could not confirm the winner. Refresh and try again.");
+}
+
+/** POST /api/giveaways/chat/entries/clear — clear participants while keeping
+ * the session keyword and draw history intact. */
+export async function handleChatGiveawayClearEntries(request, env, deps = {}) {
+  const d = withDefaults(deps);
+  const body = (await readJson(request)) || {};
+  const { res, site } = await resolveSite(request, env, { ...d, siteIdOverride: body.siteId });
+  if (res) return res;
+  if (!body.sessionId) return bad("Missing sessionId", 400);
+
+  const result = await d.transaction(async (run) => {
+    const [session] = await run(
+      `SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id = $1 AND site_id = $2 FOR UPDATE`,
+      [body.sessionId, site.id],
+    );
+    if (!session) return { error: "Giveaway not found", status: 404 };
+    if (session.status === "cancelled") return { error: "This giveaway was cancelled.", status: 409 };
+    if (session.winner_entry_id && !session.winner_finalized_at) {
+      return { error: "Confirm or re-roll the current winner before clearing the list.", status: 409 };
+    }
+    await run(
+      `DELETE FROM chat_giveaway_entries WHERE giveaway_session_id = $1`,
+      [session.id],
+    );
+    const [updated] = await run(
+      `UPDATE chat_giveaway_sessions
+          SET winner_entry_id = NULL,
+              drawn_at = NULL,
+              winner_confirmed_at = NULL,
+              winner_confirmation_message = NULL,
+              winner_finalized_at = NULL,
+              winner_finalized_by = NULL,
+              winner_response_deadline = NULL,
+              auto_reroll_exhausted_at = NULL
+        WHERE id = $1 AND site_id = $2
+        RETURNING ${SESSION_COLUMNS}`,
+      [session.id, site.id],
+    );
+    return updated || session;
+  });
+  if (result?.error) return bad(result.error, result.status);
+  return ok(await loadSessionView(d, site.id, body.sessionId));
 }
 
 /** POST /api/giveaways/chat/entries/exclude — streamer excludes linked
