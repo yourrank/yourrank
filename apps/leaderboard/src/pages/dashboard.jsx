@@ -463,10 +463,10 @@ function BoardSettingsSection({ active } = {}) {
           </div>
           <p class="v3-settings-status" id="sitePublicSlugStatus" role="status" aria-live="polite"></p>
           <p class="v3-settings-status" id="sitePublicCopyStatus" role="status" aria-live="polite"></p>
-          <div class="v3-settings-row" data-ui-advanced><div><b>Custom domain</b><p id="sitePublicDomainSummary">Checking your domain…</p></div><button class="v3-set-btn v3-set-btn--outline" id="sitePublicDomainManage" type="button" data-settings-tab-link="domain">Manage domain</button></div>
+          <div class="v3-settings-row"><div><b>Custom domain</b><p id="sitePublicDomainSummary">Checking your domain…</p></div><button class="v3-set-btn v3-set-btn--outline" id="sitePublicDomainManage" type="button" data-settings-tab-link="domain">Manage domain</button></div>
         </div>
         <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Viewer access</h2><p>Publication and the optional site password stay with the leaderboard editor.</p></div></div><div class="v3-settings-row"><div><b>Visibility and password</b><p>Choose whether anyone with the link can view this site or a password is required.</p></div><a class="v3-set-btn v3-set-btn--outline" id="settingsBoardAccessLink" href="/dashboard/leaderboard/setup">Manage access</a></div></div>
-        <details class="v3-settings-card v3-settings-disclosure" data-ui-advanced><summary>Legal pages</summary><div class="v3-settings-disclosure-body"><p class="v3-settings-muted">Add the legal links shown in your public site footer.</p><div class="v3-settings-legal"><div id="legalList"></div><div id="legalFooterPreview" class="v3-settings-muted"></div></div></div></details>
+        <details class="v3-settings-card v3-settings-disclosure"><summary>Legal pages</summary><div class="v3-settings-disclosure-body"><p class="v3-settings-muted">Add the legal links shown in your public site footer.</p><div class="v3-settings-legal"><div id="legalList"></div><div id="legalFooterPreview" class="v3-settings-muted"></div></div></div></details>
       </div>
     </div>
   </section>

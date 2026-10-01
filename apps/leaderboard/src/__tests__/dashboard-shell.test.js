@@ -222,6 +222,31 @@ describe("signed-in shell navigation", () => {
     expect(menu).not.toContain("/dashboard/settings");
   });
 
+  it("removes the advanced-mode toggle while keeping settings blocks and legacy deep links", () => {
+    const html = renderPage(AudienceMembersPage);
+    const menuStart = html.indexOf("gm-profile-menu");
+    const menu = html.slice(menuStart, html.indexOf("</details>", menuStart));
+    expect(menu).not.toContain("data-toggle-ui-mode");
+    expect(menu).not.toContain("Advanced options");
+
+    const settingsSource = readFileSync(new URL("../react/pages/settings/page.tsx", import.meta.url), "utf8");
+    const dashboardSource = readFileSync(new URL("../pages/dashboard.jsx", import.meta.url), "utf8");
+    const shellNavSource = readFileSync(new URL("../assets/shell-nav.js", import.meta.url), "utf8");
+    const dashboardShellSource = readFileSync(new URL("../assets/dashboard/shell.js", import.meta.url), "utf8");
+    const dashboardStyles = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
+
+    expect(settingsSource).not.toContain("data-ui-advanced");
+    expect(dashboardSource).not.toContain("data-ui-advanced");
+    expect(shellNavSource).toContain('document.documentElement.setAttribute("data-ui-mode", "simple")');
+    expect(shellNavSource).toContain('localStorage.removeItem("yr-ui-mode")');
+    expect(shellNavSource).not.toContain("data-toggle-ui-mode");
+    expect(shellNavSource).not.toContain("data-ui-mode-state");
+    expect(dashboardStyles).not.toContain("[data-ui-advanced]");
+    expect(dashboardStyles).toContain('html[data-ui-mode="simple"] .v3-dash .v3-tabs [data-tabs-more][aria-expanded="false"]');
+    expect(dashboardShellSource).toContain("export function expandTabsLegacy(node)");
+    expect(dashboardShellSource).toContain("if (more) setTabsMore(more, true);");
+  });
+
   it("composes the Overview as a single-column operating flow", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard", user }).toString();
     expect(html).toContain('<div id="ov-app" class="yr-react">');

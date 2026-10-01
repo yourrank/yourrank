@@ -387,7 +387,7 @@ function AccountPanel({ user, deps }: { user: User; deps: SettingsDependencies }
           </div>
         </div>
       </details>
-      <section className="account-settings-section acc-sessions-section" data-ui-advanced aria-labelledby="accountSessionsTitle">
+      <section className="account-settings-section acc-sessions-section" aria-labelledby="accountSessionsTitle">
         <div className="d-flex justify-between items-center mb-12 flex-wrap gap-8">
           <div>
             <h2 className="m-0" id="accountSessionsTitle">Signed-in devices</h2>
@@ -828,7 +828,7 @@ Sign the raw query string with HMAC-SHA256 using your conversion tracking key, t
 Also include X-Postback-Key with your key.
 Legacy unsigned link: ${postback?.legacyUrl || "deprecated"} (sunset ${postback?.legacyUrl ? "2026-10-01" : ""})`;
   return (
-    <details className="lb-widget lb-widget--full account-settings-disclosure" id="postbacks" data-ui-advanced>
+    <details className="lb-widget lb-widget--full account-settings-disclosure" id="postbacks">
       <summary>Sponsor score updates</summary>
       <div className="account-settings-disclosure-body">
         <p className="card-sub">Connect a sponsor so confirmed activity can update player scores automatically.</p>
