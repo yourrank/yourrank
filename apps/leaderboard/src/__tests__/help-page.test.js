@@ -60,6 +60,8 @@ describe("help pages", () => {
     const html = render("helpHub", null, "/help", { returnTo: "/creator", community });
     expect(html).toContain('<h1 class="vd-h1" id="contactTitle">How YourRank works</h1>');
     expect(html).toContain("<h2>Earning and claiming</h2>");
+    expect(html).toContain("Sign in with your Kick account and join a creator's community.");
+    expect(html).not.toContain("Sign in with Kick or Discord");
     expect(html).toContain("signing in never claims a reward for you");
     expect(html).toContain(`<a href="/creator/contact">Creator &amp; Co's Contact page</a>`);
     expect(html).not.toContain("channel links on their community home page");
