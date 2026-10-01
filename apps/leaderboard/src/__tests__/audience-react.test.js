@@ -257,7 +257,7 @@ describe("React Audience page", () => {
     expect(downloads[0].filename).toContain("members-site-1-");
   });
 
-  it("keeps successful member bulk feedback in a screen-reader live region", async () => {
+  it("keeps successful member bulk feedback visible", async () => {
     await mountAudiencePage();
     await clickReactTarget(document.querySelector('button[data-member-select="member-1"]'));
     await setReactInputValue(document.getElementById("cr-bulk-reason"), "Community support");
@@ -266,7 +266,8 @@ describe("React Audience page", () => {
     const status = document.querySelector(".audience-members .audience-status[role=\"status\"]");
     expect(status).toBeTruthy();
     expect(status.textContent).not.toBe("");
-    expect(status.classList.contains("sr-only")).toBe(true);
+    expect(status.classList.contains("error")).toBe(false);
+    expect(status.classList.contains("sr-only")).toBe(false);
   });
 
   it("blocks bulk awards above 25 selected recipients", async () => {
@@ -467,7 +468,7 @@ describe("React Audience page", () => {
     expect(JSON.parse(decision.options.body)).toEqual({ decision: "allow" });
     const status = document.querySelector(".people-review-feedback .audience-status[role=\"status\"]");
     expect(status.textContent).toBe("Signup allowed for this tournament.");
-    expect(status.classList.contains("sr-only")).toBe(true);
+    expect(status.classList.contains("sr-only")).toBe(false);
   });
 
   it("confirms linked-account actions and keeps their existing request contract", async () => {
@@ -517,7 +518,7 @@ describe("React Audience page", () => {
     expect(JSON.parse(decision.options.body)).toEqual({ linkIds: ["link-1", "link-2"], action: "watch" });
     const status = document.querySelector(".people-linked-content .audience-status[role=\"status\"]");
     expect(status.textContent).toBe("Saved.");
-    expect(status.classList.contains("sr-only")).toBe(true);
+    expect(status.classList.contains("sr-only")).toBe(false);
   });
 
   it("offers only remove-restriction and dismiss actions for restricted links", async () => {

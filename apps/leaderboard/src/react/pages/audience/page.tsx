@@ -1017,7 +1017,7 @@ export function AudiencePage({
               <Button id="cr-bulk-clear" type="button" variant="ghost" onClick={clearMemberSelection}>Clear selection</Button>
             </div>
           </div>
-          <StatusMessage error={memberStatusError} visuallyHidden>{memberStatus}</StatusMessage>
+          <StatusMessage error={memberStatusError}>{memberStatus}</StatusMessage>
           {membersLoading && !members.length
             ? <LoadingRows cols={6} />
             : membersError
@@ -1277,7 +1277,7 @@ export function AudiencePage({
         />
         <section className="people-reviews" aria-label="Audience reviews">
           <div className={`people-review-queue${reviewsLoading ? " is-loading" : ""}`} aria-busy={reviewsLoading}>
-            <div className="people-review-feedback" aria-live="polite"><StatusMessage error={reviewsStatusError} visuallyHidden>{reviewsStatus}</StatusMessage>{reviewsError && <Button type="button" variant="outline" id="people-reviews-retry" onClick={() => void loadReviews()}>Try again</Button>}</div>
+            <div className="people-review-feedback" aria-live="polite"><StatusMessage error={reviewsStatusError}>{reviewsStatus}</StatusMessage>{reviewsError && <Button type="button" variant="outline" id="people-reviews-retry" onClick={() => void loadReviews()}>Try again</Button>}</div>
             {reviewsLoading
               ? <div id="people-reviews-loading" className="people-review-loading"><LoadingRows cols={5} /></div>
               : reviewsError
@@ -1349,7 +1349,7 @@ export function AudiencePage({
       />
       <section className="cr-table-card people-linked" aria-label="Linked accounts">
         <div className="people-linked-content" aria-busy={linkedLoading}>
-          <StatusMessage error={linkedStatusError} visuallyHidden>{linkedStatus}</StatusMessage>
+          <StatusMessage error={linkedStatusError}>{linkedStatus}</StatusMessage>
           {linkedLoading
             ? <LoadingRows cols={3} rows={3} />
             : linkedError

@@ -132,6 +132,17 @@
   margin: -1px;
 }
 
+.yr-react.audience-react .audience-status:not(.error):not(.sr-only) {
+  margin-block: 0.375rem;
+  color: var(--ws-text-soft);
+  font-size: 0.8125rem;
+}
+
+.yr-react.audience-react .audience-members > .audience-status:not(.error):not(.sr-only),
+.yr-react.audience-react .people-linked-content > .audience-status:not(.error):not(.sr-only) {
+  padding-inline: 1rem;
+}
+
 .yr-react.audience-react .audience-empty {
   display: grid;
   justify-items: start;
@@ -1332,6 +1343,12 @@
 
   .yr-react.audience-react .audience-activity-table td[data-label="Details"] {
     overflow-wrap: anywhere;
+  }
+
+  .yr-react.audience-react .audience-activity-table td[data-label="Activity"] .audience-activity-chip {
+    justify-self: end;
+    width: max-content;
+    max-width: 100%;
   }
 
   .yr-react.audience-react .audience-activity-table td[data-label="Change"] {
