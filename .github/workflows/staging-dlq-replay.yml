@@ -53,6 +53,11 @@ jobs:
       exhausted: ${{ steps.replay.outputs.exhausted }}
       reclaimed: ${{ steps.replay.outputs.reclaimed }}
     steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/staging-access-headers
+        with:
+          client-id: ${{ secrets.STAGING_CF_ACCESS_CLIENT_ID }}
+          client-secret: ${{ secrets.STAGING_CF_ACCESS_CLIENT_SECRET }}
       - name: Require staging admin key
         env:
           STAGING_ADMIN_API_KEY: ${{ secrets.STAGING_ADMIN_API_KEY }}

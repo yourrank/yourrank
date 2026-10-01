@@ -1,0 +1,31 @@
+name: Configure staging Cloudflare Access headers
+description: Write Cloudflare Access service-token headers to curl's user config.
+inputs:
+  client-id:
+    description: Cloudflare Access service-token client ID.
+    required: false
+  client-secret:
+    description: Cloudflare Access service-token client secret.
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Validate credentials and write curl config
+      shell: bash
+      env:
+        CLIENT_ID: ${{ inputs.client-id }}
+        CLIENT_SECRET: ${{ inputs.client-secret }}
+      run: |
+        set -euo pipefail
+        if [ -z "${CLIENT_ID:-}" ]; then
+          echo "::error::Cloudflare Access client ID is required."
+          exit 1
+        fi
+        if [ -z "${CLIENT_SECRET:-}" ]; then
+          echo "::error::Cloudflare Access client secret is required."
+          exit 1
+        fi
+        umask 077
+        printf 'header = "CF-Access-Client-Id: %s"\n' "$CLIENT_ID" > "$HOME/.curlrc"
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CLIENT_SECRET" >> "$HOME/.curlrc"
+        chmod 600 "$HOME/.curlrc"

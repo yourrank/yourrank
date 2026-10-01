@@ -193,7 +193,8 @@ still run — only the outbound side effect is absent.
 (admin postgres URL for the staging project — used by the environment guard and
 the `e2e-staging` gate as `E2E_DB_URL`), `STAGING_WORKER_DATABASE_URL`
 (`yourrank_worker` pooler URL — consumed only by `staging-bootstrap.yml` when
-creating the Hyperdrive config; not required by the release preflight).
+creating the Hyperdrive config; not required by the release preflight),
+`STAGING_CF_ACCESS_CLIENT_ID`, `STAGING_CF_ACCESS_CLIENT_SECRET`.
 
 The app talks to Postgres over Hyperdrive only — there are no Supabase
 anon/service-role keys anywhere in this system, so no `STAGING_SUPABASE_URL` /
@@ -203,7 +204,15 @@ Production names (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`,
 `SUPABASE_PROJECT_REF`, `DATABASE_URL`) must **not** exist in the staging
 environment; the preflight fails if they are visible.
 
-### 2.4 Environment identity guard
+### 2.4 Zero Trust Access
+
+`staging.yourrank.site` is protected by a Cloudflare Access app with an
+allowlisted-emails policy and a Service Auth policy for the CI service token.
+`/api/billing/webhook/polar` uses a separate Bypass app so Polar sandbox
+webhooks can reach staging. Rotate the service token before it expires and
+update both GitHub staging secrets.
+
+### 2.5 Environment identity guard
 
 `scripts/release-target-guard.mjs <staging|production>` runs before every
 mutation step (preflight, migrate, and the bootstrap). It verifies

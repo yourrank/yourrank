@@ -3,6 +3,8 @@
 
 export interface Env {
   MONITOR_TARGET: string;       // e.g. "https://yourrank.site"
+  CF_ACCESS_CLIENT_ID?: string;
+  CF_ACCESS_CLIENT_SECRET?: string;
   DISCORD_MONITORING_WEBHOOK: string;  // Discord webhook for alerts
   MONITOR_SLUG?: string;        // known board slug for /r/ check
   MONITOR_PB_KEY?: string;      // known postback key for /pb check
@@ -160,15 +162,22 @@ async function alertEmail(env: Env, failures: CheckResult[]): Promise<boolean> {
 
 export async function runChecks(env: Env): Promise<CheckResult[]> {
   const base = env.MONITOR_TARGET;
+  const targetOptions = (options: RequestInit): RequestInit => {
+    if (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET) return options;
+    const headers = new Headers(options.headers);
+    headers.set("CF-Access-Client-Id", env.CF_ACCESS_CLIENT_ID);
+    headers.set("CF-Access-Client-Secret", env.CF_ACCESS_CLIENT_SECRET);
+    return { ...options, headers };
+  };
   const checks: Promise<CheckResult>[] = [
     // 1. GET /health (leaderboard + DB)
-    checkEndpoint(`${base}/health`, { method: "GET" }, "GET /health"),
+    checkEndpoint(`${base}/health`, targetOptions({ method: "GET" }), "GET /health"),
     // 2. GET / (landing page render)
-    checkEndpoint(`${base}/`, { method: "GET" }, "GET / (landing)"),
+    checkEndpoint(`${base}/`, targetOptions({ method: "GET" }), "GET / (landing)"),
     // 3. GET /bot/health (bot worker + DB)
-    checkEndpoint(`${base}/bot/health`, { method: "GET" }, "GET /bot/health"),
+    checkEndpoint(`${base}/bot/health`, targetOptions({ method: "GET" }), "GET /bot/health"),
     // 4. GET /dashboard/telegram (bot dashboard + Telegram login widget)
-    checkEndpoint(`${base}/dashboard/telegram`, { method: "GET" }, "GET /dashboard/telegram"),
+    checkEndpoint(`${base}/dashboard/telegram`, targetOptions({ method: "GET" }), "GET /dashboard/telegram"),
   ];
 
   // 5. GET /r/<known-slug> — only if a slug is configured; 302/307 are expected
@@ -176,7 +185,7 @@ export async function runChecks(env: Env): Promise<CheckResult[]> {
     checks.push(
       checkEndpoint(
         `${base}/r/${env.MONITOR_SLUG}`,
-        { method: "GET", redirect: "manual" },
+        targetOptions({ method: "GET", redirect: "manual" }),
         `GET /r/${env.MONITOR_SLUG}`,
         10_000,
         [301, 302, 303, 307, 308]
@@ -194,14 +203,14 @@ export async function runChecks(env: Env): Promise<CheckResult[]> {
     checks.push(
       checkEndpoint(
         `${base}/pb?${qs}`,
-        {
+        targetOptions({
           method: "POST",
           headers: {
             "content-type": "application/json",
             "x-postback-key": env.MONITOR_PB_KEY,
             "x-postback-signature": signature,
           },
-        },
+        }),
         "POST /pb (canary)",
         10_000,
         [200]
@@ -226,7 +235,7 @@ export async function runChecks(env: Env): Promise<CheckResult[]> {
     checks.push(
       checkEndpoint(
         `${base}/api/health/backup`,
-        { method: "GET" },
+        targetOptions({ method: "GET" }),
         "GET /api/health/backup",
         10_000,
         [200]
@@ -236,7 +245,7 @@ export async function runChecks(env: Env): Promise<CheckResult[]> {
 
   // 8. Consumer readiness: DB reachable + scheduled heartbeat fresh, 503
   // otherwise. Read-only — the probe never refreshes the heartbeat it checks.
-  checks.push(checkEndpoint(`${base}/consumer/ready`, { method: "GET" }, "GET /consumer/ready"));
+  checks.push(checkEndpoint(`${base}/consumer/ready`, targetOptions({ method: "GET" }), "GET /consumer/ready"));
 
   return Promise.all(checks);
 }

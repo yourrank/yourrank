@@ -114,7 +114,7 @@ export const STAGING_WORKERS = Object.freeze([
     assets: false,
     // With staging crons disabled, /check is the deterministic manual trigger and
     // must stay protected.
-    requiredSecrets: Object.freeze(["MONITOR_CHECK_SECRET"]),
+    requiredSecrets: Object.freeze(["MONITOR_CHECK_SECRET", "CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET"]),
     forbiddenSecrets: Object.freeze(["DATABASE_URL"]),
     integrations: Object.freeze(["discord-monitoring", "monitor-email"]),
   },
@@ -167,6 +167,8 @@ export const STAGING_ENVIRONMENT_CONTRACT = Object.freeze({
     "STAGING_TOKEN_ENC_KEY",
     "STAGING_IP_HASH_SALT",
     "STAGING_MONITOR_CHECK_SECRET",
+    "STAGING_CF_ACCESS_CLIENT_ID",
+    "STAGING_CF_ACCESS_CLIENT_SECRET",
     "STAGING_DATABASE_URL",
   ]),
   optionalVars: Object.freeze(["STAGING_DISABLED_INTEGRATIONS", "CLOUDFLARE_WORKERS_PLAN"]),

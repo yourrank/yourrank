@@ -37,10 +37,10 @@ afterEach(() => {
   console.log = realLog;
 });
 
-function stubFetch(handler: (url: string) => Response | Promise<Response>) {
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
+function stubFetch(handler: (url: string, init?: RequestInit) => Response | Promise<Response>) {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    return handler(url);
+    return handler(url, init);
   }) as typeof fetch;
 }
 
@@ -129,6 +129,78 @@ describe("F-013/F-014 monitor /check authentication", () => {
   it("worker source contains no query-string credential path", () => {
     const src = readFileSync(resolve(import.meta.dir, "../worker.ts"), "utf8");
     expect(src).not.toMatch(/searchParams\.get\(["']secret["']\)/);
+  });
+});
+
+describe("Cloudflare Access credentials for target checks", () => {
+  it("sends both credentials to target checks, merges target headers, and keeps them off alert providers", async () => {
+    const accessEnv = {
+      ...baseEnv,
+      CF_ACCESS_CLIENT_ID: "test-access-client-id",
+      CF_ACCESS_CLIENT_SECRET: "test-access-client-secret",
+      MONITOR_PB_KEY: "test-postback-key",
+    } as Env;
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      return new Response("ok", { status: 200 });
+    });
+
+    await runChecks(accessEnv);
+    const targetCalls = calls.filter(({ url }) => url.startsWith(accessEnv.MONITOR_TARGET));
+    expect(targetCalls.length).toBeGreaterThan(0);
+    for (const { init } of targetCalls) {
+      const headers = new Headers(init?.headers);
+      expect(headers.get("CF-Access-Client-Id")).toBe(accessEnv.CF_ACCESS_CLIENT_ID);
+      expect(headers.get("CF-Access-Client-Secret")).toBe(accessEnv.CF_ACCESS_CLIENT_SECRET);
+    }
+    const postback = targetCalls.find(({ url }) => url.includes("/pb?"));
+    expect(new Headers(postback?.init?.headers).get("x-postback-key")).toBe(accessEnv.MONITOR_PB_KEY);
+    expect(new Headers(postback?.init?.headers).get("x-postback-signature")).toBeTruthy();
+
+    await alertAll({
+      ...accessEnv,
+      DISCORD_MONITORING_WEBHOOK: "https://discord.example/hook",
+      RESEND_API_KEY: "test-resend-key",
+      ALERT_EMAIL: "alerts@example.test",
+      ALERT_FROM: "monitor@example.test",
+    }, [{ name: "failed check", ok: false, status: 500, latencyMs: 1 }]);
+
+    const providerCalls = calls.filter(({ url }) => !url.startsWith(accessEnv.MONITOR_TARGET));
+    expect(providerCalls.map(({ url }) => url).sort()).toEqual([
+      "https://api.resend.com/emails",
+      "https://discord.example/hook",
+    ]);
+    for (const { init } of providerCalls) {
+      const headers = new Headers(init?.headers);
+      expect(headers.has("CF-Access-Client-Id")).toBe(false);
+      expect(headers.has("CF-Access-Client-Secret")).toBe(false);
+    }
+  });
+
+  it("omits credentials when unset or only one is provided", async () => {
+    const envs = [
+      baseEnv,
+      { ...baseEnv, CF_ACCESS_CLIENT_ID: "test-access-client-id" },
+      { ...baseEnv, CF_ACCESS_CLIENT_SECRET: "test-access-client-secret" },
+    ];
+
+    for (const env of envs) {
+      const calls: Array<{ url: string; init?: RequestInit }> = [];
+      stubFetch((url, init) => {
+        calls.push({ url, init });
+        return new Response("ok", { status: 200 });
+      });
+      await runChecks(env as Env);
+
+      const targetCalls = calls.filter(({ url }) => url.startsWith(env.MONITOR_TARGET));
+      expect(targetCalls.length).toBeGreaterThan(0);
+      for (const { init } of targetCalls) {
+        const headers = new Headers(init?.headers);
+        expect(headers.has("CF-Access-Client-Id")).toBe(false);
+        expect(headers.has("CF-Access-Client-Secret")).toBe(false);
+      }
+    }
   });
 });
 

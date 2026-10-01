@@ -55,6 +55,8 @@ const validEnvironment = () => ({
   STAGING_TOKEN_ENC_KEY: "a".repeat(64),
   STAGING_IP_HASH_SALT: "x",
   STAGING_MONITOR_CHECK_SECRET: "x",
+  STAGING_CF_ACCESS_CLIENT_ID: "x",
+  STAGING_CF_ACCESS_CLIENT_SECRET: "x",
   STAGING_DATABASE_URL: "postgresql://postgres.abcdefghijklmnopqrst:x@aws-0-eu-west-1.pooler.supabase.com:5432/postgres",
 });
 
@@ -190,6 +192,24 @@ describe("F-012 staging release verification", () => {
     ]);
     expect(checkStagingEnvironment({ ...validEnvironment(), STAGING_WEB_URL: "https://app.yourrank.site" })).toEqual([
       "STAGING_WEB_URL points at production host app.yourrank.site.",
+    ]);
+  });
+
+  it("requires the staging Cloudflare Access service-token secrets", () => {
+    const env = validEnvironment();
+    env.STAGING_CF_ACCESS_CLIENT_SECRET = "";
+    expect(checkStagingEnvironment(env)).toEqual([
+      "Required staging secret STAGING_CF_ACCESS_CLIENT_SECRET is not set in the GitHub staging environment.",
+    ]);
+  });
+
+  it("requires both Cloudflare Access secrets on the deployed staging monitor", () => {
+    const monitor = worker("monitor");
+    const disabled = parseDisabledIntegrations("discord-monitoring,monitor-email");
+    const configured = ["MONITOR_CHECK_SECRET", "CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET"];
+    expect(checkWorkerSecrets(monitor, configured, disabled).problems).toEqual([]);
+    expect(checkWorkerSecrets(monitor, configured.slice(0, 2), disabled).problems).toEqual([
+      "yourrank-monitor-staging: required secret CF_ACCESS_CLIENT_SECRET is not set.",
     ]);
   });
 
