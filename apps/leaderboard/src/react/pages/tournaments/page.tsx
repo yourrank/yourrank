@@ -1344,7 +1344,7 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
             <DialogHeader><DialogTitle id="tournament-create-heading">Create tournament</DialogTitle><DialogDescription>Create a tournament and collect entries from your community.</DialogDescription></DialogHeader>
             <div className="tn-form-grid tn-form-grid--two grid gap-4 sm:grid-cols-2">
               <Field label="Tournament name" id="tc-title">
-                <Input id="tc-title" name="title" value={createDraft.title} placeholder="e.g. Friday Night Cup" maxLength={120} required className="tn-input h-10" onChange={(event) => setCreateDraft((current) => ({ ...current, title: event.currentTarget.value }))} />
+                <Input id="tc-title" name="title" value={createDraft.title} placeholder="e.g. Friday Night Cup" maxLength={120} required className="tn-input h-10" onChange={(event) => { const title = event.currentTarget.value; setCreateDraft((current) => ({ ...current, title })); }} />
               </Field>
               <Field label="Bracket size" id="tc-bracket-size" hint={<span>How many participants play in the bracket.</span>}>
                 <Select value={createDraft.bracketSize} onValueChange={(value) => setCreateDraft((current) => ({ ...current, bracketSize: value }))}>
@@ -1356,7 +1356,7 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
             <Collapsible open={createMore} onOpenChange={setCreateMore} className="tn-more border-t border-border pt-3">
               <CollapsibleTrigger id="tc-more-trigger" className="flex items-center gap-1 text-xs font-bold text-primary">More options<ChevronDown className={cn("size-3 transition-transform", createMore && "rotate-180")} /></CollapsibleTrigger>
               <CollapsibleContent className="tn-form-grid tn-form-grid--two mt-3 grid gap-4 sm:grid-cols-2">
-                <Field label="Game" id="tc-game"><Input id="tc-game" name="gameName" value={createDraft.gameName} placeholder="e.g. Fortnite" maxLength={120} className="tn-input h-10" onChange={(event) => setCreateDraft((current) => ({ ...current, gameName: event.currentTarget.value }))} /></Field>
+                <Field label="Game" id="tc-game"><Input id="tc-game" name="gameName" value={createDraft.gameName} placeholder="e.g. Fortnite" maxLength={120} className="tn-input h-10" onChange={(event) => { const gameName = event.currentTarget.value; setCreateDraft((current) => ({ ...current, gameName })); }} /></Field>
                 <Field label="Signup limit" id="tc-entry-cap">
                   <Select value={createDraft.capMode} onValueChange={(value) => setCreateDraft((current) => ({ ...current, capMode: value }))}>
                     <SelectTrigger id="tc-entry-cap" className="tn-input h-10"><SelectValue /></SelectTrigger>
@@ -1366,17 +1366,17 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
                       <SelectItem value="custom">Custom…</SelectItem>
                     </SelectContent>
                   </Select>
-                  {createDraft.capMode === "custom" && <Input id="tc-entry-cap-custom" name="entryCap" type="number" min="1" placeholder="e.g. 40" inputMode="numeric" aria-label="Custom signup limit" className="tn-input mt-2 h-10" value={createDraft.customCap} onChange={(event) => setCreateDraft((current) => ({ ...current, customCap: event.currentTarget.value }))} />}
+                  {createDraft.capMode === "custom" && <Input id="tc-entry-cap-custom" name="entryCap" type="number" min="1" placeholder="e.g. 40" inputMode="numeric" aria-label="Custom signup limit" className="tn-input mt-2 h-10" value={createDraft.customCap} onChange={(event) => { const customCap = event.currentTarget.value; setCreateDraft((current) => ({ ...current, customCap })); }} />}
                   <span className="text-xs text-muted-foreground">Defaults to the bracket size.</span>
                 </Field>
                 <Field label="Kick channel" id="tc-chat-channel">
                   <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:border-primary focus-within:ring-2 focus-within:ring-ring">
                     <span className="flex items-center border-r border-input bg-muted px-3 py-2 text-xs text-muted-foreground">kick.com/</span>
-                    <Input id="tc-chat-channel" name="chatChannel" value={createDraft.chatChannel} placeholder="channelname" autoComplete="off" readOnly={Boolean(chatRegistration?.connected)} className="tn-input h-10 border-0 shadow-none focus-visible:ring-0" onChange={(event) => setCreateDraft((current) => ({ ...current, chatChannel: event.currentTarget.value }))} />
+                    <Input id="tc-chat-channel" name="chatChannel" value={createDraft.chatChannel} placeholder="channelname" autoComplete="off" readOnly={Boolean(chatRegistration?.connected)} className="tn-input h-10 border-0 shadow-none focus-visible:ring-0" onChange={(event) => { const chatChannel = event.currentTarget.value; setCreateDraft((current) => ({ ...current, chatChannel })); }} />
                   </div>
                   <span className="text-xs text-muted-foreground">{chatRegistration?.connected ? "Your connected Kick channel. Signups are collected here." : "Connect Kick in Settings → Connections before opening signups."}</span>
                 </Field>
-                <Field label="Chat command" id="tc-keyword"><Input id="tc-keyword" name="entryKeyword" value={createDraft.keyword} maxLength={40} className="tn-input h-10" onChange={(event) => setCreateDraft((current) => ({ ...current, keyword: event.currentTarget.value }))} /></Field>
+                <Field label="Chat command" id="tc-keyword"><Input id="tc-keyword" name="entryKeyword" value={createDraft.keyword} maxLength={40} className="tn-input h-10" onChange={(event) => { const keyword = event.currentTarget.value; setCreateDraft((current) => ({ ...current, keyword })); }} /></Field>
               </CollapsibleContent>
             </Collapsible>
             <p className="tn-message is-error rounded-md border border-red-600/30 bg-red-600/5 p-2.5 text-sm text-red-700" id="tournament-create-error" role="alert" hidden={!createError}>{createError}</p>
