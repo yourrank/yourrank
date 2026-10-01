@@ -1111,7 +1111,7 @@ function ChatGiveaway({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 min-[961px]:grid-cols-2 min-[1280px]:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.5fr)_minmax(17rem,1fr)]">
+      <div className="grid gap-6 min-[961px]:grid-cols-2 min-[1280px]:grid-cols-[minmax(18rem,1fr)_minmax(0,1.35fr)_minmax(17rem,0.95fr)]">
         <div className={cn("min-w-0 space-y-6 min-[961px]:max-[1279px]:row-span-2", active ? "max-[960px]:order-3" : "max-[960px]:order-1")}>
           <Card id="gw-setup-card">
             <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
@@ -1182,8 +1182,8 @@ function ChatGiveaway({
               <CardDescription id="gw-rules-summary">{formatRulesSummary(rules)}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <fieldset id="gw-settings" disabled={settingsLocked} className="space-y-5">
-                <fieldset id="gw-entry-modes" disabled={settingsLocked} hidden={manualUi} className="space-y-3">
+              <fieldset id="gw-settings" disabled={settingsLocked} className="m-0 min-w-0 border-0 p-0 space-y-5">
+                <fieldset id="gw-entry-modes" disabled={settingsLocked} hidden={manualUi} className="m-0 min-w-0 border-0 p-0 space-y-3">
                   <legend id="gw-entry-mode-legend" hidden={manualUi} className="text-sm font-semibold">Entry Mode</legend>
                   {(["chat", "members", "verified"] as const).map((mode) => (
                     <label key={mode} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm">
@@ -1215,7 +1215,7 @@ function ChatGiveaway({
                         : "Anyone who types the keyword can participate."}
                   </p>
                 </fieldset>
-                <fieldset id="gw-kick-eligibility-section" hidden={manualUi} className="space-y-2">
+                <fieldset id="gw-kick-eligibility-section" hidden={manualUi} className="m-0 min-w-0 border-0 p-0 space-y-2">
                   <legend id="gw-eligibility-title" className="text-sm font-semibold">Eligibility</legend>
                   <label id="gw-kick-identity-rule" className="flex items-center gap-2 text-sm">
                     <Checkbox checked disabled aria-label="One entry per Kick account" />
@@ -1225,7 +1225,7 @@ function ChatGiveaway({
                     </span>
                   </label>
                 </fieldset>
-                <fieldset id="gw-winner-repeat-modes" disabled={settingsLocked} className="space-y-2">
+                <fieldset id="gw-winner-repeat-modes" disabled={settingsLocked} className="m-0 min-w-0 border-0 p-0 space-y-2">
                   <legend id="gw-winner-repeat-title" className="text-sm font-medium">Winner repeat</legend>
                   {(["once", "again"] as const).map((value) => (
                     <label key={value} className="flex items-center gap-2 text-sm">
@@ -1247,7 +1247,7 @@ function ChatGiveaway({
                   </p>
                 </fieldset>
               </fieldset>
-              <fieldset id="gw-response-settings" className="space-y-4">
+              <fieldset id="gw-response-settings" className="m-0 min-w-0 border-0 p-0 space-y-4">
                 <div id="gw-winner-verification-section" hidden={manualUi} className="space-y-3">
                   <h3 id="gw-winner-verification-title" className="text-sm font-medium">Winner verification</h3>
                   <RuleCheckbox id="gw-opt-claim-req" label="Winner must respond in chat" checked={Boolean(rules.winnerMustRespond)} disabled={savingResponseRules} onChange={(value) => setRule("winnerMustRespond", value)} />
@@ -1281,15 +1281,15 @@ function ChatGiveaway({
           "min-[961px]:max-[1279px]:col-start-2 min-[961px]:max-[1279px]:row-start-2",
         )}>
           <Card id="gw-entrants-card">
-            <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
+            <CardHeader className="flex flex-col gap-3">
               <div>
                 <CardTitle className="text-lg">Entrants (<span id="gw-count-header">{entries.length.toLocaleString()}</span>)</CardTitle>
                 <CardDescription className="mt-2">Collect entries from chat or add viewer names here.</CardDescription>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
+              <div className="flex w-full items-center gap-2">
+                <div className="relative min-w-0 flex-1">
                   <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <Input aria-label="Search entrants" id="gw-search-entrants" className="w-52 pl-9" placeholder="Search entrant…" value={search} onChange={(event) => setSearch(event.target.value)} />
+                  <Input aria-label="Search entrants" id="gw-search-entrants" className="w-full pl-9" placeholder="Search entrant…" value={search} onChange={(event) => setSearch(event.target.value)} />
                 </div>
                 <Button id="gw-btn-export" type="button" variant="outline" size="sm" disabled={!entries.length} onClick={exportCsv}>Export CSV</Button>
               </div>
@@ -1336,9 +1336,9 @@ function ChatGiveaway({
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-lg border min-[1280px]:max-h-[70vh] min-[1280px]:overflow-y-auto">
-                  <table className="w-full min-w-[560px] text-left text-sm">
+                  <table className="w-full min-w-[560px] min-[1280px]:min-w-0 text-left text-sm">
                     <thead className="sticky top-0 z-10 bg-muted/50 text-xs uppercase text-muted-foreground">
-                      <tr><th className="px-3 py-3">#</th><th className="px-3 py-3">Viewer</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Chat Message</th><th className="px-3 py-3">Entered At</th><th className="px-3 py-3 text-right">Action</th></tr>
+                      <tr><th className="px-3 py-3">#</th><th className="px-3 py-3">Viewer</th><th className="px-3 py-3">Status</th><th className="px-3 py-3 min-[1280px]:hidden">Chat Message</th><th className="px-3 py-3 min-[1280px]:hidden">Entered At</th><th className="px-3 py-3 text-right">Action</th></tr>
                     </thead>
                     <tbody id="gw-entrants-list" className="divide-y">
                       {filteredEntries.map((entrant) => (
@@ -1465,14 +1465,14 @@ function ChatGiveaway({
 
         <Card id="gw-advanced-card" className="col-span-full max-[960px]:order-4">
           <CardContent className="pt-6">
-            <fieldset id="gw-advanced-settings" disabled={settingsLocked} className="space-y-4">
-              <details id="gw-advanced-options" open={advancedOpen} onToggle={(event) => updateAdvancedOpen(event.currentTarget.open)} className="rounded-lg border p-3">
-                <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
+            <fieldset id="gw-advanced-settings" disabled={settingsLocked} className="m-0 min-w-0 border-0 p-0 space-y-4">
+              <details id="gw-advanced-options" open={advancedOpen} onToggle={(event) => updateAdvancedOpen(event.currentTarget.open)} className="rounded-lg">
+                <summary className="flex cursor-pointer items-center justify-between gap-3 text-base font-semibold">
                   <span>Advanced options</span>
                   <span id="gw-advanced-summary" className="text-xs font-normal text-muted-foreground">{formatAdvancedSummary(rules)}</span>
                 </summary>
                 <div className="mt-4 grid gap-6 md:grid-cols-3">
-                  <fieldset id="gw-advanced-eligibility-section" disabled={settingsLocked} hidden={manualUi} className="space-y-3">
+                  <fieldset id="gw-advanced-eligibility-section" disabled={settingsLocked} hidden={manualUi} className="m-0 min-w-0 border-0 p-0 space-y-3">
                     <h3 id="gw-advanced-eligibility-title" className="text-sm font-semibold">Eligibility</h3>
                     <div id="gw-subscriber-rule" hidden={manualUi}>
                       <RuleCheckbox id="gw-opt-subscriber" label="Subscriber only" checked={Boolean(rules.subscriberOnly)} onChange={(value) => setRule("subscriberOnly", value)} />
@@ -1485,7 +1485,7 @@ function ChatGiveaway({
                     <p id="gw-subscriber-hint" hidden={manualUi} className="text-xs text-muted-foreground">Checked against chat badges. Both on requires both badges.</p>
                     <p id="gw-kick-history-hint" hidden={manualUi} className="text-xs text-muted-foreground">Account age and follow duration need Kick data that isn’t connected.</p>
                   </fieldset>
-                  <fieldset id="gw-anti-abuse-section" disabled={settingsLocked} hidden={manualUi} className="space-y-3">
+                  <fieldset id="gw-anti-abuse-section" disabled={settingsLocked} hidden={manualUi} className="m-0 min-w-0 border-0 p-0 space-y-3">
                     <h3 id="gw-abuse-title" className="text-sm font-semibold">Anti-abuse</h3>
                     <RuleCheckbox id="gw-opt-ip" label="One account per IP" checked={Boolean(rules.onePerIp)} disabled={rules.entryMode !== "verified"} onChange={(value) => setRule("onePerIp", value)} />
                     <RuleCheckbox id="gw-opt-vpn" label="VPN / Proxy detection" checked={Boolean(rules.vpnDetection)} disabled={rules.entryMode !== "verified" || capabilities.vpnDetection !== true} onChange={(value) => setRule("vpnDetection", value)} />
@@ -1783,7 +1783,10 @@ function EntrantRow({
       <td className="px-3 py-3" data-label="Viewer">
         <div className="flex items-center gap-2">
           <img className="size-8 rounded-full bg-muted object-cover" src={manual ? DEFAULT_AVATAR : safeAvatarUrl(entrant.avatar_url)} alt="" />
-          {manual ? <span className="gw-entrant-name font-medium">{entrant.username}</span> : <a className="gw-entrant-name font-medium underline-offset-4 hover:underline" href={safeKickProfileUrl(entrant.username)} target="_blank" rel="noopener">{entrant.username}</a>}
+          <div className="min-w-0">
+            {manual ? <span className="gw-entrant-name font-medium">{entrant.username}</span> : <a className="gw-entrant-name font-medium underline-offset-4 hover:underline" href={safeKickProfileUrl(entrant.username)} target="_blank" rel="noopener">{entrant.username}</a>}
+            {!manual && entrant.message && <p className="gw-entrant-msg-inline hidden max-w-56 truncate text-xs text-muted-foreground min-[1280px]:block">{entrant.message}</p>}
+          </div>
         </div>
       </td>
       <td className="px-3 py-3" data-label="Status">
@@ -1794,8 +1797,8 @@ function EntrantRow({
           </Badge>
         )}
       </td>
-      <td className="gw-entrant-msg max-w-48 truncate px-3 py-3 text-muted-foreground" data-label="Chat message">{manual ? "—" : entrant.message || ""}</td>
-      <td className="px-3 py-3 text-muted-foreground" data-label="Entered">{formatEnteredAt(entrant.entered_at)}</td>
+      <td className="gw-entrant-msg max-w-48 truncate px-3 py-3 text-muted-foreground min-[1280px]:hidden" data-label="Chat message">{manual ? "—" : entrant.message || ""}</td>
+      <td className="px-3 py-3 text-muted-foreground min-[1280px]:hidden" data-label="Entered">{formatEnteredAt(entrant.entered_at)}</td>
       <td className="px-3 py-3 text-right" data-label="Action">
         {entrant.eligibility_reason === "excluded_linked_account" && <Button type="button" size="sm" variant="outline" onClick={onInclude}>Include again</Button>}
         {linked.length > 0 && entrant.eligibility_reason !== "excluded_linked_account" && <Button type="button" size="sm" variant="outline" onClick={onExclude}>Exclude</Button>}

@@ -290,7 +290,7 @@ describe("Giveaways React migration", () => {
     }
     expect(giveawaysPageSource.indexOf('id="gw-keyword-field"')).toBeLessThan(giveawaysPageSource.indexOf('id="gw-btn-listen"'));
     expect(giveawaysPageSource.indexOf('id="gw-settings-note"')).toBeLessThan(giveawaysPageSource.indexOf('id="gw-advanced-options"'));
-    expect(giveawaysPageSource).toContain("grid gap-6 min-[961px]:grid-cols-2 min-[1280px]:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.5fr)_minmax(17rem,1fr)]");
+    expect(giveawaysPageSource).toContain("grid gap-6 min-[961px]:grid-cols-2 min-[1280px]:grid-cols-[minmax(18rem,1fr)_minmax(0,1.35fr)_minmax(17rem,0.95fr)]");
     expect(giveawaysPageSource).toContain("min-[961px]:max-[1279px]:row-span-2");
     expect(giveawaysPageSource).toContain("max-[960px]:order-1");
     expect(giveawaysPageSource).toContain("max-[960px]:order-2");
@@ -298,10 +298,14 @@ describe("Giveaways React migration", () => {
     expect(giveawaysPageSource).toContain("max-[960px]:order-4");
     expect(giveawaysPageSource).not.toContain("min-[961px]:sticky");
     expect(giveawaysPageSource).toContain("overflow-x-auto rounded-lg border min-[1280px]:max-h-[70vh] min-[1280px]:overflow-y-auto");
-    expect(giveawaysPageSource).toContain("min-w-[560px]");
+    expect(giveawaysPageSource).toContain("w-full min-w-[560px] min-[1280px]:min-w-0 text-left text-sm");
+    expect(giveawaysPageSource).toContain("gw-entrant-msg-inline hidden max-w-56 truncate text-xs text-muted-foreground min-[1280px]:block");
+    expect(giveawaysPageSource).toContain("min-[1280px]:hidden");
     expect(giveawaysPageSource).not.toContain("min-w-[680px]");
     expect(giveawaysPageSource).toContain("mt-4 grid gap-6 md:grid-cols-3");
     expect(giveawaysPageSource).toContain("sticky top-0 z-10");
+    expect(giveawaysPageSource).toContain('className="rounded-lg"');
+    expect(giveawaysPageSource).toContain("text-base font-semibold");
     expect(giveawaysConfig.styles).not.toContain("/assets/giveaways.css");
   });
 
@@ -327,6 +331,20 @@ describe("Giveaways React migration", () => {
     expect($id("gw-rules-card").contains($id("gw-settings-note"))).toBe(true);
     expect($id("gw-rules-card").contains($id("gw-manual-rules-note"))).toBe(true);
     expect(participantsColumn.querySelector("#gw-entrants-card")).toBe(entrantsCard);
+    for (const id of [
+      "gw-settings",
+      "gw-entry-modes",
+      "gw-kick-eligibility-section",
+      "gw-winner-repeat-modes",
+      "gw-response-settings",
+      "gw-advanced-settings",
+      "gw-advanced-eligibility-section",
+      "gw-anti-abuse-section",
+    ]) {
+      expect($id(id).className).toContain("m-0 min-w-0 border-0 p-0");
+    }
+    expect($id("gw-advanced-options").className).toBe("rounded-lg");
+    expect($id("gw-advanced-options").querySelector("summary").className).toContain("text-base font-semibold");
     expect(settingsColumn.className).toContain("max-[960px]:order-3");
     expect(participantsColumn.className).toContain("max-[960px]:order-2");
     expect(winnersColumn.className).toContain("max-[960px]:order-1");
@@ -369,6 +387,13 @@ describe("Giveaways React migration", () => {
     expect(row.querySelector(".gw-entrant-name").textContent).toBe(username);
     expect(row.querySelector(".gw-entrant-name img")).toBeNull();
     expect(row.querySelector(".gw-entrant-msg").textContent).toBe(message);
+    const inlineMessage = row.querySelector(".gw-entrant-msg-inline");
+    expect(inlineMessage).toBeTruthy();
+    expect(inlineMessage.textContent).toBe(message);
+    expect(inlineMessage.className).toContain("min-[1280px]:block");
+    const chatMessageHeader = [...$id("gw-entrants-card").querySelectorAll("th")].find((header) => header.textContent === "Chat Message");
+    expect(chatMessageHeader).toBeTruthy();
+    expect(chatMessageHeader.className).toContain("min-[1280px]:hidden");
     expect(row.querySelector("img").getAttribute("src")).not.toContain("javascript:");
     expect(giveawaysPageSource).not.toContain("dangerouslySetInnerHTML");
   });
