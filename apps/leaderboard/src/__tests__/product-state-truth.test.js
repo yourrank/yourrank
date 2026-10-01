@@ -41,8 +41,9 @@ describe("metric state vocabulary", () => {
   });
 
   it("renders zeros for a credits economy with no activity yet", () => {
-    expect(rewardsPage).toContain('value={loading ? "—" : String(summary.periodEarned ?? 0)}');
-    expect(rewardsPage).toContain('value={loading ? "—" : String(summary.redemptionsPending ?? 0)}');
+    expect(rewardsPage).toContain('(value ?? 0).toLocaleString()');
+    expect(rewardsPage).toContain('value={loading ? "—" : numberLabel(summary.periodEarned)}');
+    expect(rewardsPage).toContain('value={loading ? "—" : numberLabel(summary.redemptionsTotal)}');
   });
 });
 
