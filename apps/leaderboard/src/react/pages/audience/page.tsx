@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../../lib/api";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
@@ -236,11 +236,93 @@ function StatusMessage({ children, error = false }: { children: string; error?: 
   return children ? <p className={`status audience-status${error ? " error" : ""}`} role={error ? "alert" : "status"}>{children}</p> : null;
 }
 
-function PageHeader({ title, description }: { title: string; description: string }) {
+function PageHeader({ title, description, aside }: { title: string; description: string; aside?: ReactNode }) {
   return (
     <header className="cr-react-head audience-page-head">
-      <div><h1>{title}</h1><p className="hint">{description}</p></div>
+      <div className="audience-page-head__main"><h1>{title}</h1><p className="hint">{description}</p></div>
+      {aside && <div className="audience-page-head__aside">{aside}</div>}
     </header>
+  );
+}
+
+type SegmentedFilterOption<T extends string> = {
+  label: string;
+  value: T;
+  count: number;
+  countId?: string;
+};
+
+function SegmentedFilter<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: SegmentedFilterOption<T>[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="audience-segmented-filter" role="group" aria-label={label}>
+      {options.map((option) => (
+        <Button
+          className={`audience-segmented-filter__option${value === option.value ? " is-active" : ""}`}
+          key={option.value}
+          type="button"
+          variant="ghost"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+        >
+          <span>{option.label}</span>
+          <span className="audience-segmented-filter__count" id={option.countId}>{option.count}</span>
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+type AudienceEmptyKind = "members" | "activity" | "reviews" | "linked";
+
+function AudienceEmptyIcon({ kind }: { kind: AudienceEmptyKind }) {
+  if (kind === "members") {
+    return <><circle cx="12" cy="8" r="3.25" /><path d="M5.5 20c.5-3 2.7-4.5 6.5-4.5s6 1.5 6.5 4.5" /></>;
+  }
+  if (kind === "activity") {
+    return <path d="M4 17h3.5l2.25-7 4.5 10 2.25-6H20" />;
+  }
+  if (kind === "reviews") {
+    return <path d="m5 12 4.25 4.25L19 6.5" />;
+  }
+  return <><path d="m9.5 14.5 5-5" /><path d="M8 16l-1.5 1.5a4 4 0 0 1-5.65-5.65l3-3A4 4 0 0 1 9.5 9" /><path d="m16 8 1.5-1.5a4 4 0 0 1 5.65 5.65l-3 3A4 4 0 0 1 14.5 15" /></>;
+}
+
+function AudienceEmptyState({
+  id,
+  kind,
+  title,
+  body,
+  className = "",
+  children,
+}: {
+  id?: string;
+  kind: AudienceEmptyKind;
+  title: string;
+  body: string;
+  className?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div id={id} className={`audience-empty-state${className ? ` ${className}` : ""}`}>
+      <span className="audience-empty-state__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <AudienceEmptyIcon kind={kind} />
+        </svg>
+      </span>
+      <h3>{title}</h3>
+      <p>{body}</p>
+      {children}
+    </div>
   );
 }
 
@@ -894,21 +976,25 @@ export function AudiencePage({
   if (tab === "viewers") {
     return (
       <div className="yr-react audience-react" data-audience-tab={tab}>
-        <PageHeader title="Members" description="People who have joined this site or completed a supported community action." />
+        <PageHeader
+          title="Members"
+          description="People who joined this site, with their Credits."
+          aside={<span className="audience-header-count">{memberTotal ?? members.length} members</span>}
+        />
         <section className="cr-table-card cr-member-list audience-members" id="cr-viewers" aria-label="Members in this site">
-          <div className="cr-table-card__head audience-members-head">
-            <div><h2>Members in this site</h2><p className="hint">Membership and Credits activity for the selected site.</p></div>
-            <div className="cr-list-toolbar" id="cr-viewer-toolbar">
-              <Input
-                className="list-search"
-                type="search"
-                placeholder="Search members…"
-                aria-label="Search members"
-                value={memberSearch}
-                onChange={(event) => setMemberSearch(event.currentTarget.value)}
-              />
+          <div className="audience-toolbar" id="cr-viewer-toolbar">
+            <Input
+              className="list-search audience-members-search"
+              type="search"
+              placeholder="Search members…"
+              aria-label="Search members"
+              value={memberSearch}
+              onChange={(event) => setMemberSearch(event.currentTarget.value)}
+            />
+            <div className="audience-sort-control">
+              <Label htmlFor="cr-viewer-sort">Sort</Label>
               <Select value={memberSort} onValueChange={setMemberSort}>
-                <SelectTrigger className="list-sort audience-select" aria-label="Sort members"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="cr-viewer-sort" className="list-sort audience-select" aria-label="Sort members"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="activity">Recently active</SelectItem>
                   <SelectItem value="balance">Credit balance</SelectItem>
@@ -916,6 +1002,8 @@ export function AudiencePage({
                 </SelectContent>
               </Select>
             </div>
+            <span className="audience-toolbar-spacer" aria-hidden="true" />
+            <Button type="button" variant="outline" onClick={exportMembers}>Export CSV</Button>
           </div>
           <div className="cr-member-bulk-bar audience-bulk-bar" id="cr-member-bulk-bar" hidden={!selection.size} data-selection-version={selectionVersion}>
             <span id="cr-bulk-count">{selection.size} selected{selection.size > BULK_AWARD_MAX ? ` — bulk award is capped at ${BULK_AWARD_MAX} per apply` : ""}</span>
@@ -931,73 +1019,79 @@ export function AudiencePage({
           </div>
           <StatusMessage error={memberStatusError}>{memberStatus}</StatusMessage>
           {membersLoading && !members.length
-            ? <LoadingRows cols={5} />
+            ? <LoadingRows cols={6} />
             : membersError
               ? <ErrorState title="Couldn't load members" body="People for the selected site could not be loaded." onRetry={() => void loadMembers()} />
               : members.length === 0
-                ? <div className="v3-empty audience-empty" id="cr-viewer-empty">
-                    <h2>{debouncedMemberSearch ? "No matching members" : "No members yet"}</h2>
-                    <p>{debouncedMemberSearch
+                ? <AudienceEmptyState
+                    id="cr-viewer-empty"
+                    kind="members"
+                    title={debouncedMemberSearch ? "No matching members" : "No members yet"}
+                    body={debouncedMemberSearch
                       ? "No member name matches this search on the selected site."
-                      : "People become members when they choose to join this community or complete a supported community action."}</p>
+                      : "People become members when they choose to join this community or complete a supported community action."}
+                  >
                     {!debouncedMemberSearch && <a className="v3-btn v3-btn--accent v3-btn--sm" href="/dashboard/leaderboard/share">Share your site</a>}
-                  </div>
-                : (
-                  <>
-                    <div className="cr-table-scroll">
-                      <table className="cr-table audience-member-table">
-                        <thead><tr>
-                          <th className="cr-member-select-col"><Checkbox id="cr-member-select-all" checked={selectAllState} aria-label="Select all members on this page" onCheckedChange={(checked) => members.forEach((member) => handleMemberSelection(member.id, checked === true))} /></th>
-                          <th>Member</th><th>Membership</th><th>Account connection</th><th>Credits</th><th className="ta-r">Actions</th>
-                        </tr></thead>
-                        <tbody id="cr-viewer-list">
-                          {members.map((member) => {
-                            const name = memberIdentity(member);
-                            const lastActive = member.lastSeenAt || member.lastCreditAt;
-                            return (
-                              <tr key={member.id}>
-                                <td className="cr-member-select-col" data-label="Select">
-                                  <Checkbox
-                                    data-member-select={member.id}
-                                    checked={selection.has(member.id)}
-                                    aria-label={`Select ${name}`}
-                                    onCheckedChange={(checked) => handleMemberSelection(member.id, checked === true)}
-                                  />
-                                </td>
-                                <td data-label="Member"><div className="cr-viewer-identity">
-                                  {member.avatarUrl
-                                    ? <img className="cr-viewer-avatar" src={member.avatarUrl} alt="" loading="lazy" />
-                                    : <span className="cr-viewer-avatar cr-viewer-avatar--fallback" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>}
-                                  <span className="cr-member-name"><b>{name}</b>{member.blocked && <span className="v3-chip v3-chip--cancelled">Blocked on this site</span>}</span>
-                                </div></td>
-                                <td data-label="Membership"><div className="cr-member-activity">{lastActive
-                                  ? <b title={`Last active: ${formatDate(lastActive)}`}>Active {relative(lastActive)}</b>
-                                  : <b>No activity yet</b>}</div></td>
-                                <td data-label="Account connection"><div className="cr-member-platforms">{member.linkedIdentities?.length
-                                  ? member.linkedIdentities.map((identity, index) => <span key={`${identity.provider}-${index}`}>{identity.provider} sign-in</span>)
-                                  : <span>No signed-in account</span>}</div></td>
-                                <td data-label="Credits"><div className="cr-member-credits"><b>{Number(member.balance) || 0} Credits</b><span>Earned {Number(member.totalEarned) || 0} · Spent {Number(member.totalSpent) || 0}</span></div></td>
-                                <td data-label="Actions" className="ta-r cr-member-actions"><Button
-                                  className="btn btn--sm"
-                                  type="button"
-                                  variant="outline"
-                                  data-member-detail={member.id}
-                                  aria-controls="audience-member-drawer"
-                                  aria-expanded={memberDetailOpen && memberDetailId === member.id}
-                                  onClick={() => void loadMemberDetail(member.id)}
-                                >View member</Button></td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <footer className="cr-list-foot audience-list-foot" id="cr-viewer-foot">
-                      <span className="list-page-info">Showing {members.length}{memberTotal !== null ? ` of ${memberTotal}` : memberPage.hasMore ? "" : ""} members{memberPage.hasMore && memberTotal === null ? " · more available" : ""}</span>
-                      {memberPage.hasMore && <Button type="button" variant="outline" size="sm" disabled={membersMoreLoading} onClick={() => void loadMembers({ append: true, cursor: memberPage.nextCursor || "" })}>{membersMoreLoading ? "Loading…" : "Load more"}</Button>}
-                    </footer>
-                  </>
-                )}
+                  </AudienceEmptyState>
+                : <div className="cr-table-scroll">
+                    <table className="cr-table audience-member-table">
+                      <thead><tr>
+                        <th className="cr-member-select-col"><Checkbox id="cr-member-select-all" checked={selectAllState} aria-label="Select all members on this page" onCheckedChange={(checked) => members.forEach((member) => handleMemberSelection(member.id, checked === true))} /></th>
+                        <th>Member</th><th>Last active</th><th>Account</th><th className="ta-r">Credits</th><th className="ta-r">View</th>
+                      </tr></thead>
+                      <tbody id="cr-viewer-list">
+                        {members.map((member) => {
+                          const name = memberIdentity(member);
+                          const lastActive = member.lastSeenAt || member.lastCreditAt;
+                          const balance = Number(member.balance) || 0;
+                          const earned = Number(member.totalEarned) || 0;
+                          const spent = Number(member.totalSpent) || 0;
+                          return (
+                            <tr key={member.id}>
+                              <td className="cr-member-select-col" data-label="Select">
+                                <Checkbox
+                                  data-member-select={member.id}
+                                  checked={selection.has(member.id)}
+                                  aria-label={`Select ${name}`}
+                                  onCheckedChange={(checked) => handleMemberSelection(member.id, checked === true)}
+                                />
+                              </td>
+                              <td data-label="Member"><div className="cr-viewer-identity">
+                                {member.avatarUrl
+                                  ? <img className="cr-viewer-avatar" src={member.avatarUrl} alt="" loading="lazy" />
+                                  : <span className="cr-viewer-avatar cr-viewer-avatar--fallback" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>}
+                                <span className="cr-member-name"><b>{name}</b>{member.blocked && <span className="v3-chip v3-chip--cancelled">Blocked</span>}</span>
+                              </div></td>
+                              <td data-label="Last active"><div className="cr-member-activity">{lastActive
+                                ? <span title={`Last active: ${formatDate(lastActive)}`}>{relative(lastActive)}</span>
+                                : <span>No activity yet</span>}</div></td>
+                              <td data-label="Account"><div className="cr-member-platforms">{member.linkedIdentities?.length
+                                ? member.linkedIdentities.map((identity, index) => <span className="audience-account-chip" key={`${identity.provider}-${index}`}>{identity.provider}</span>)
+                                : <span className="audience-no-signin">No sign-in</span>}</div></td>
+                              <td data-label="Credits" className="ta-r"><div className="cr-member-credits audience-member-credits">
+                                <b className="num">{balance.toLocaleString()}</b>
+                                <span className="num">+{earned.toLocaleString()} earned · −{spent.toLocaleString()} spent</span>
+                              </div></td>
+                              <td data-label="View" className="ta-r cr-member-actions"><Button
+                                className="btn btn--sm"
+                                type="button"
+                                variant="outline"
+                                data-member-detail={member.id}
+                                aria-controls="audience-member-drawer"
+                                aria-expanded={memberDetailOpen && memberDetailId === member.id}
+                                onClick={() => void loadMemberDetail(member.id)}
+                              >View</Button></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>}
+          {!membersLoading && !membersError && <footer className="cr-list-foot audience-list-foot" id="cr-viewer-foot">
+            <span className="list-page-info">Showing {members.length} of {memberTotal ?? members.length}</span>
+            <span className="audience-list-foot__hint">Select members to award Credits in bulk</span>
+            {memberPage.hasMore && <Button type="button" variant="outline" size="sm" disabled={membersMoreLoading} onClick={() => void loadMembers({ append: true, cursor: memberPage.nextCursor || "" })}>{membersMoreLoading ? "Loading…" : "Load more"}</Button>}
+          </footer>}
         </section>
         <aside className="cr-audience-note audience-note">
           <div><h2>Looking for visitor trends?</h2><p>Anonymous visits and traffic sources live in Insights.</p></div>
@@ -1093,9 +1187,13 @@ export function AudiencePage({
   if (tab === "history") {
     return (
       <div className="yr-react audience-react" data-audience-tab={tab}>
-        <PageHeader title="Activity" description="Credit activity for the selected site. Filter by member and activity type." />
+        <PageHeader
+          title="Activity"
+          description="Every Credit earned or spent on this site."
+          aside={<span className="audience-header-count">{activityEvents.length} entries</span>}
+        />
         <section className="cr-table-card audience-activity">
-          <form className="audience-activity-filters" onSubmit={(event) => {
+          <form className="audience-activity-filters" aria-label="Filter activity" onSubmit={(event) => {
             event.preventDefault();
             const username = activityUsername.trim();
             if (username === appliedActivityUsername && activityType === appliedActivityType) {
@@ -1105,14 +1203,14 @@ export function AudiencePage({
               setAppliedActivityType(activityType);
             }
           }}>
-            <div className="audience-field"><Label htmlFor="cr-history-username">Member username</Label><Input id="cr-history-username" name="username" type="text" value={activityUsername} onChange={(event) => setActivityUsername(event.currentTarget.value)} placeholder="Kick or Discord username" /></div>
-            <div className="audience-field"><Label htmlFor="cr-history-type">Activity type</Label><Select value={activityType || "all"} onValueChange={(value) => setActivityType(value === "all" ? "" : value)}>
+            <div className="audience-activity-search"><Label className="sr-only" htmlFor="cr-history-username">Member username</Label><Input className="audience-activity-username" id="cr-history-username" name="username" type="text" value={activityUsername} onChange={(event) => setActivityUsername(event.currentTarget.value)} placeholder="Kick or Discord username" /></div>
+            <div className="audience-activity-type"><Label className="sr-only" htmlFor="cr-history-type">Activity type</Label><Select value={activityType || "all"} onValueChange={(value) => setActivityType(value === "all" ? "" : value)}>
               <SelectTrigger id="cr-history-type" className="audience-select"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="all">All activity</SelectItem>
                 {Object.entries(LEDGER_EVENT_LABELS).map(([value, label]) => <SelectItem value={value} key={value}>{label}</SelectItem>)}
               </SelectContent>
             </Select></div>
-            <Button id="cr-history-search" type="submit" disabled={activityLoading}>{activityLoading ? "Loading…" : "Apply filters"}</Button>
+            <Button id="cr-history-search" type="submit" disabled={activityLoading}>{activityLoading ? "Loading…" : "Apply"}</Button>
           </form>
           {viewerHistoryVisible && <section className="cr-table-card audience-history-summary" id="cr-history-summary">
             <h2>Member activity across sites</h2>
@@ -1128,18 +1226,29 @@ export function AudiencePage({
             : activityError
               ? <ErrorState title="Couldn't load activity" body={activityStatus || "Activity for the selected site could not be loaded."} onRetry={() => void loadActivity(true)} />
               : activityEvents.length === 0
-                ? <div className="v3-empty audience-empty" id="cr-history-feed-empty">
-                    <h2>No credit activity found</h2>
-                    <p>{appliedActivityUsername.trim()
+                ? <AudienceEmptyState
+                    id="cr-history-feed-empty"
+                    kind="activity"
+                    title="No credit activity found"
+                    body={appliedActivityUsername.trim()
                       ? "This member has not earned or spent credits yet. Try another member or activity type."
-                      : "No credit activity matches the current filters. Try another member or activity type."}</p>
-                  </div>
+                      : "No credit activity matches the current filters. Try another member or activity type."}
+                  />
                 : <div className="cr-table-scroll"><table className="cr-table audience-activity-table" aria-busy={activityMoreLoading}>
-                    <thead><tr><th>When</th><th>Member</th><th>Activity</th><th>Change</th><th>Details</th></tr></thead>
+                    <thead><tr><th>When</th><th>Member</th><th>Activity</th><th>Details</th><th className="ta-r">Change</th></tr></thead>
                     <tbody id="cr-history-feed-list">{activityEvents.map((event, index) => {
                       const debit = event.direction === "debit";
                       const memberName = event.kickUsername || event.discordUsername || event.kickUserId || event.discordUserId || "Unknown member";
-                      return <tr key={event.id || `${event.createdAt}-${index}`}><td data-label="When" title={formatDate(event.createdAt)}>{relative(event.createdAt)}</td><td data-label="Member">{memberName}</td><td data-label="Activity">{LEDGER_EVENT_LABELS[event.type] || event.type}</td><td data-label="Change" className={`num ${debit ? "cr-negative" : "cr-positive"}`}>{debit ? "−" : "+"}{event.amount}</td><td data-label="Details">{event.description || "—"}</td></tr>;
+                      return <tr key={event.id || `${event.createdAt}-${index}`}>
+                        <td data-label="When" title={formatDate(event.createdAt)}>{relative(event.createdAt)}</td>
+                        <td data-label="Member"><div className="audience-activity-member">
+                          <span className="audience-activity-avatar" aria-hidden="true">{memberName.slice(0, 1).toUpperCase()}</span>
+                          <span>{memberName}</span>
+                        </div></td>
+                        <td data-label="Activity"><span className="audience-activity-chip">{LEDGER_EVENT_LABELS[event.type] || event.type}</span></td>
+                        <td data-label="Details">{event.description || "—"}</td>
+                        <td data-label="Change" className={`num ta-r audience-activity-change ${debit ? "is-negative" : "is-positive"}`}>{debit ? "−" : "+"}{event.amount}</td>
+                      </tr>;
                     })}</tbody>
                   </table></div>}
           <footer className="cr-list-foot audience-list-foot">
@@ -1153,17 +1262,21 @@ export function AudiencePage({
   if (tab === "reviews") {
     return (
       <div className="yr-react audience-react" data-audience-tab={tab}>
-        <PageHeader title="Reviews" description="Human decisions needed for your community." />
+        <PageHeader
+          title="Reviews"
+          description="Signups that need your decision before they count."
+          aside={<SegmentedFilter
+            label="Review status"
+            value={reviewFilter}
+            onChange={setReviewFilter}
+            options={[
+              { label: "Needs review", value: "pending", count: reviewCounts.pending, countId: "people-reviews-pending-count" },
+              { label: "Resolved", value: "resolved", count: reviewCounts.resolved },
+            ]}
+          />}
+        />
         <section className="people-reviews" aria-label="Audience reviews">
-          <div className="people-reviews__head">
-            <div className="people-review-count"><strong id="people-reviews-pending-count">{reviewCounts.pending}</strong><span>needs review</span></div>
-            <div className="people-review-filters" role="group" aria-label="Review status">
-              <Button type="button" variant={reviewFilter === "pending" ? "default" : "outline"} className={reviewFilter === "pending" ? "is-active" : ""} aria-pressed={reviewFilter === "pending"} onClick={() => setReviewFilter("pending")}>Needs review</Button>
-              <Button type="button" variant={reviewFilter === "resolved" ? "default" : "outline"} className={reviewFilter === "resolved" ? "is-active" : ""} aria-pressed={reviewFilter === "resolved"} onClick={() => setReviewFilter("resolved")}>Resolved</Button>
-            </div>
-          </div>
           <div className={`people-review-queue${reviewsLoading ? " is-loading" : ""}`} aria-busy={reviewsLoading}>
-            <div className="people-review-toolbar"><div><h2>{reviewFilter === "pending" ? "Needs review" : "Resolved reviews"}</h2><p>{reviewFilter === "pending" ? "Review the context before allowing or excluding a signup." : "Decisions made for this site."}</p></div></div>
             <div className="people-review-feedback" aria-live="polite"><StatusMessage error={reviewsStatusError}>{reviewsStatus}</StatusMessage>{reviewsError && <Button type="button" variant="outline" id="people-reviews-retry" onClick={() => void loadReviews()}>Try again</Button>}</div>
             {reviewsLoading
               ? <div id="people-reviews-loading" className="people-review-loading"><LoadingRows cols={5} /></div>
@@ -1180,7 +1293,15 @@ export function AudiencePage({
                         <td data-label="Actions" className="ta-r"><Button className="btn btn--sm" type="button" variant="outline" data-open-review={review.id} aria-controls="people-review-drawer" aria-expanded={reviewDialogOpen && selectedReview?.id === review.id} onClick={() => void loadReviewDetail(review.id)}>View review</Button></td>
                       </tr>)}</tbody>
                     </table></div>
-                  : <div className="people-review-empty" id="people-reviews-empty"><h3>{reviewFilter === "pending" ? "No reviews need your attention." : "No resolved reviews yet."}</h3><p>{reviewFilter === "pending" ? "New eligibility exceptions for this site will appear here." : "Decisions made for this site will appear here."}</p></div>}
+                  : <AudienceEmptyState
+                    id="people-reviews-empty"
+                    kind="reviews"
+                    className="people-review-empty"
+                    title={reviewFilter === "pending" ? "You're all caught up" : "No resolved reviews yet."}
+                    body={reviewFilter === "pending"
+                      ? "When a signup needs a human decision, it shows up here."
+                      : "Decisions made for this site will appear here."}
+                  />}
           </div>
         </section>
         <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
@@ -1213,15 +1334,20 @@ export function AudiencePage({
 
   return (
     <div className="yr-react audience-react" data-audience-tab="linked">
-      <PageHeader title="Linked accounts" description="Review account links and decide how they should be handled on this site." />
-      <section className="people-linked">
-        <div className="people-linked-header">
-          <div><h2>Account links</h2><p className="hint">Signals help prioritize review; they do not prove identity.</p></div>
-          <div className="people-review-filters" role="group" aria-label="Linked account status">
-            <Button type="button" variant={linkedFilter === "active" ? "default" : "outline"} aria-pressed={linkedFilter === "active"} onClick={() => setLinkedFilter("active")}>Active <span className="people-linked-filter-count">{linkedCounts.pending}</span></Button>
-            <Button type="button" variant={linkedFilter === "dismissed" ? "default" : "outline"} aria-pressed={linkedFilter === "dismissed"} onClick={() => setLinkedFilter("dismissed")}>Dismissed <span className="people-linked-filter-count">{linkedCounts.dismissed}</span></Button>
-          </div>
-        </div>
+      <PageHeader
+        title="Linked accounts"
+        description="Accounts that may belong to the same person. Signals only — they don't prove identity."
+        aside={<SegmentedFilter
+          label="Linked account status"
+          value={linkedFilter}
+          onChange={setLinkedFilter}
+          options={[
+            { label: "Active", value: "active", count: linkedCounts.pending },
+            { label: "Dismissed", value: "dismissed", count: linkedCounts.dismissed },
+          ]}
+        />}
+      />
+      <section className="cr-table-card people-linked" aria-label="Linked accounts">
         <div className="people-linked-content" aria-busy={linkedLoading}>
           <StatusMessage error={linkedStatusError}>{linkedStatus}</StatusMessage>
           {linkedLoading
@@ -1235,7 +1361,14 @@ export function AudiencePage({
                     pending={linkedPending}
                     onAction={(action) => void decideLinked(group, action)}
                   />)}</div>
-                : <div className="people-review-empty"><h3>{linkedFilter === "dismissed" ? "No dismissed account links." : "No linked accounts need attention."}</h3><p>{linkedFilter === "dismissed" ? "Dismissed signals for this site will appear here." : "New account-link signals for this site will appear here."}</p></div>}
+                : <AudienceEmptyState
+                  kind="linked"
+                  className="people-review-empty"
+                  title={linkedFilter === "dismissed" ? "No dismissed account links." : "No linked accounts to check"}
+                  body={linkedFilter === "dismissed"
+                    ? "Dismissed signals for this site will appear here."
+                    : "When two accounts look connected, they appear here so you can keep or dismiss the link."}
+                />}
         </div>
       </section>
     </div>

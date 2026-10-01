@@ -444,8 +444,11 @@ describe("People Reviews route and UI ownership", () => {
     expect(routes).toContain('path: "/api/people/reviews/:id/decision"');
     expect(index).toContain('clean === "/dashboard/audience/reviews"');
     expect(AudienceReviewsPage({ fragment: true }).toString()).toContain('<div id="audience-app" data-audience-tab="reviews"></div>');
-    expect(reactPage).toContain("Human decisions needed for your community.");
-    expect(reactPage).toContain("No reviews need your attention.");
+    expect(reactPage).toContain("Signups that need your decision before they count.");
+    expect(reactPage).toContain("You're all caught up");
+    expect(reactPage).toContain("When a signup needs a human decision, it shows up here.");
+    expect(reactPage).not.toContain("Human decisions needed for your community.");
+    expect(reactPage).not.toContain("No reviews need your attention.");
     expect(page).toContain('href: "/dashboard/audience/members"');
     expect(page).toContain('href: "/dashboard/audience/reviews"');
     expect(client).toContain('import("./react/audience.js")');

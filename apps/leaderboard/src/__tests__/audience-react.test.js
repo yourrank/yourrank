@@ -136,6 +136,69 @@ describe("React Audience page", () => {
     expect(document.getElementById("people-reviews-list")?.textContent).toContain("SPA review signup");
   });
 
+  it("keeps one page heading and exposes count-bearing segmented filters", async () => {
+    await mountAudiencePage();
+    let page = document.querySelector(".audience-react");
+    expect(page.querySelectorAll("h1")).toHaveLength(1);
+    expect(page.querySelector("h1").textContent).toBe("Members");
+    expect(page.querySelector(".audience-page-head__main .hint").textContent).toBe("People who joined this site, with their Credits.");
+    expect(page.querySelector(".audience-header-count").textContent).toBe("1 members");
+    expect([...page.querySelectorAll("h2")].map((heading) => heading.textContent)).not.toContain("Members in this site");
+
+    await unmountAudiencePage();
+    await mountAudiencePage({
+      tab: "history",
+      url: "http://localhost/dashboard/audience/activity?siteId=site-1",
+    });
+    page = document.querySelector(".audience-react");
+    expect(page.querySelectorAll("h1")).toHaveLength(1);
+    expect(page.querySelector("h1").textContent).toBe("Activity");
+    expect(page.querySelector(".audience-page-head__main .hint").textContent).toBe("Every Credit earned or spent on this site.");
+    expect(page.querySelector(".audience-header-count").textContent).toBe("0 entries");
+
+    await unmountAudiencePage();
+    await mountAudiencePage({
+      tab: "reviews",
+      url: "http://localhost/dashboard/audience/reviews?siteId=site-1",
+      deps: {
+        api: async (path) => path.startsWith("/api/people/reviews?")
+          ? { reviews: [], counts: { pending: 3, resolved: 5 } }
+          : {},
+      },
+    });
+    page = document.querySelector(".audience-react");
+    expect(page.querySelectorAll("h1")).toHaveLength(1);
+    expect(page.querySelector("h1").textContent).toBe("Reviews");
+    expect(page.querySelector(".audience-page-head__main .hint").textContent).toBe("Signups that need your decision before they count.");
+    expect([...page.querySelectorAll("h2")].map((heading) => heading.textContent)).not.toContain("Needs review");
+    expect([...page.querySelectorAll("h2")].map((heading) => heading.textContent)).not.toContain("Resolved reviews");
+    const reviewFilter = page.querySelector('[role="group"][aria-label="Review status"]');
+    const reviewButtons = [...reviewFilter.querySelectorAll("button")];
+    expect(reviewButtons.map((button) => button.getAttribute("aria-pressed"))).toEqual(["true", "false"]);
+    expect(reviewButtons.map((button) => button.textContent.trim())).toEqual(["Needs review3", "Resolved5"]);
+    expect(page.querySelector("#people-reviews-pending-count").textContent).toBe("3");
+
+    await unmountAudiencePage();
+    await mountAudiencePage({
+      tab: "linked",
+      url: "http://localhost/dashboard/audience/linked?siteId=site-1",
+      deps: {
+        api: async (path) => path.startsWith("/api/people/linked-accounts?")
+          ? { groups: [], counts: { pending: 4, watching: 0, restricted: 0, dismissed: 2 } }
+          : {},
+      },
+    });
+    page = document.querySelector(".audience-react");
+    expect(page.querySelectorAll("h1")).toHaveLength(1);
+    expect(page.querySelector("h1").textContent).toBe("Linked accounts");
+    expect(page.querySelector(".audience-page-head__main .hint").textContent).toBe("Accounts that may belong to the same person. Signals only — they don't prove identity.");
+    expect([...page.querySelectorAll("h2")].map((heading) => heading.textContent)).not.toContain("Account links");
+    const linkedFilter = page.querySelector('[role="group"][aria-label="Linked account status"]');
+    const linkedButtons = [...linkedFilter.querySelectorAll("button")];
+    expect(linkedButtons.map((button) => button.getAttribute("aria-pressed"))).toEqual(["true", "false"]);
+    expect(linkedButtons.map((button) => button.textContent.trim())).toEqual(["Active4", "Dismissed2"]);
+  });
+
   it("opens the site-scoped member drawer from ?member=", async () => {
     const calls = [];
     await mountAudiencePage({
@@ -397,7 +460,7 @@ describe("React Audience page", () => {
       },
     });
     expect(document.querySelector(".people-linked-pill").textContent).toBe("New");
-    expect(document.querySelector('.people-review-filters[aria-label="Linked account status"] button').textContent.trim()).toMatch(/^Active/);
+    expect(document.querySelector('.audience-segmented-filter[aria-label="Linked account status"] button').textContent.trim()).toMatch(/^Active/);
     await clickReactTarget([...document.querySelectorAll("button")].find((button) => button.textContent === "Watch"));
 
     const decision = calls.find((call) => call.path === "/api/people/linked-accounts/decision");
