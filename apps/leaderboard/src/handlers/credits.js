@@ -1234,6 +1234,7 @@ export async function handleCreditsAnalytics(request, env) {
          LEFT JOIN redemptions r ON r.shop_item_id = i.id AND r.created_at > $2::timestamptz
         WHERE i.site_id = $1
         GROUP BY i.id, i.name
+       HAVING COUNT(r.id) FILTER (WHERE r.status != 'cancelled') > 0
         ORDER BY redemptions DESC, i.name ASC
         LIMIT 10`,
       [site.id, startDate]

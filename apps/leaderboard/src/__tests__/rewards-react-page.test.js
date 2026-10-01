@@ -24,6 +24,26 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+function setupDoneStatus() {
+  return {
+    channel: { connected: true, name: "sam" },
+    mappings: [{ id: "mapping-1", kick_reward_id: "reward-1", kick_reward_title: "Sticker", kick_reward_cost: 100, credits: 10, active: true }],
+    shopItems: [{ id: "item-1", name: "VIP role", cost: 100, stock: null, active: true }],
+    usage: { redemptionsPer30Days: 0, pendingRedemptions: 0 },
+    limits: { redemptionsPer30Days: 10000, pendingRedemptions: 2500 },
+  };
+}
+
+async function mountOverview({ status = setupDoneStatus(), analytics = {}, board } = {}) {
+  return mountRewardsPage({
+    tab: "overview",
+    deps: {
+      api: async (path) => path === "/api/credits/status" ? status : analytics,
+      loadBoardShell: async () => ({ activeSiteId: "site-1", board }),
+    },
+  });
+}
+
 describe("React Rewards page", () => {
   it("shows the loader until status resolves, then reveals the page", async () => {
     const status = deferred();
@@ -80,6 +100,50 @@ describe("React Rewards page", () => {
     await clickReactTarget([...container.querySelectorAll("button")].find((button) => button.textContent === "Try again"));
     expect(statusRequests).toBe(2);
     expect(container.querySelector("h1").textContent).toBe("Overview");
+  });
+
+  it("shows the first-claim overview and hides zero-claim top items", async () => {
+    const { container } = await mountOverview({
+      analytics: {
+        topItems: [{ id: "item-1", name: "VIP role", redemptions: 0, credits_spent: 0 }],
+      },
+    });
+
+    expect(container.textContent).toContain("Get your first claim");
+    expect(container.textContent).toContain("Kick connected");
+    expect(container.textContent).toContain("@sam");
+    expect(container.textContent).toContain("0 of 10,000 claims · last 30 days");
+    expect(container.textContent).toContain("No items claimed yet");
+    expect(container.querySelector('table[aria-label="Top items"]')).toBeNull();
+    expect(container.textContent).not.toContain("VIP role");
+    expect(container.textContent).not.toContain("Metric glossary");
+  });
+
+  it("offers a review action when claims are open", async () => {
+    const status = setupDoneStatus();
+    status.usage.pendingRedemptions = 3;
+    const { container } = await mountOverview({ status });
+
+    expect(container.textContent).toContain("3 claims need action");
+    expect(container.querySelector('a[href="/dashboard/rewards/redemptions"]')?.textContent).toBe("Review claims");
+  });
+
+  it("shows the next setup step when no way to earn is active", async () => {
+    const status = { ...setupDoneStatus(), mappings: [] };
+    const { container } = await mountOverview({ status });
+
+    expect(container.textContent).toContain("Add a way to earn");
+    expect(container.querySelector('a[href="/dashboard/rewards/rules"]')).toBeTruthy();
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Hide")).toBe(false);
+  });
+
+  it("only offers a public page copy action for published boards with a slug", async () => {
+    const published = await mountOverview({ board: { slug: "my-site", published: true } });
+    expect([...published.container.querySelectorAll("button")].some((button) => button.textContent === "Copy public page link")).toBe(true);
+
+    await unmountRewardsPage();
+    const unpublished = await mountOverview({ board: { slug: "my-site", published: false } });
+    expect([...unpublished.container.querySelectorAll("button")].some((button) => button.textContent === "Copy public page link")).toBe(false);
   });
 
   it("uses the URL siteId and removes only OAuth query parameters", async () => {

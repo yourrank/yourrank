@@ -524,6 +524,7 @@ describe("handleCreditsAnalytics", () => {
     expect(topItem).toBeDefined();
     expect(topItem.params.length).toBe(2);
     expect(topItem.sql).toMatch(/r\.created_at > \$2::timestamptz/);
+    expect(topItem.sql).toMatch(/HAVING COUNT\(r\.id\) FILTER \(WHERE r\.status != 'cancelled'\) > 0/);
     expect(topItem.params[0]).toBe("site-1");
     const start = Date.parse(topItem.params[1]);
     expect(Number.isFinite(start)).toBe(true);

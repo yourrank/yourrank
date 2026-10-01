@@ -2,6 +2,7 @@ import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { api } from "../../lib/api";
 import { cn } from "../../lib/utils";
+import { ChartLine, ShoppingBag } from "lucide-react";
 import { reviewRewardReadiness } from "@yourrank/shared/reward-readiness";
 import { kickDeliveryPresentation } from "../../../assets/kick-delivery-presentation.js";
 import { optimizeRewardImage } from "../../../assets/reward-image.js";
@@ -13,6 +14,7 @@ import { Checkbox } from "../../components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Switch } from "../../components/ui/switch";
 import { Textarea } from "../../components/ui/textarea";
@@ -118,8 +120,29 @@ function StatusText({ children, error = false, className }: { children: React.Re
   return <p className={cn("cr-react-status", "status", error && "error", className)} role={error ? "alert" : "status"} aria-live="polite">{children}</p>;
 }
 
-function Metric({ label, value, detail }: { label: string; value: string; detail?: string }) {
-  return <div className="v3-kpi-card"><div className="v3-kpi-label">{label}</div><div className="v3-kpi-value-row"><strong>{value}</strong>{detail && <small className="kpi-sub">{detail}</small>}</div></div>;
+function InfoTip({ label, info }: { label: string; info: string }) {
+  return <Popover>
+    <PopoverTrigger asChild>
+      <button className="cr-info-tip" type="button" aria-label={`About ${label}`}>i</button>
+    </PopoverTrigger>
+    <PopoverContent className="cr-info-popover" style={{ maxWidth: "min(15rem, calc(100vw - 2rem))" }}>{info}</PopoverContent>
+  </Popover>;
+}
+
+function Metric({ label, info, value, scope, scopeTone = "period", foot }: {
+  label: string;
+  info: string;
+  value: string;
+  scope: string;
+  scopeTone?: "period" | "now";
+  foot?: React.ReactNode;
+}) {
+  return <div className="v3-kpi-card cr-metric-card">
+    <div className="cr-metric-label"><span>{label}</span><InfoTip label={label} info={info} /></div>
+    <strong className="cr-metric-value">{value}</strong>
+    <span className={cn("cr-metric-scope", scopeTone === "now" && "is-now")}>{scope}</span>
+    {foot && <div className="cr-metric-foot">{foot}</div>}
+  </div>;
 }
 
 function DataTable({ children, label }: { children: React.ReactNode; label?: string }) {
@@ -130,10 +153,23 @@ function EmptyState({ title, body, action }: { title: string; body: string; acti
   return <div className="v3-empty" role="status"><h2>{title}</h2><p>{body}</p>{action}</div>;
 }
 
+function CompactEmpty({ icon, title, body, action }: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  action?: React.ReactNode;
+}) {
+  return <div className="cr-compact-empty" role="status">
+    <span className="cr-compact-icon" aria-hidden="true">{icon}</span>
+    <div className="cr-compact-copy"><strong>{title}</strong><p>{body}</p></div>
+    {action && <div className="cr-compact-action">{action}</div>}
+  </div>;
+}
+
 function RewardsHead({ tab }: { tab: RewardsTab }) {
   const heading: Record<RewardsTab, [string, string]> = {
     channel: ["Kick connection", "Site connection — this Kick channel powers the selected site's credits. Your account sign-ins live under Settings → Connections."],
-    overview: ["Overview", "See how your rewards are doing and what to set up next."],
+    overview: ["Overview", "Your next step, plus how credits and claims are moving."],
     rules: ["Ways to earn", "Choose how members earn Credits."],
     shop: ["Shop", "Manage what members can claim with Credits."],
     redemptions: ["Claims", "Handle reward claims and keep fulfillment moving."],
@@ -1608,20 +1644,17 @@ function RulesTab({
   </div>;
 }
 
-function OverviewTab({ data, siteId, deps }: { data: CreditsStatus; siteId: string; deps: PageDependencies }) {
+function OverviewTab({ data, siteId, deps, board, notify }: {
+  data: CreditsStatus;
+  siteId: string;
+  deps: PageDependencies;
+  board: BoardContext["board"];
+  notify: (message: string, kind?: Toast["kind"]) => void;
+}) {
   const [days, setDays] = useState("30");
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(true);
-  const [onboardingHidden, setOnboardingHidden] = useState(() => {
-    try {
-      return localStorage.getItem("cr-onboarding-hide") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const panelRef = useRef<HTMLDetailsElement>(null);
 
   const loadAnalytics = useCallback(async () => {
     setLoading(true);
@@ -1629,13 +1662,8 @@ function OverviewTab({ data, siteId, deps }: { data: CreditsStatus; siteId: stri
     try {
       const result = await deps.api<AnalyticsResponse>(`/api/credits/analytics?days=${days}`, {}, siteId);
       setAnalytics(result);
-      const summary = result.summary || {};
-      const hasActivity = Boolean((result.topItems || []).length || (result.creditsByDay || []).length ||
-        [summary.periodEarned, summary.periodSpent, summary.redemptionsTotal, summary.redemptionsPending, summary.viewerBalance].some((value) => Number(value) > 0));
-      setDetailsOpen(hasActivity);
     } catch {
       setError("Analytics are temporarily unavailable.");
-      setDetailsOpen(true);
     } finally {
       setLoading(false);
     }
@@ -1645,47 +1673,75 @@ function OverviewTab({ data, siteId, deps }: { data: CreditsStatus; siteId: stri
     void loadAnalytics();
   }, [loadAnalytics]);
 
-  useEffect(() => {
-    if (panelRef.current) panelRef.current.open = detailsOpen;
-  }, [detailsOpen]);
-
   const channel = data.channel || {};
   const usage = data.usage || EMPTY_USAGE;
   const limits = data.limits || EMPTY_LIMITS;
+  const connected = Boolean(channel.connected ?? channel.externalId);
   const mappings = (data.mappings || []).filter((mapping) => mapping.active).length;
   const items = (data.shopItems || []).filter((item) => item.active).length;
   const claimCount = Number(usage.redemptionsPer30Days) || (data.recentClaims || []).length;
-  const steps = [
-    { id: 1, done: Boolean(channel.connected ?? channel.externalId), label: "Connect Kick", body: "Link your channel so Kick reward claims become credits here.", href: "/dashboard/site/connections" },
-    { id: 2, done: mappings > 0, label: "Add a way to earn", body: "Choose a Kick reward and set how many credits it gives.", href: "/dashboard/rewards/rules" },
-    { id: 3, done: items > 0, label: "Add a shop item", body: "Add something members can claim with their credits.", href: "/dashboard/rewards/shop" },
-    { id: 4, done: claimCount > 0, label: "Test it live", body: "Claim the Kick reward on your stream, then complete the reward claim here.", href: "" },
-    { id: 5, done: Boolean(channel.connected ?? channel.externalId) && mappings > 0 && items > 0, label: "Confirm setup is live", body: "Your credits and shop are visible on your public page.", href: "" },
+  const openClaims = Number(usage.pendingRedemptions) || 0;
+  const setupDone = connected && mappings > 0 && items > 0;
+  const publicPageUrl = board?.published && board.slug ? `${location.origin}/${board.slug}` : null;
+  const currentSetupStep = !connected
+    ? { id: 1, title: "Connect Kick", body: "Link your channel so Kick reward claims become credits here.", href: "/dashboard/site/connections", action: "Connect" }
+    : mappings === 0
+      ? { id: 2, title: "Add a way to earn", body: "Choose a Kick reward and set how many credits it gives.", href: "/dashboard/rewards/rules", action: "Create way to earn" }
+      : { id: 3, title: "Add a shop item", body: "Add something members can claim with their credits.", href: "/dashboard/rewards/shop", action: "Create shop item" };
+  const progressSteps = [
+    { id: 1, done: connected, label: "Kick connected", pending: "Connect Kick" },
+    { id: 2, done: mappings > 0, label: "Way to earn", pending: "Way to earn" },
+    { id: 3, done: items > 0, label: "Shop item", pending: "Shop item" },
+    { id: 4, done: claimCount > 0, label: "First claim", pending: "First claim" },
   ];
-  const currentStep = steps.find((step) => !step.done);
-  const allReady = steps[4].done;
-  useEffect(() => {
-    if (allReady && !onboardingHidden) {
-      setOnboardingHidden(true);
-      try {
-        localStorage.setItem("cr-onboarding-hide", "1");
-      } catch {
-        return;
-      }
-    }
-  }, [allReady, onboardingHidden]);
-
-  const hideOnboarding = () => {
-    setOnboardingHidden(true);
+  const currentProgressId = !setupDone
+    ? currentSetupStep.id
+    : openClaims === 0 && claimCount === 0 ? 4 : null;
+  const nextTitle = !setupDone
+    ? currentSetupStep.title
+    : openClaims > 0
+      ? `${openClaims} ${openClaims === 1 ? "claim needs" : "claims need"} action`
+      : claimCount === 0 ? "Get your first claim" : "You're all caught up";
+  const nextBody = !setupDone
+    ? currentSetupStep.id === 1 && !data.capabilities?.manageConnections
+      ? "Ask the site owner to connect Kick."
+      : currentSetupStep.body
+    : openClaims > 0
+      ? "Complete or cancel claims so members get their rewards."
+      : claimCount === 0
+        ? "Setup is done. Share your public page with members, or claim your Kick reward on stream to test the full flow."
+        : "No claims are waiting. Add more shop items or ways to earn to keep members engaged.";
+  const copyPublicPageLink = async () => {
+    if (!publicPageUrl) return;
     try {
-      localStorage.setItem("cr-onboarding-hide", "1");
+      await navigator.clipboard.writeText(publicPageUrl);
+      notify("Public page link copied.");
     } catch {
-      return;
+      notify("Couldn't copy the link.", "error");
     }
   };
+  const nextActions = !setupDone
+    ? currentSetupStep.id === 1 && !data.capabilities?.manageConnections
+      ? null
+      : <a className="btn btn--sm btn--accent" href={currentSetupStep.href}>{currentSetupStep.action}</a>
+    : openClaims > 0
+      ? <>
+          <a className="btn btn--sm btn--accent" href="/dashboard/rewards/redemptions">Review claims</a>
+          <a className="btn btn--sm" href="/dashboard/rewards/shop">Add shop item</a>
+        </>
+      : claimCount === 0
+        ? <>
+            {publicPageUrl && <button className="btn btn--sm btn--accent" type="button" onClick={() => void copyPublicPageLink()}>Copy public page link</button>}
+            <a className={cn("btn btn--sm", !publicPageUrl && "btn--accent")} href="/dashboard/rewards/shop">View shop</a>
+          </>
+        : <>
+            <a className="btn btn--sm btn--accent" href="/dashboard/rewards/shop">Add shop item</a>
+            <a className="btn btn--sm" href="/dashboard/rewards/rules">Add a way to earn</a>
+          </>;
 
   const summary = analytics?.summary || {};
   const topItems = analytics?.topItems || [];
+  const claimedItems = topItems.filter((item) => Number(item.redemptions) > 0);
   const chartDays = useMemo(() => {
     const totals = new Map<string, { earn: number; spend: number }>();
     for (const row of analytics?.creditsByDay || []) {
@@ -1698,98 +1754,150 @@ function OverviewTab({ data, siteId, deps }: { data: CreditsStatus; siteId: stri
   }, [analytics]);
   const chartMax = Math.max(1, ...chartDays.map(([, point]) => point.earn + point.spend));
   const chartTotal = chartDays.reduce((total, [, point]) => total + point.earn + point.spend, 0);
-  const hasActivity = Boolean(topItems.length || (analytics?.creditsByDay || []).length ||
-    [summary.periodEarned, summary.periodSpent, summary.redemptionsTotal, summary.redemptionsPending, summary.viewerBalance].some((value) => Number(value) > 0));
+  const usedClaims = Number(usage.redemptionsPer30Days) || 0;
+  const claimsLimit = limits.redemptionsPer30Days;
+  const usagePercent = claimsLimit == null ? 0 : claimsLimit > 0
+    ? Math.min((usedClaims / claimsLimit) * 100, 100)
+    : usedClaims > 0 ? 100 : 0;
+  const planLimitClauses = [
+    claimsLimit == null ? null : `${claimsLimit.toLocaleString()} claims in any rolling 30 days`,
+    limits.pendingRedemptions == null ? null : `${limits.pendingRedemptions.toLocaleString()} open claims at once`,
+  ].filter((clause): clause is string => Boolean(clause));
+  const planUsageInfo = planLimitClauses.length
+    ? `Your plan allows ${planLimitClauses.join(" and ")}.`
+    : "Your plan limits aren't available.";
+  const numberLabel = (value: number | undefined) => (value ?? 0).toLocaleString();
 
   return <div className="cr-react-grid">
-    {!onboardingHidden && <Card className="cr-onboarding">
-      <CardHeader className="cr-react-head">
-        <div><CardTitle>Set up rewards</CardTitle><p className="v3-head-sub">Members earn credits from your Kick rewards, then spend them on shop items.</p></div>
-        <Button variant="outline" size="sm" type="button" onClick={hideOnboarding}>Hide</Button>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        {currentStep && <div className="cr-step current">
-          <div className="cr-step-text"><b>{currentStep.label}</b><span>{currentStep.body}</span></div>
-          {currentStep.href && <a className="btn btn--sm btn--accent" href={currentStep.href}>{currentStep.id === 1 ? "Connect" : currentStep.id === 2 ? "Create way to earn" : "Create shop item"}</a>}
+    <Card className="cr-next-step">
+      <CardContent>
+        <div className="cr-next-row">
+          <div className="cr-next-copy">
+            <p className="cr-next-eyebrow">Next step</p>
+            <h2>{nextTitle}</h2>
+            <p>{nextBody}</p>
+          </div>
+          <div className="cr-next-actions">{nextActions}</div>
+        </div>
+        {(!setupDone || (openClaims === 0 && claimCount === 0)) && <div className="cr-progress-steps" aria-label="Rewards setup progress">
+          {progressSteps.map((step) => {
+            const current = currentProgressId === step.id;
+            return <span className={cn(step.done && "is-done", current && "is-current")} aria-current={current ? "step" : undefined} key={step.id}>
+              {step.done ? `✓ ${step.label}` : current ? `${step.id} · ${step.label}` : step.pending}
+            </span>;
+          })}
         </div>}
-        <details className="cr-setup-details">
-          <summary>View all setup steps</summary>
-          <ol className="cr-steps">
-            {steps.map((step) => <li className={cn("cr-step", step.done && "done", currentStep?.id === step.id && "current")} key={step.id}>
-              <div className="cr-step-text"><b>{step.id}. {step.label}</b><span>{step.body}</span></div>
-              {step.href && <a className="btn btn--sm" href={step.href}>{step.id === 1 ? "Connect" : step.id === 2 ? "Create way to earn" : "Create shop item"}</a>}
-            </li>)}
-          </ol>
-        </details>
-      </CardContent>
-    </Card>}
-    <Card className="cr-redemption-summary">
-      <CardContent className="cr-react-grid cr-react-grid--two p-5">
-        <div className={cn("v3-chip", (channel.connected ?? channel.externalId) ? "v3-chip--refunded" : "v3-chip--cancelled")}>
-          {(channel.connected ?? channel.externalId) ?
-            <>● Connected to @{channel.name || "Kick"}</> :
-            data.capabilities?.manageConnections ? <a href="/dashboard/site/connections">Not connected · Connect Kick</a> : "Not connected · Owner action required"}
-        </div>
-        <div className="cr-counters">
-          <div><span>Claims needing action</span><b>{numberOr(usage.pendingRedemptions, "0")} / {numberOr(limits.pendingRedemptions, "—")}</b><small>limit</small></div>
-          <i aria-hidden="true" />
-          <div><span>Completed claims (this month)</span><b>{numberOr(usage.redemptionsPer30Days, "0")} / {numberOr(limits.redemptionsPer30Days, "—")}</b><small>limit</small></div>
-        </div>
       </CardContent>
     </Card>
-    <details ref={panelRef} className="cr-detail-panel" open>
-      <summary onClick={(event) => { event.preventDefault(); setDetailsOpen((open) => !open); }}>
-        Reward activity <span>{loading ? "Loading activity…" : error ? "Could not load activity" : hasActivity ? "Credits and claims" : "No credit activity in this period · View metrics"}</span>
-      </summary>
-      <div className="cr-react-grid mt-4">
-        <div className="v3-analytics-scope">
-          <span>Recent credit activity · Last <span>{days}</span> days · Local time</span>
-          <div className="v3-range-filter">
-            <Label className="sr-only" htmlFor="cr-analytics-days">Date range</Label>
-            <select id="cr-analytics-days" value={days} onChange={(event) => setDays(event.target.value)}>
-              <option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option>
-            </select>
-          </div>
-        </div>
-        <StatusText error={Boolean(error)}>{error}</StatusText>
-        <div className="v3-kpi-grid">
-          <Metric label="Credits earned" value={loading ? "—" : String(summary.periodEarned ?? 0)} detail={!loading ? `All time: ${summary.allTimeEarned ?? 0}` : undefined} />
-          <Metric label="Credits spent" value={loading ? "—" : String(summary.periodSpent ?? 0)} detail={!loading ? `All time: ${summary.allTimeSpent ?? 0}` : undefined} />
-          <Metric label="Claims submitted" value={loading ? "—" : String(summary.redemptionsTotal ?? 0)} />
-          <Metric label="Needs attention" value={loading ? "—" : String(summary.redemptionsPending ?? 0)} />
-          <Metric label="Credits held" value={loading ? "—" : String(summary.viewerBalance ?? 0)} />
-        </div>
-        <Card>
-          <CardHeader><CardTitle>Top items</CardTitle><p className="v3-head-sub">Most claimed items in this period.</p></CardHeader>
-          <CardContent>
-            {loading ? <Skeleton className="h-24 w-full" /> : topItems.length ? <DataTable label="Top items"><thead><tr><th>Item</th><th className="num">Claims</th><th className="num">Credits spent</th></tr></thead>
-              <tbody>{topItems.map((item) => <tr key={item.id}><td data-label="Item">{item.name}</td><td data-label="Claims" className="num">{item.redemptions}</td><td data-label="Credits spent" className="num">{item.credits_spent}</td></tr>)}</tbody></DataTable> :
-              <EmptyState title="No items claimed yet" body="Claims will appear after members claim a shop item." />}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Credits by day</CardTitle><p className="v3-head-sub">Credits earned and spent across the selected period.</p></CardHeader>
-          <CardContent>
-            {loading ? <Skeleton className="h-40 w-full" /> : chartDays.length ? <div className="cr-react-chart" role="img" aria-label={`Bar chart of credits across ${chartDays.length} days with activity. Total: ${chartTotal} credits.`}>
-              {chartDays.map(([day, point]) => <div className="cr-react-chart-column" key={day} title={`${new Date(day).toLocaleDateString(undefined, { month: "short", day: "numeric" })}: ${point.earn + point.spend} (${point.earn} earned, ${point.spend} spent)`}>
-                <div className="cr-react-chart-earn" style={{ height: `${(point.earn / chartMax) * 100}%` }} />
-                <div className="cr-react-chart-spend" style={{ height: `${(point.spend / chartMax) * 100}%` }} />
-              </div>)}
-            </div> : <EmptyState title="No credit activity for this period" body="Activity will appear after members earn or spend credits." />}
-          </CardContent>
-        </Card>
-        <details className="metric-glossary">
-          <summary>Metric glossary</summary>
-          <dl>
-            <div><dt>Credits earned</dt><dd>Credits members received from Kick channel-point claims.</dd></div>
-            <div><dt>Credits spent</dt><dd>Credits members used to claim items.</dd></div>
-            <div><dt>Claims</dt><dd>Total reward claims, including pending and completed.</dd></div>
-            <div><dt>Pending</dt><dd>Claims you have not yet completed or cancelled.</dd></div>
-            <div><dt>Member balance</dt><dd>Total credits currently held by all members on this site.</dd></div>
-          </dl>
-        </details>
+    <div className="cr-status-strip">
+      <div className="cr-connection-state">
+        {connected
+          ? <><span className="cr-connection-pill">● Kick connected</span>{channel.name && <span className="cr-connection-name">@{channel.name}</span>}</>
+          : data.capabilities?.manageConnections
+            ? <a className="cr-connection-link" href="/dashboard/site/connections">Not connected · Connect Kick</a>
+            : <span className="cr-connection-muted">Not connected · Owner action required</span>}
       </div>
-    </details>
+      <span className="cr-status-divider" aria-hidden="true" />
+      <div className="cr-plan-usage">
+        <span className="cr-plan-label">Plan usage</span>
+        {claimsLimit != null && <div
+          className="cr-plan-progress"
+          role="meter"
+          aria-label="Claims used in the last 30 days"
+          aria-valuemin={0}
+          aria-valuemax={claimsLimit}
+          aria-valuenow={Math.min(usedClaims, claimsLimit)}
+        ><span style={{ width: `${usagePercent}%` }} /></div>}
+        <span className="cr-plan-count">{usedClaims.toLocaleString()} of {claimsLimit == null ? "—" : claimsLimit.toLocaleString()} claims · last 30 days</span>
+        <InfoTip label="Plan usage" info={planUsageInfo} />
+      </div>
+      <a className="cr-plan-manage" href="/dashboard/settings/billing">Manage plan</a>
+    </div>
+    <section className="cr-overview-activity" aria-labelledby="cr-activity-title">
+      <div className="cr-activity-header">
+        <h2 id="cr-activity-title">Activity · Last {days} days</h2>
+        <div className="v3-range-filter">
+          <Label className="sr-only" htmlFor="cr-analytics-days">Date range</Label>
+          <select id="cr-analytics-days" value={days} onChange={(event) => setDays(event.target.value)}>
+            <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option>
+          </select>
+        </div>
+      </div>
+      <StatusText error={Boolean(error)}>{error}</StatusText>
+      <div className="cr-overview-kpis">
+        <Metric
+          label="Credits earned"
+          info="Credits members received in this period from every source — Kick rewards, daily check-ins and manual adjustments — net of refunds."
+          value={loading ? "—" : numberLabel(summary.periodEarned)}
+          scope={`Last ${days} days`}
+          foot={!loading ? <>All time <strong>{numberLabel(summary.allTimeEarned)}</strong></> : undefined}
+        />
+        <Metric
+          label="Credits spent"
+          info="Credits members used to claim shop items in this period, net of revoked spends."
+          value={loading ? "—" : numberLabel(summary.periodSpent)}
+          scope={`Last ${days} days`}
+          foot={!loading ? <>All time <strong>{numberLabel(summary.allTimeSpent)}</strong></> : undefined}
+        />
+        <Metric
+          label="Claims"
+          info="Shop item claims submitted in this period, excluding cancelled ones."
+          value={loading ? "—" : numberLabel(summary.redemptionsTotal)}
+          scope={`Last ${days} days`}
+          foot={!loading ? openClaims > 0
+            ? <>{openClaims.toLocaleString()} open right now · <a href="/dashboard/rewards/redemptions">Review</a></>
+            : "No open claims" : undefined}
+        />
+        <Metric
+          label="Credits held by members"
+          info="Total credits all members hold right now."
+          value={loading ? "—" : numberLabel(summary.viewerBalance)}
+          scope="Right now"
+          scopeTone="now"
+          foot={!loading ? "Not affected by the date range" : undefined}
+        />
+      </div>
+      <div className="cr-overview-two">
+        <Card className="cr-overview-card">
+          <CardHeader><CardTitle>Most claimed items</CardTitle><p className="v3-head-sub">Last {days} days</p></CardHeader>
+          <CardContent>
+            {loading ? <Skeleton className="h-24 w-full" /> : claimedItems.length
+              ? <DataTable label="Top items"><thead><tr><th>Item</th><th className="num">Claims</th><th className="num">Credits spent</th></tr></thead>
+                  <tbody>{claimedItems.map((item) => <tr key={item.id}><td data-label="Item">{item.name}</td><td data-label="Claims" className="num">{item.redemptions.toLocaleString()}</td><td data-label="Credits spent" className="num">{item.credits_spent.toLocaleString()}</td></tr>)}</tbody></DataTable>
+              : <CompactEmpty
+                  icon={<ShoppingBag size={18} />}
+                  title="No items claimed yet"
+                  body={items > 0 ? `You have ${items} shop ${items === 1 ? "item" : "items"}. They'll rank here once members claim them.` : "Add a shop item so members have something to claim."}
+                  action={<a className="btn btn--sm" href="/dashboard/rewards/shop">{items > 0 ? "View shop" : "Create shop item"}</a>}
+                />}
+          </CardContent>
+        </Card>
+        <Card className="cr-overview-card">
+          <CardHeader><CardTitle>Credits by day</CardTitle><p className="v3-head-sub">Earned vs spent · Last {days} days</p></CardHeader>
+          <CardContent>
+            {loading ? <Skeleton className="h-40 w-full" /> : chartDays.length
+              ? <>
+                  <div className="cr-react-chart" role="img" aria-label={`Bar chart of credits across ${chartDays.length} days with activity. Total: ${chartTotal} credits.`}>
+                    {chartDays.map(([day, point]) => <div className="cr-react-chart-column" key={day} title={`${new Date(day).toLocaleDateString(undefined, { month: "short", day: "numeric" })}: ${point.earn + point.spend} (${point.earn} earned, ${point.spend} spent)`}>
+                      <div className="cr-react-chart-earn" style={{ height: `${(point.earn / chartMax) * 100}%` }} />
+                      <div className="cr-react-chart-spend" style={{ height: `${(point.spend / chartMax) * 100}%` }} />
+                    </div>)}
+                  </div>
+                  <div className="cr-chart-legend">
+                    <span><i className="cr-react-chart-earn" />Earned</span>
+                    <span><i className="cr-react-chart-spend" />Spent</span>
+                  </div>
+                </>
+              : <CompactEmpty
+                  icon={<ChartLine size={18} />}
+                  title={`No credit activity in the last ${days} days`}
+                  body="The chart appears after members earn or spend credits."
+                  action={days !== "90" ? <button className="btn btn--sm" type="button" onClick={() => setDays("90")}>Show last 90 days</button> : undefined}
+                />}
+          </CardContent>
+        </Card>
+      </div>
+    </section>
   </div>;
 }
 
@@ -1797,6 +1905,7 @@ export function RewardsPage({ tab, dependencies }: PageProps) {
   const deps = useMemo(() => ({ ...DEFAULT_DEPENDENCIES, ...dependencies }), [dependencies]);
   const [data, setData] = useState<CreditsStatus>(EMPTY_STATUS);
   const [siteId, setSiteId] = useState("");
+  const [board, setBoard] = useState<BoardContext["board"]>();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
@@ -1824,6 +1933,7 @@ export function RewardsPage({ tab, dependencies }: PageProps) {
     showPage(true);
     try {
       const shell = await deps.loadBoardShell();
+      setBoard(shell.board);
       const selectedSiteId = new URLSearchParams(location.search).get("siteId") || shell.activeSiteId;
       setSiteId(selectedSiteId);
       const result = await deps.api<CreditsStatus>("/api/credits/status", {}, selectedSiteId);
@@ -1874,7 +1984,7 @@ export function RewardsPage({ tab, dependencies }: PageProps) {
     ) : <>
       <RewardsHead tab={tab} />
       {tab === "channel" && <ChannelTab data={data} siteId={siteId} oauth={oauth} deps={deps} notify={notify} reload={load} />}
-      {tab === "overview" && <OverviewTab data={data} siteId={siteId} deps={deps} />}
+      {tab === "overview" && <OverviewTab data={data} siteId={siteId} deps={deps} board={board} notify={notify} />}
       {tab === "rules" && <RulesTab data={data} siteId={siteId} deps={deps} notify={notify} reload={load} />}
       {tab === "shop" && <ShopTab data={data} siteId={siteId} deps={deps} notify={notify} reload={load} />}
       {tab === "redemptions" && <ClaimsTab siteId={siteId} deps={deps} notify={notify} />}

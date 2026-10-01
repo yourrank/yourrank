@@ -283,7 +283,370 @@
 }
 
 .yr-react.cr-react-rewards .cr-react-chart-spend {
-  background: #ef4444;
+  background: var(--ws-info);
+}
+
+.yr-react.cr-react-rewards .cr-next-step {
+  border-color: var(--ws-accent-line);
+  background: var(--ws-accent-soft);
+}
+
+.yr-react.cr-react-rewards .cr-next-step > div {
+  display: grid;
+  gap: var(--ws-space-3);
+  padding: var(--ws-space-5);
+}
+
+.yr-react.cr-react-rewards .cr-next-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ws-space-5);
+  flex-wrap: wrap;
+}
+
+.yr-react.cr-react-rewards .cr-next-copy {
+  min-width: 0;
+}
+
+.yr-react.cr-react-rewards .cr-next-eyebrow {
+  margin: 0 0 var(--ws-space-1);
+  color: var(--ws-accent);
+  font-size: var(--ws-type-label-size);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.yr-react.cr-react-rewards .cr-next-copy h2 {
+  margin: 0;
+  font-size: var(--ws-type-section-size);
+  line-height: var(--ws-type-section-leading);
+}
+
+.yr-react.cr-react-rewards .cr-next-copy > p:last-child {
+  margin: var(--ws-space-1) 0 0;
+  color: var(--ws-text-soft);
+}
+
+.yr-react.cr-react-rewards .cr-next-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--ws-space-2);
+}
+
+.yr-react.cr-react-rewards .cr-progress-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ws-space-2);
+}
+
+.yr-react.cr-react-rewards .cr-progress-steps > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0 var(--ws-space-3);
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-pill);
+  background: var(--ws-surface);
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+}
+
+.yr-react.cr-react-rewards .cr-progress-steps > .is-done {
+  border-color: var(--ws-success-line);
+  background: var(--ws-success-soft);
+  color: var(--ws-success-text);
+}
+
+.yr-react.cr-react-rewards .cr-progress-steps > .is-current {
+  border-color: var(--ws-accent-line);
+  color: var(--ws-accent);
+  font-weight: 600;
+}
+
+.yr-react.cr-react-rewards .cr-status-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--ws-space-5);
+  flex-wrap: wrap;
+  padding: var(--ws-space-3) var(--ws-space-4);
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius);
+  background: var(--ws-surface);
+}
+
+.yr-react.cr-react-rewards .cr-connection-state,
+.yr-react.cr-react-rewards .cr-plan-usage {
+  display: flex;
+  align-items: center;
+  gap: var(--ws-space-2);
+}
+
+.yr-react.cr-react-rewards .cr-connection-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0 var(--ws-space-3);
+  border: 1px solid var(--ws-success-line);
+  border-radius: var(--ws-radius-pill);
+  background: var(--ws-success-soft);
+  color: var(--ws-success-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.yr-react.cr-react-rewards .cr-connection-name,
+.yr-react.cr-react-rewards .cr-connection-muted,
+.yr-react.cr-react-rewards .cr-plan-count {
+  color: var(--ws-text-mute);
+}
+
+.yr-react.cr-react-rewards .cr-connection-link {
+  color: var(--ws-text-soft);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.yr-react.cr-react-rewards .cr-status-divider {
+  width: 1px;
+  height: 1.25rem;
+  background: var(--ws-line);
+}
+
+.yr-react.cr-react-rewards .cr-plan-usage {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.yr-react.cr-react-rewards .cr-plan-label {
+  color: var(--ws-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.yr-react.cr-react-rewards .cr-plan-progress {
+  width: clamp(3.5rem, 10vw, 7rem);
+  height: 0.375rem;
+  overflow: hidden;
+  border-radius: var(--ws-radius-pill);
+  background: var(--ws-surface-strong);
+}
+
+.yr-react.cr-react-rewards .cr-plan-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--ws-accent);
+}
+
+.yr-react.cr-react-rewards .cr-plan-count {
+  white-space: nowrap;
+}
+
+.yr-react.cr-react-rewards .cr-plan-manage {
+  margin-left: auto;
+  color: var(--ws-accent);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.yr-react.cr-react-rewards .cr-plan-manage:hover {
+  color: var(--ws-accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.yr-react.cr-react-rewards .cr-info-tip {
+  display: inline-grid;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: 0 0 1.125rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--ws-line-strong);
+  border-radius: var(--ws-radius-pill);
+  background: var(--ws-surface);
+  color: var(--ws-text-soft);
+  font: inherit;
+  font-size: var(--ws-type-label-size);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.yr-react.cr-react-rewards .cr-overview-activity {
+  display: grid;
+  gap: var(--ws-space-4);
+}
+
+.yr-react.cr-react-rewards .cr-activity-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ws-space-4);
+}
+
+.yr-react.cr-react-rewards .cr-activity-header h2 {
+  margin: 0;
+  font-size: var(--ws-type-card-size);
+  line-height: var(--ws-type-card-leading);
+}
+
+.yr-react.cr-react-rewards .cr-activity-header select {
+  min-height: var(--ws-control-h);
+}
+
+.yr-react.cr-react-rewards .cr-overview-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--ws-space-3);
+}
+
+.yr-react.cr-react-rewards .cr-metric-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--ws-space-4);
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius);
+  background: var(--ws-surface);
+}
+
+.yr-react.cr-react-rewards .cr-metric-label {
+  display: flex;
+  align-items: center;
+  gap: var(--ws-space-1);
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+}
+
+.yr-react.cr-react-rewards .cr-metric-value {
+  margin-top: var(--ws-space-1);
+  color: var(--ws-text);
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.yr-react.cr-react-rewards .cr-metric-scope {
+  display: inline-flex;
+  margin-top: var(--ws-space-2);
+  padding: 0 var(--ws-space-2);
+  border-radius: var(--ws-radius-pill);
+  background: var(--ws-surface-soft);
+  color: var(--ws-text-mute);
+  font-size: var(--ws-type-label-size);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.yr-react.cr-react-rewards .cr-metric-scope.is-now {
+  background: var(--ws-success-soft);
+  color: var(--ws-success-text);
+}
+
+.yr-react.cr-react-rewards .cr-metric-foot {
+  width: 100%;
+  margin-top: var(--ws-space-3);
+  padding-top: var(--ws-space-3);
+  border-top: 1px dashed var(--ws-line);
+  color: var(--ws-text-mute);
+  font-size: var(--ws-type-meta-size);
+}
+
+.yr-react.cr-react-rewards .cr-metric-foot strong {
+  color: var(--ws-text);
+}
+
+.yr-react.cr-react-rewards .cr-metric-foot a {
+  color: var(--ws-accent);
+}
+
+.yr-react.cr-react-rewards .cr-overview-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ws-space-3);
+}
+
+.yr-react.cr-react-rewards .cr-overview-card {
+  min-width: 0;
+}
+
+.yr-react.cr-react-rewards .cr-compact-empty {
+  display: flex;
+  min-height: 4.5rem;
+  align-items: center;
+  gap: var(--ws-space-3);
+  flex-wrap: wrap;
+  padding: var(--ws-space-3);
+  border: 1px dashed var(--ws-line-strong);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface-soft);
+}
+
+.yr-react.cr-react-rewards .cr-compact-icon {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 2.25rem;
+  place-items: center;
+  border-radius: var(--ws-radius-pill);
+  background: var(--ws-surface);
+  color: var(--ws-accent);
+}
+
+.yr-react.cr-react-rewards .cr-compact-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.yr-react.cr-react-rewards .cr-compact-copy strong {
+  display: block;
+  color: var(--ws-text);
+}
+
+.yr-react.cr-react-rewards .cr-compact-copy p {
+  margin: var(--ws-space-1) 0 0;
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+}
+
+.yr-react.cr-react-rewards .cr-compact-action {
+  margin-left: auto;
+}
+
+.yr-react.cr-react-rewards .cr-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--ws-space-3);
+  margin-top: var(--ws-space-3);
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+}
+
+.yr-react.cr-react-rewards .cr-chart-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ws-space-1);
+}
+
+.yr-react.cr-react-rewards .cr-chart-legend i {
+  display: block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 0.125rem;
+}
+
+@media (max-width: 900px) {
+  .yr-react.cr-react-rewards .cr-overview-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 700px) {
@@ -308,5 +671,41 @@
 
   .yr-react.cr-react-claim-drawer .cr-member-facts {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .yr-react.cr-react-rewards .cr-next-step > div {
+    padding: var(--ws-space-4);
+  }
+
+  .yr-react.cr-react-rewards .cr-status-strip {
+    gap: var(--ws-space-3);
+  }
+
+  .yr-react.cr-react-rewards .cr-status-divider {
+    display: none;
+  }
+
+  .yr-react.cr-react-rewards .cr-plan-usage {
+    width: 100%;
+  }
+
+  .yr-react.cr-react-rewards .cr-activity-header {
+    align-items: flex-start;
+  }
+
+  .yr-react.cr-react-rewards .cr-activity-header h2 {
+    font-size: var(--ws-type-meta-size);
+  }
+
+  .yr-react.cr-react-rewards .cr-overview-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .yr-react.cr-react-rewards .cr-overview-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .yr-react.cr-react-rewards .cr-compact-action {
+    width: 100%;
   }
 }
