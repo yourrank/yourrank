@@ -24,6 +24,7 @@ const pages = [
   ["redemptions", RewardsRedemptionsPage],
 ];
 const rewardsPageSource = readFileSync(new URL("../react/pages/rewards/page.tsx", import.meta.url), "utf8");
+const rewardsStylesSource = readFileSync(new URL("../react/pages/rewards/styles.css", import.meta.url), "utf8");
 const rewardsEntrySource = readFileSync(new URL("../react/pages/rewards/entry.tsx", import.meta.url), "utf8");
 const rewardsDispatcherSource = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
 const dashboardV4Source = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
@@ -55,6 +56,18 @@ describe("server-rendered rewards entry points", () => {
     expect(rewardsEntrySource).toContain('document.getElementById("cr-app")?.getAttribute("data-cr-tab")');
     expect(rewardsEntrySource).toContain("export const enter = island.enter");
     expect(rewardsEntrySource).toContain("export const leave = island.leave");
+  });
+
+  it("keeps rewards toolbars and table headers aligned", () => {
+    expect(rewardsPageSource).toContain('className="cr-react-toolbar"');
+    expect(rewardsPageSource).toContain('id="cr-shop-controls" className="cr-react-toolbar"');
+    expect(rewardsPageSource).toContain('className="cr-react-select"');
+    expect(rewardsPageSource).toContain('<th className="num">Credits awarded</th>');
+    expect(rewardsPageSource).toContain('className="cr-react-toggle"');
+    expect(rewardsPageSource).not.toContain('id="cr-mapping-sort" className="v3-select"');
+    expect(rewardsPageSource).not.toContain('id="cr-shop-sort" className="v3-select"');
+    expect(rewardsStylesSource).toContain(".yr-react.cr-react-rewards .v3-table th.num");
+    expect(rewardsStylesSource).toContain("select.cr-react-select");
   });
 
   it("leads with automatic Kick reward creation while preserving manual entry", () => {
