@@ -1111,8 +1111,8 @@ function ChatGiveaway({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 min-[961px]:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.7fr)]">
-        <div className={cn("space-y-6", active && "max-[960px]:order-2")}>
+      <div className="grid gap-6 min-[961px]:grid-cols-2 min-[1280px]:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.5fr)_minmax(17rem,1fr)]">
+        <div className={cn("min-w-0 space-y-6 min-[961px]:max-[1279px]:row-span-2", active ? "max-[960px]:order-3" : "max-[960px]:order-1")}>
           <Card id="gw-setup-card">
             <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
               <div>
@@ -1267,65 +1267,6 @@ function ChatGiveaway({
                 </div>
               </fieldset>
               {responseRulesEditable && <p id="gw-response-live-note" className="text-xs text-muted-foreground">Changes apply to the next draw or re-roll.</p>}
-              <fieldset id="gw-advanced-settings" disabled={settingsLocked} className="space-y-4">
-                <details id="gw-advanced-options" open={advancedOpen} onToggle={(event) => updateAdvancedOpen(event.currentTarget.open)} className="rounded-lg border p-3">
-                  <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
-                    <span>Advanced options</span>
-                    <span id="gw-advanced-summary" className="text-xs font-normal text-muted-foreground">{formatAdvancedSummary(rules)}</span>
-                  </summary>
-                  <div className="mt-4 space-y-5">
-                    <fieldset id="gw-advanced-eligibility-section" disabled={settingsLocked} hidden={manualUi} className="space-y-3">
-                      <h3 id="gw-advanced-eligibility-title" className="text-sm font-semibold">Eligibility</h3>
-                      <div id="gw-subscriber-rule" hidden={manualUi}>
-                        <RuleCheckbox id="gw-opt-subscriber" label="Subscriber only" checked={Boolean(rules.subscriberOnly)} onChange={(value) => setRule("subscriberOnly", value)} />
-                      </div>
-                      <div id="gw-vip-rule" hidden={manualUi}>
-                        <RuleCheckbox id="gw-opt-vip" label="VIP only" checked={Boolean(rules.vipOnly)} onChange={(value) => setRule("vipOnly", value)} />
-                      </div>
-                      <RuleCheckbox id="gw-opt-skip-past" label="Exclude past giveaway winners" checked={Boolean(rules.excludePreviousWinners)} onChange={(value) => setRule("excludePreviousWinners", value)} />
-                      <p className="text-xs text-muted-foreground">Skips winners from this community’s earlier giveaways.</p>
-                      <p id="gw-subscriber-hint" hidden={manualUi} className="text-xs text-muted-foreground">Checked against chat badges. Both on requires both badges.</p>
-                      <p id="gw-kick-history-hint" hidden={manualUi} className="text-xs text-muted-foreground">Account age and follow duration need Kick data that isn’t connected.</p>
-                    </fieldset>
-                    <fieldset id="gw-anti-abuse-section" disabled={settingsLocked} hidden={manualUi} className="space-y-3">
-                      <h3 id="gw-abuse-title" className="text-sm font-semibold">Anti-abuse</h3>
-                      <RuleCheckbox id="gw-opt-ip" label="One account per IP" checked={Boolean(rules.onePerIp)} disabled={rules.entryMode !== "verified"} onChange={(value) => setRule("onePerIp", value)} />
-                      <RuleCheckbox id="gw-opt-vpn" label="VPN / Proxy detection" checked={Boolean(rules.vpnDetection)} disabled={rules.entryMode !== "verified" || capabilities.vpnDetection !== true} onChange={(value) => setRule("vpnDetection", value)} />
-                      <label className="flex cursor-not-allowed items-center gap-2 text-sm opacity-50">
-                        <Checkbox checked={false} disabled aria-label="Duplicate device detection" aria-describedby="gw-device-requirement" />
-                        <span>Duplicate device detection</span>
-                      </label>
-                      <p id="gw-ip-requirement" className="text-xs text-muted-foreground">{rules.entryMode === "verified" ? "Shared connections may exclude people living together." : "Locked — Requires Verified Entry"}</p>
-                      <p id="gw-vpn-requirement" className="text-xs text-muted-foreground">
-                        {rules.entryMode !== "verified"
-                          ? "Locked — Requires Verified Entry"
-                          : capabilities.vpnDetection === true
-                            ? "Blocks VPN, proxy, Tor and hosting networks."
-                            : "Unavailable right now."}
-                      </p>
-                      <p id="gw-device-requirement" className="text-xs text-muted-foreground">
-                        {rules.entryMode === "verified" ? "Unavailable — No supported device check" : "Locked — Requires Verified Entry and a supported device check"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Needs Verified Entry — Kick chat doesn’t expose IP or device.</p>
-                      <Button
-                        id="gw-enable-verified"
-                        type="button"
-                        variant="link"
-                        hidden={rules.entryMode === "verified" || settingsLocked}
-                        onClick={() => setRule("entryMode", "verified")}
-                      >
-                        Enable Verified Entry
-                      </Button>
-                    </fieldset>
-                    <div id="gw-winner-instruction-section" hidden={manualUi} className="space-y-2">
-                      <h3 id="gw-winner-instruction-title" className="text-sm font-semibold">Winner instruction</h3>
-                      <Label htmlFor="gw-custom-rule-text">Winner instruction (optional)</Label>
-                      <Input id="gw-custom-rule-text" maxLength={160} placeholder="e.g. Say your in-game name in chat" value={customRule} onChange={(event) => setCustomRule(event.target.value)} />
-                      <p className="text-xs text-muted-foreground">A display instruction on this page; not an eligibility check.</p>
-                    </div>
-                  </div>
-                </details>
-              </fieldset>
               <p id="gw-settings-note" className="text-xs text-muted-foreground">
                 {settingsLocked ? "Entry rules are locked for the current giveaway. Winner verification can still change until you confirm a winner." : "Settings are saved when you start a giveaway. Changes apply to the next giveaway."}
               </p>
@@ -1334,13 +1275,95 @@ function ChatGiveaway({
           </Card>
         </div>
 
+        <div className={cn(
+          "min-w-0",
+          "max-[960px]:order-2",
+          "min-[961px]:max-[1279px]:col-start-2 min-[961px]:max-[1279px]:row-start-2",
+        )}>
+          <Card id="gw-entrants-card">
+            <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <CardTitle className="text-lg">Entrants (<span id="gw-count-header">{entries.length.toLocaleString()}</span>)</CardTitle>
+                <CardDescription className="mt-2">Collect entries from chat or add viewer names here.</CardDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input aria-label="Search entrants" id="gw-search-entrants" className="w-52 pl-9" placeholder="Search entrant…" value={search} onChange={(event) => setSearch(event.target.value)} />
+                </div>
+                <Button id="gw-btn-export" type="button" variant="outline" size="sm" disabled={!entries.length} onClick={exportCsv}>Export CSV</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {session?.rules?.entryMode === "verified" && (session.status === "active" || session.status === "stopped") && (
+                <section id="gw-verification-share" aria-labelledby="gw-verification-share-title" className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                  <div>
+                    <h3 id="gw-verification-share-title" className="text-sm font-semibold">Verification link</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">Share this with your chat. Entries stay pending until the viewer opens it and selects Verify Entry. Only verified entries can win.</p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input id="gw-verification-url" readOnly aria-label="Verification link" value={verificationUrl} onFocus={(event) => event.currentTarget.select()} className="font-mono text-xs" />
+                    <div className="flex gap-2">
+                      <Button id="gw-btn-copy-verification" type="button" size="sm" onClick={() => void copyVerificationLink()}>Copy link</Button>
+                      <Button asChild size="sm" variant="outline"><a id="gw-verification-link" href={verificationPath} target="_blank" rel="noopener noreferrer">Open</a></Button>
+                    </div>
+                  </div>
+                  {pendingCount > 0 && <p id="gw-verification-pending" className="text-xs text-muted-foreground" role="status">{pendingCount} {pendingCount === 1 ? "entry is" : "entries are"} waiting for verification.</p>}
+                </section>
+              )}
+              {linkedCount > 0 && (
+                <div id="gw-linked-banner" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-700/20 bg-amber-500/5 px-4 py-3 text-sm" role="status">
+                  <span id="gw-linked-banner-text">{linkedCount} entrant{linkedCount === 1 ? " is" : "s are"} linked to another entrant.</span>
+                  {excludePlan.length > 0 && <Button id="gw-linked-exclude-all" size="sm" variant="outline" onClick={() => void mutateEntry("/entries/exclude", { entryIds: excludePlan.map((entry) => entry.id) }, "Could not exclude linked entrants.")}>Exclude linked duplicates ({excludePlan.length})</Button>}
+                </div>
+              )}
+              {active && (
+                <form id="gw-add-entrant-form" className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto]" onSubmit={(event) => void addEntrant(event)}>
+                  <div className="space-y-2">
+                    <Label htmlFor="gw-add-entrant-name">Add entrant</Label>
+                    <Input ref={manualInputRef} id="gw-add-entrant-name" name="username" type="text" maxLength={40} autoComplete="off" required value={manualName} onChange={(event) => setManualName(event.target.value)} />
+                    {manualError && <p id="gw-add-entrant-error" className="text-sm text-destructive" role="alert" aria-live="assertive">{manualError}</p>}
+                  </div>
+                  <Button className="self-end" type="submit" disabled={adding}>{adding ? <Loader2 className="animate-spin" /> : null}Add</Button>
+                </form>
+              )}
+              {entries.length === 0 ? (
+                <EmptyState id="gw-entrants-empty" title="No entrants yet" description="Start a giveaway, then add viewer names or collect entries from Kick chat." />
+              ) : filteredEntries.length === 0 ? (
+                <div id="gw-entrants-no-match" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-5" role="status">
+                  <div><strong id="gw-entrants-no-match-text">No entrants match "{search.trim()}"</strong><p className="mt-1 text-sm text-muted-foreground">Clear the search to see all entrants.</p></div>
+                  <Button id="gw-btn-clear-search" variant="outline" size="sm" onClick={() => setSearch("")}>Clear search</Button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border min-[1280px]:max-h-[70vh] min-[1280px]:overflow-y-auto">
+                  <table className="w-full min-w-[560px] text-left text-sm">
+                    <thead className="sticky top-0 z-10 bg-muted/50 text-xs uppercase text-muted-foreground">
+                      <tr><th className="px-3 py-3">#</th><th className="px-3 py-3">Viewer</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Chat Message</th><th className="px-3 py-3">Entered At</th><th className="px-3 py-3 text-right">Action</th></tr>
+                    </thead>
+                    <tbody id="gw-entrants-list" className="divide-y">
+                      {filteredEntries.map((entrant) => (
+                        <EntrantRow
+                          key={entrant.id}
+                          entrant={entrant}
+                          index={entries.indexOf(entrant) + 1}
+                          onInclude={() => void mutateEntry("/entries/include", { entryId: entrant.id }, "Could not include the entrant again.")}
+                          onExclude={() => void mutateEntry("/entries/exclude", { entryIds: [entrant.id] }, "Could not exclude linked entrants.")}
+                          onRemove={() => void mutateEntry("/entries/remove", { entryId: entrant.id }, "Could not remove entrant.")}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
         <div
           className={cn(
-            "space-y-6 min-w-0",
-            active && "is-live max-[960px]:order-1",
-            "min-[961px]:sticky min-[961px]:top-[var(--gw-pinned-top,calc(var(--ws-topbar-h,64px)_+_112px))]",
-            "min-[961px]:max-h-[calc(100vh_-_var(--gw-pinned-top,calc(var(--ws-topbar-h,64px)_+_112px))_-_80px)]",
-            "min-[961px]:overflow-y-auto min-[961px]:[scrollbar-width:thin]",
+            "min-w-0",
+            active ? "is-live max-[960px]:order-1" : "max-[960px]:order-3",
+            "min-[961px]:max-[1279px]:col-start-2 min-[961px]:max-[1279px]:row-start-1",
           )}
           id="gw-layout"
         >
@@ -1438,84 +1461,71 @@ function ChatGiveaway({
             </CardContent>
           </Card>
 
-          <Card id="gw-entrants-card">
-            <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <CardTitle className="text-lg">Entrants (<span id="gw-count-header">{entries.length.toLocaleString()}</span>)</CardTitle>
-                <CardDescription className="mt-2">Collect entries from chat or add viewer names here.</CardDescription>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <Input aria-label="Search entrants" id="gw-search-entrants" className="w-52 pl-9" placeholder="Search entrant…" value={search} onChange={(event) => setSearch(event.target.value)} />
-                </div>
-                <Button id="gw-btn-export" type="button" variant="outline" size="sm" disabled={!entries.length} onClick={exportCsv}>Export CSV</Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {session?.rules?.entryMode === "verified" && (session.status === "active" || session.status === "stopped") && (
-                <section id="gw-verification-share" aria-labelledby="gw-verification-share-title" className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
-                  <div>
-                    <h3 id="gw-verification-share-title" className="text-sm font-semibold">Verification link</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">Share this with your chat. Entries stay pending until the viewer opens it and selects Verify Entry. Only verified entries can win.</p>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input id="gw-verification-url" readOnly aria-label="Verification link" value={verificationUrl} onFocus={(event) => event.currentTarget.select()} className="font-mono text-xs" />
-                    <div className="flex gap-2">
-                      <Button id="gw-btn-copy-verification" type="button" size="sm" onClick={() => void copyVerificationLink()}>Copy link</Button>
-                      <Button asChild size="sm" variant="outline"><a id="gw-verification-link" href={verificationPath} target="_blank" rel="noopener noreferrer">Open</a></Button>
-                    </div>
-                  </div>
-                  {pendingCount > 0 && <p id="gw-verification-pending" className="text-xs text-muted-foreground" role="status">{pendingCount} {pendingCount === 1 ? "entry is" : "entries are"} waiting for verification.</p>}
-                </section>
-              )}
-              {linkedCount > 0 && (
-                <div id="gw-linked-banner" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-700/20 bg-amber-500/5 px-4 py-3 text-sm" role="status">
-                  <span id="gw-linked-banner-text">{linkedCount} entrant{linkedCount === 1 ? " is" : "s are"} linked to another entrant.</span>
-                  {excludePlan.length > 0 && <Button id="gw-linked-exclude-all" size="sm" variant="outline" onClick={() => void mutateEntry("/entries/exclude", { entryIds: excludePlan.map((entry) => entry.id) }, "Could not exclude linked entrants.")}>Exclude linked duplicates ({excludePlan.length})</Button>}
-                </div>
-              )}
-              {active && (
-                <form id="gw-add-entrant-form" className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto]" onSubmit={(event) => void addEntrant(event)}>
-                  <div className="space-y-2">
-                    <Label htmlFor="gw-add-entrant-name">Add entrant</Label>
-                    <Input ref={manualInputRef} id="gw-add-entrant-name" name="username" type="text" maxLength={40} autoComplete="off" required value={manualName} onChange={(event) => setManualName(event.target.value)} />
-                    {manualError && <p id="gw-add-entrant-error" className="text-sm text-destructive" role="alert" aria-live="assertive">{manualError}</p>}
-                  </div>
-                  <Button className="self-end" type="submit" disabled={adding}>{adding ? <Loader2 className="animate-spin" /> : null}Add</Button>
-                </form>
-              )}
-              {entries.length === 0 ? (
-                <EmptyState id="gw-entrants-empty" title="No entrants yet" description="Start a giveaway, then add viewer names or collect entries from Kick chat." />
-              ) : filteredEntries.length === 0 ? (
-                <div id="gw-entrants-no-match" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-5" role="status">
-                  <div><strong id="gw-entrants-no-match-text">No entrants match "{search.trim()}"</strong><p className="mt-1 text-sm text-muted-foreground">Clear the search to see all entrants.</p></div>
-                  <Button id="gw-btn-clear-search" variant="outline" size="sm" onClick={() => setSearch("")}>Clear search</Button>
-                </div>
-              ) : (
-                <div className="max-h-[min(60vh,520px)] overflow-auto rounded-lg border">
-                  <table className="w-full min-w-[680px] text-left text-sm">
-                    <thead className="sticky top-0 z-10 bg-muted/50 text-xs uppercase text-muted-foreground">
-                      <tr><th className="px-3 py-3">#</th><th className="px-3 py-3">Viewer</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Chat Message</th><th className="px-3 py-3">Entered At</th><th className="px-3 py-3 text-right">Action</th></tr>
-                    </thead>
-                    <tbody id="gw-entrants-list" className="divide-y">
-                      {filteredEntries.map((entrant) => (
-                        <EntrantRow
-                          key={entrant.id}
-                          entrant={entrant}
-                          index={entries.indexOf(entrant) + 1}
-                          onInclude={() => void mutateEntry("/entries/include", { entryId: entrant.id }, "Could not include the entrant again.")}
-                          onExclude={() => void mutateEntry("/entries/exclude", { entryIds: [entrant.id] }, "Could not exclude linked entrants.")}
-                          onRemove={() => void mutateEntry("/entries/remove", { entryId: entrant.id }, "Could not remove entrant.")}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
+
+        <Card id="gw-advanced-card" className="col-span-full max-[960px]:order-4">
+          <CardContent className="pt-6">
+            <fieldset id="gw-advanced-settings" disabled={settingsLocked} className="space-y-4">
+              <details id="gw-advanced-options" open={advancedOpen} onToggle={(event) => updateAdvancedOpen(event.currentTarget.open)} className="rounded-lg border p-3">
+                <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
+                  <span>Advanced options</span>
+                  <span id="gw-advanced-summary" className="text-xs font-normal text-muted-foreground">{formatAdvancedSummary(rules)}</span>
+                </summary>
+                <div className="mt-4 grid gap-6 md:grid-cols-3">
+                  <fieldset id="gw-advanced-eligibility-section" disabled={settingsLocked} hidden={manualUi} className="space-y-3">
+                    <h3 id="gw-advanced-eligibility-title" className="text-sm font-semibold">Eligibility</h3>
+                    <div id="gw-subscriber-rule" hidden={manualUi}>
+                      <RuleCheckbox id="gw-opt-subscriber" label="Subscriber only" checked={Boolean(rules.subscriberOnly)} onChange={(value) => setRule("subscriberOnly", value)} />
+                    </div>
+                    <div id="gw-vip-rule" hidden={manualUi}>
+                      <RuleCheckbox id="gw-opt-vip" label="VIP only" checked={Boolean(rules.vipOnly)} onChange={(value) => setRule("vipOnly", value)} />
+                    </div>
+                    <RuleCheckbox id="gw-opt-skip-past" label="Exclude past giveaway winners" checked={Boolean(rules.excludePreviousWinners)} onChange={(value) => setRule("excludePreviousWinners", value)} />
+                    <p className="text-xs text-muted-foreground">Skips winners from this community’s earlier giveaways.</p>
+                    <p id="gw-subscriber-hint" hidden={manualUi} className="text-xs text-muted-foreground">Checked against chat badges. Both on requires both badges.</p>
+                    <p id="gw-kick-history-hint" hidden={manualUi} className="text-xs text-muted-foreground">Account age and follow duration need Kick data that isn’t connected.</p>
+                  </fieldset>
+                  <fieldset id="gw-anti-abuse-section" disabled={settingsLocked} hidden={manualUi} className="space-y-3">
+                    <h3 id="gw-abuse-title" className="text-sm font-semibold">Anti-abuse</h3>
+                    <RuleCheckbox id="gw-opt-ip" label="One account per IP" checked={Boolean(rules.onePerIp)} disabled={rules.entryMode !== "verified"} onChange={(value) => setRule("onePerIp", value)} />
+                    <RuleCheckbox id="gw-opt-vpn" label="VPN / Proxy detection" checked={Boolean(rules.vpnDetection)} disabled={rules.entryMode !== "verified" || capabilities.vpnDetection !== true} onChange={(value) => setRule("vpnDetection", value)} />
+                    <label className="flex cursor-not-allowed items-center gap-2 text-sm opacity-50">
+                      <Checkbox checked={false} disabled aria-label="Duplicate device detection" aria-describedby="gw-device-requirement" />
+                      <span>Duplicate device detection</span>
+                    </label>
+                    <p id="gw-ip-requirement" className="text-xs text-muted-foreground">{rules.entryMode === "verified" ? "Shared connections may exclude people living together." : "Locked — Requires Verified Entry"}</p>
+                    <p id="gw-vpn-requirement" className="text-xs text-muted-foreground">
+                      {rules.entryMode !== "verified"
+                        ? "Locked — Requires Verified Entry"
+                        : capabilities.vpnDetection === true
+                          ? "Blocks VPN, proxy, Tor and hosting networks."
+                          : "Unavailable right now."}
+                    </p>
+                    <p id="gw-device-requirement" className="text-xs text-muted-foreground">
+                      {rules.entryMode === "verified" ? "Unavailable — No supported device check" : "Locked — Requires Verified Entry and a supported device check"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Needs Verified Entry — Kick chat doesn’t expose IP or device.</p>
+                    <Button
+                      id="gw-enable-verified"
+                      type="button"
+                      variant="link"
+                      hidden={rules.entryMode === "verified" || settingsLocked}
+                      onClick={() => setRule("entryMode", "verified")}
+                    >
+                      Enable Verified Entry
+                    </Button>
+                  </fieldset>
+                  <div id="gw-winner-instruction-section" hidden={manualUi} className="space-y-2">
+                    <h3 id="gw-winner-instruction-title" className="text-sm font-semibold">Winner instruction</h3>
+                    <Label htmlFor="gw-custom-rule-text">Winner instruction (optional)</Label>
+                    <Input id="gw-custom-rule-text" maxLength={160} placeholder="e.g. Say your in-game name in chat" value={customRule} onChange={(event) => setCustomRule(event.target.value)} />
+                    <p className="text-xs text-muted-foreground">A display instruction on this page; not an eligibility check.</p>
+                  </div>
+                </div>
+              </details>
+            </fieldset>
+          </CardContent>
+        </Card>
       </div>
 
       <Dialog open={winnerOpen && Boolean(winner)} onOpenChange={(open) => { if (!open) setWinnerOpen(false); }}>
