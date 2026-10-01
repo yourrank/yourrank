@@ -283,7 +283,7 @@
 }
 
 .yr-react.cr-react-rewards .cr-react-chart-spend {
-  background: var(--ws-info);
+  background: var(--ws-warning);
 }
 
 .yr-react.cr-react-rewards .cr-next-step {

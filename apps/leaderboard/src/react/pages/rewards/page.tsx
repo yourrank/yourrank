@@ -1823,7 +1823,7 @@ function OverviewTab({ data, siteId, deps, board, notify }: {
           </select>
         </div>
       </div>
-      <StatusText error={Boolean(error)}>{error}</StatusText>
+      {error && <StatusText error>{error}</StatusText>}
       <div className="cr-overview-kpis">
         <Metric
           label="Credits earned"
