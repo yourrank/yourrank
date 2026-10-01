@@ -1,6 +1,7 @@
 // Billing handlers: trial activation
-import { requireUser, json, bad, rateLimit, rateLimitHeaders } from "../auth.js";
+import { requireUser, json, ok, bad, rateLimit, rateLimitHeaders } from "../auth.js";
 import { activatePro } from "../billing.js";
+import { withTransaction } from "@yourrank/shared/db";
 import { effectivePlan } from "@yourrank/shared/plans";
 import { logAudit } from "@yourrank/shared/audit";
 
@@ -41,6 +42,68 @@ export async function handleTrial(request, env) {
   } catch (e) {
     console.error("trial failed:", String(e?.message || e));
     return bad("Couldn't start trial. Try again.", 500);
+  }
+}
+
+export async function handleEndPlanAccess(request, env, {
+  requireUserImpl = requireUser,
+  transactionImpl = withTransaction,
+  logAuditImpl = logAudit,
+} = {}) {
+  try {
+    const { user, res } = await requireUserImpl(request, env);
+    if (res) return res;
+    if (user.status === "suspended") return bad("This account is suspended.", 403);
+
+    const result = await transactionImpl(async (tx) => {
+      const row = await tx.one(
+        `SELECT id, plan::text AS plan, status,
+                (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at
+           FROM users WHERE id=$1 FOR UPDATE`,
+        [user.id],
+      );
+      if (!row) throw new Error("Plan access user was not found.");
+      if (row.status === "suspended") return { conflict: "suspended" };
+
+      const previousPlan = effectivePlan(row);
+      if (previousPlan === "free") return { conflict: "free" };
+
+      const polarSubscription = await tx.one(
+        `SELECT id FROM subscriptions
+          WHERE user_id=$1 AND provider='polar' AND status IN ('active','past_due')
+          LIMIT 1`,
+        [user.id],
+      );
+      if (polarSubscription) return { conflict: "polar" };
+
+      await tx.unsafe(
+        `UPDATE users SET plan='free', plan_expires_at=NULL, updated_at=now() WHERE id=$1`,
+        [user.id],
+      );
+      await tx.unsafe(
+        `UPDATE subscriptions SET status='canceled'
+          WHERE user_id=$1 AND provider <> 'polar' AND status IN ('active','trialing')`,
+        [user.id],
+      );
+      return { previousPlan };
+    });
+
+    if (result.conflict === "suspended") return bad("This account is suspended.", 403);
+    if (result.conflict === "free") return bad("You're already on Free.", 409);
+    if (result.conflict === "polar") return bad("Your plan is a Polar subscription. Cancel it from Billing instead.", 409);
+
+    await logAuditImpl({
+      actorId: user.id,
+      action: "billing.plan_access_ended",
+      entityType: "plan",
+      entityId: result.previousPlan,
+      details: { from: result.previousPlan },
+      request,
+    });
+    return ok({ plan: "free" });
+  } catch (error) {
+    console.error("[handleEndPlanAccess] failed:", String(error?.message || error));
+    return bad("Couldn't switch to Free. Try again.", 500);
   }
 }
 
