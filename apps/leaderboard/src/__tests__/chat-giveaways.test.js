@@ -418,6 +418,14 @@ describe("Chat Giveaway API", () => {
     expect(wrote.params[3]).toMatchObject({ entryMode: "verified", vpnDetection: true, onePerIp: true });
   });
 
+  it("uses plain-language copy when VPN detection is unavailable", async () => {
+    const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", {
+      keyword: "!win", rules: { entryMode: "verified", vpnDetection: true },
+    }), {}, deps());
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("VPN / proxy detection isn't available right now.");
+  });
+
   it("refuses to start when the chat subscription was not confirmed", async () => {
     const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", { keyword: "!win" }), {}, deps({
       loadChatGiveawayConnection: async () => ({ connected: true, chatReady: false, channelName: "streamer", externalChannelId: "111" }),
