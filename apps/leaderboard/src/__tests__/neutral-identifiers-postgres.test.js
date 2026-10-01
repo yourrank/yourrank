@@ -166,5 +166,35 @@ describe("neutral identifier migration (PostgreSQL)", () => {
         await connection.release();
       }
     }
+
+    const [appRole] = await sql`
+      SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'yourrank_app') AS present`;
+    if (appRole.present) {
+      const [appPrivileges] = await sql`
+        SELECT
+          has_table_privilege('yourrank_app', 'public.partners', 'SELECT') AS can_select,
+          has_table_privilege('yourrank_app', 'public.partners', 'INSERT') AS can_insert,
+          has_table_privilege('yourrank_app', 'public.partners', 'UPDATE') AS can_update`;
+      expect(appPrivileges).toEqual({ can_select: true, can_insert: true, can_update: true });
+
+      const rollbackSignal = new Error("rollback yourrank_app partner privileges test");
+      try {
+        await sql.begin(async (transaction) => {
+          await transaction.unsafe("SET LOCAL ROLE yourrank_app");
+          const [visible] = await transaction`
+            SELECT id FROM public.partners WHERE slug = ${partnerASlug}`;
+          expect(visible.id).toBe(partnerAId);
+          const [upserted] = await transaction`
+            INSERT INTO public.partners (slug, name, created_by)
+            VALUES (${partnerASlug}, 'Ignored Partner Name', ${ownerId})
+            ON CONFLICT (slug) DO UPDATE SET name = partners.name
+            RETURNING id, name`;
+          expect(upserted).toEqual({ id: partnerAId, name: "Partner A" });
+          throw rollbackSignal;
+        });
+      } catch (error) {
+        if (error !== rollbackSignal) throw error;
+      }
+    }
   });
 });

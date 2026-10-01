@@ -1,5 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
+import { z } from "zod";
 import {
+  buildQueueEnvelope,
   createQueueProducer,
   parseQueueEvent,
   parseQueueMessage,
@@ -9,6 +11,36 @@ import {
 } from "../queue-producer.js";
 import { QueueEventValidationError as PackageQueueEventValidationError } from "@yourrank/shared/queue-producer";
 import { detectTop3Changes } from "../notifications.js";
+
+const n1Id = z.string().min(1).max(128);
+const n1Label = z.string().max(256);
+
+const n1Top3NotifyEventSchema = z.object({
+  type: z.literal("notify"),
+  kind: z.literal("top3"),
+  siteId: n1Id,
+  siteName: n1Label,
+  changes: z.array(z.object({
+    name: n1Label,
+    rank: z.number().int().positive(),
+    wagered: z.number().finite(),
+    score: z.number().finite().optional(),
+    rankBy: z.enum(["wagered", "score"]).optional(),
+  }).strict()).max(10),
+}).strict();
+
+const n1ResetNotifyEventSchema = z.object({
+  type: z.literal("notify"),
+  kind: z.literal("reset"),
+  siteId: n1Id,
+  siteName: n1Label,
+  players: z.array(z.object({
+    name: n1Label,
+    wagered: z.number().finite(),
+    prize: z.number().finite().optional(),
+  }).strict()).max(10_000),
+  period: z.string().max(64),
+}).strict();
 
 const clickEvent: QueueEvent = {
   type: "click",
@@ -136,14 +168,57 @@ describe("createQueueProducer", () => {
       const queue = fakeQueue();
       const producer = createQueueProducer(queue, noFallback);
       await producer.send({ type: "notify", kind: "top3", siteId: "site-1", siteName: "Arena", changes });
-      expect((queue.sent[0] as { payload: { changes: unknown[] } }).payload.changes[0]).toMatchObject({
-        amount: 99,
+      const wireChange = (queue.sent[0] as { payload: { changes: unknown[] } }).payload.changes[0];
+      expect(wireChange).toMatchObject({
         wagered: 99,
         rankBy: "wagered",
       });
+      expect(wireChange).not.toHaveProperty("amount");
       const parsed = parseQueueMessage(queue.sent[0]);
       expect(parsed.legacy).toBe(false);
       expect((parsed.event as { changes: unknown[] }).changes).toEqual(changes);
+    });
+
+    it("keeps top3 and reset envelope payloads valid for the N-1 strict schemas", () => {
+      const top3Envelope = buildQueueEnvelope({
+        type: "notify",
+        kind: "top3",
+        siteId: "site-1",
+        siteName: "Arena",
+        changes: [{ name: "A", rank: 1, amount: 99, score: 42, rankBy: "amount" }],
+      });
+      expect(n1Top3NotifyEventSchema.parse(top3Envelope.payload)).toEqual({
+        type: "notify",
+        kind: "top3",
+        siteId: "site-1",
+        siteName: "Arena",
+        changes: [{ name: "A", rank: 1, wagered: 99, score: 42, rankBy: "wagered" }],
+      });
+      const top3Parsed = parseQueueMessage(top3Envelope);
+      expect((top3Parsed.event as { changes: unknown[] }).changes).toEqual([
+        { name: "A", rank: 1, amount: 99, score: 42, rankBy: "amount" },
+      ]);
+
+      const resetEnvelope = buildQueueEnvelope({
+        type: "notify",
+        kind: "reset",
+        siteId: "site-1",
+        siteName: "Arena",
+        players: [{ name: "A", amount: 99, prize: 7 }],
+        period: "Monthly",
+      });
+      expect(n1ResetNotifyEventSchema.parse(resetEnvelope.payload)).toEqual({
+        type: "notify",
+        kind: "reset",
+        siteId: "site-1",
+        siteName: "Arena",
+        players: [{ name: "A", wagered: 99, prize: 7 }],
+        period: "Monthly",
+      });
+      const resetParsed = parseQueueMessage(resetEnvelope);
+      expect((resetParsed.event as { players: unknown[] }).players).toEqual([
+        { name: "A", amount: 99, prize: 7 },
+      ]);
     });
 
     const roundTrip = async (changes: ReturnType<typeof detectTop3Changes>) => {

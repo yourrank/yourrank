@@ -185,6 +185,7 @@ export function normalizeLegacyQueueInput(input: unknown): unknown {
 function addQueuePlayerAlias(value: unknown): unknown {
   if (!isRecord(value)) return value;
   const player = withLegacyAmount(value);
+  delete player.amount;
   if (player.rankBy === "amount") player.rankBy = DB_RANK_BY_AMOUNT;
   return player;
 }

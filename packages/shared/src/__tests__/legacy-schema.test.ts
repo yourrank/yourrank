@@ -98,7 +98,7 @@ test("queue aliases preserve the old wire shape and normalize old messages", () 
   expect(addLegacyQueueAliases({
     changes: [{ name: "A", amount: 5, rankBy: "amount" }],
   })).toEqual({
-    changes: [{ name: "A", amount: 5, wagered: 5, rankBy: "wagered" }],
+    changes: [{ name: "A", wagered: 5, rankBy: "wagered" }],
   });
   expect(normalizeLegacyQueueInput({
     changes: [{ name: "A", wagered: 7, rankBy: "wagered" }],

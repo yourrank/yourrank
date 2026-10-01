@@ -127,5 +127,8 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
     EXECUTE 'GRANT ALL ON TABLE public.partners TO service_role';
   END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'yourrank_app') THEN
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE ON TABLE public.partners TO yourrank_app';
+  END IF;
 END
 $$;

@@ -88,6 +88,8 @@ describe("handlePublicStandings", () => {
     expect(body).toHaveProperty("slug", "testboard");
     expect(body).toHaveProperty("name", "Test Community");
     expect(body).toHaveProperty("sponsor", "Acme Sponsor");
+    expect(body.casino).toBe(body.sponsor);
+    expect(body).not.toHaveProperty("brand");
     expect(body).toHaveProperty("period", "Monthly");
     expect(body).toHaveProperty("prizePool", "$10,000");
     expect(body).toHaveProperty("players");
@@ -104,6 +106,15 @@ describe("handlePublicStandings", () => {
     expect(body).toHaveProperty("countdown");
     expect(body.countdown).toHaveProperty("endsAt");
     expect(body.countdown).toHaveProperty("remaining");
+  });
+
+  it("keeps demo standings flat with sponsor aliases", async () => {
+    const res = await handlePublicStandings(req("https://test.com/api/public/demo/standings"), mockEnv(), { slug: "demo" });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toHaveProperty("sponsor");
+    expect(body.casino).toBe(body.sponsor);
+    expect(body).not.toHaveProperty("brand");
   });
 
   it("returns 404 for nonexistent slug", async () => {
