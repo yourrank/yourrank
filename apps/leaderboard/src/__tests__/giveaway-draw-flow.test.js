@@ -373,13 +373,12 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-kick-eligibility-section").hidden).toBe(true);
     expect($id("gw-winner-verification-section").hidden).toBe(true);
     expect($id("gw-anti-abuse-section").hidden).toBe(true);
-    expect($id("gw-rules-card")).toBeTruthy();
+    expect($id("gw-rules-card")).toBeNull();
     expect($id("gw-advanced-options").open).toBe(false);
 
     await actGiveaways(() => { $id("gw-advanced-options").open = true; });
     click("gw-opt-skip-past");
-    clickGiveaways(document.querySelector('input[name="gw-winner-repeat"][value="again"]'));
-    expect($id("gw-rules-summary").textContent).toBe("Anyone in chat · Can win again · Exclude past winners · No chat response");
+    click("gw-opt-winner-repeat");
 
     await clickAndFlush("gw-btn-listen");
     const startRequest = requestsTo("/api/giveaways/chat/start")[0];
@@ -399,11 +398,12 @@ describe("Giveaway draw flow", () => {
     expect(server.session.provider).toBe("manual");
     expect(server.session.keyword).toBe("manual");
     expect($id("gw-setup-card").textContent).toContain("LIVE");
-    expect($id("gw-stat-keyword").textContent).toBe("Manual");
+    expect($id("gw-stage-card").textContent).toContain("Winners (0)");
     expect($id("gw-add-entrant-form").hidden).toBe(false);
     expect($id("gw-layout").classList.contains("is-live")).toBe(true);
 
     const input = $id("gw-add-entrant-name");
+    expect(input.placeholder).toBe("Add viewer name…");
     setGiveawaysInputValue(input, "Alex Rivera");
     await dispatchAndFlush($id("gw-add-entrant-form"), new window.Event("submit", { bubbles: true, cancelable: true }));
     const addRequest = requestsTo("/api/giveaways/chat/entries/add")[0];
@@ -416,7 +416,9 @@ describe("Giveaway draw flow", () => {
     expect(row.querySelector(".gw-entrant-name").tagName).toBe("SPAN");
     expect(row.querySelector("img").src.startsWith("data:image/svg+xml")).toBe(true);
     expect(row.querySelector('[data-label="Status"]').textContent).toContain("Added manually");
-    expect(row.querySelector(".gw-entrant-msg").textContent).toBe("—");
+    expect(row.querySelector(".gw-entrant-msg")).toBeNull();
+    expect($id("gw-btn-roll").hidden).toBe(false);
+    expect($id("gw-btn-roll").disabled).toBe(false);
   });
 
   it("locks prediction entry points for a free owner while preserving the page", async () => {
@@ -823,7 +825,7 @@ describe("Giveaway draw flow", () => {
 
   it("the default winner rule is Win once per giveaway", async () => {
     await boot();
-    expect($id("gw-winner-repeat-once").checked).toBe(true);
+    expect($id("gw-opt-winner-repeat").getAttribute("aria-checked")).toBe("false");
     click("gw-btn-listen");
     await clock.tick(50);
     expect(requestsTo("/api/giveaways/chat/start").at(-1).body.rules.winnerRepeat).toBe("once");
@@ -843,7 +845,7 @@ describe("Giveaway draw flow", () => {
   it("Can win again lets a re-roll land on the same participant", async () => {
     resetServer({ entries: [ENTRANTS[0]] });
     await boot();
-    click("gw-winner-repeat-again");
+    click("gw-opt-winner-repeat");
     click("gw-btn-listen");
     await clock.tick(50);
     expect(server.session.rules.winnerRepeat).toBe("again");
@@ -854,6 +856,7 @@ describe("Giveaway draw flow", () => {
     expect(server.session.winner_entry_id).toBe(firstId);
     expect($id("gw-page-alert")).toBeNull();
     expect($id("gw-winner-stage")).toBeTruthy();
+    expect($id("gw-btn-roll").hidden).toBe(true);
   });
 
   it("with no other eligible entrant a Win-once re-roll shows a clear error", async () => {
@@ -871,12 +874,12 @@ describe("Giveaway draw flow", () => {
   it("a reload preserves the persisted winner repeat rule", async () => {
     server.session.rules = { winnerRepeat: "again" };
     await boot();
-    expect($id("gw-winner-repeat-again").checked).toBe(true);
+    expect($id("gw-opt-winner-repeat").getAttribute("aria-checked")).toBe("true");
     await leave();
     document.body.innerHTML = renderGiveawaysHtml("chat");
     await enter();
     await clock.tick(50);
-    expect($id("gw-winner-repeat-again").checked).toBe(true);
+    expect($id("gw-opt-winner-repeat").getAttribute("aria-checked")).toBe("true");
   });
 
   it("a stale tab's re-roll follows the server-persisted rule", async () => {
@@ -886,8 +889,8 @@ describe("Giveaway draw flow", () => {
     await drawWinner();
     // The fieldset is locked while the giveaway runs; even a forged control
     // change cannot alter the rule persisted at start.
-    click("gw-winner-repeat-again");
-    expect($id("gw-winner-repeat-again").checked).toBe(false);
+    click("gw-opt-winner-repeat");
+    expect($id("gw-opt-winner-repeat").getAttribute("aria-checked")).toBe("false");
     click("gw-btn-reroll");
     await clock.tick(3000);
     expect(server.session.rules.winnerRepeat ?? "once").toBe("once");
@@ -974,30 +977,34 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-opt-claim-duration").disabled).toBe(false);
   });
 
-  it("draw history logs the draw, the re-roll, and the auto re-roll reasons", async () => {
+  it("draw history lists earlier winners newest-first with replacement labels", async () => {
     server.session.status = "active";
     server.session.rules = { winnerMustRespond: true, responseTimeout: 30, autoReroll: true };
     await boot();
 
     await drawWinner(); // server picks e3 (charlie)
     expect($id("gw-draw-history")).toBeTruthy();
-    expect([...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent)).toEqual([
-      expect.stringContaining("Drew charlie"),
-    ]);
+    expect($id("gw-draw-history-list").querySelectorAll("li")).toHaveLength(0);
+    expect($id("gw-btn-roll").hidden).toBe(true);
 
     await clickAndFlush("gw-btn-reroll");
     await tickUntilReveal();
     const items = [...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent);
-    expect(items).toHaveLength(2);
-    expect(items[0]).toContain("Re-rolled to bravo (replaced charlie)");
-    expect(items[1]).toContain("Drew charlie");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toContain("charlie");
+    expect(items[0]).toContain("Re-rolled");
+    expect($id("gw-btn-roll").hidden).toBe(true);
 
     // Let the response window lapse; the open page fires the automatic re-roll.
     await clock.tick(31_000);
     const auto = requestsTo("/api/giveaways/chat/draw").at(-1);
     expect(auto.body.automatic).toBe(true);
     const after = [...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent);
-    expect(after[0]).toContain("Auto re-roll to alpha — bravo didn't respond in time");
+    expect(after).toHaveLength(2);
+    expect(after[0]).toContain("bravo");
+    expect(after[0]).toContain("Didn't respond");
+    expect(after[1]).toContain("charlie");
+    expect(after[1]).toContain("Re-rolled");
 
     // Alpha's window lapses too; with no entrant left the sweep exhausts and the
     // server-side flag lands in the client's state via the 409 payload.
@@ -1013,7 +1020,10 @@ describe("Giveaway draw flow", () => {
     );
     const items2 = [...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent);
     expect(items2[0]).toContain("Auto re-roll stopped — no other eligible entrants left (alpha didn't respond)");
-    expect(items2[1]).toContain("Auto re-roll to alpha — bravo didn't respond in time");
+    expect(items2[1]).toContain("bravo");
+    expect(items2[1]).toContain("Didn't respond");
+    expect(items2[2]).toContain("charlie");
+    expect(items2[2]).toContain("Re-rolled");
     // Confirm stays disabled (unanswered required response); nothing else hid.
     for (const b of confirmButtons()) expect(b.disabled).toBe(true);
   });

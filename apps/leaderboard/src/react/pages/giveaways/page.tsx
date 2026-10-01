@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import {
   Check,
   ChevronRight,
+  Copy,
   Crown,
+  Download,
   Gift,
   Loader2,
   RefreshCw,
@@ -253,21 +255,6 @@ function playWinnerSound() {
       oscillator.stop(context.currentTime + index * 0.1 + 0.6);
     });
   } catch {}
-}
-
-function formatRulesSummary(rules: GiveawayRules) {
-  const parts = [
-    rules.entryMode === "members" ? "Members only" : rules.entryMode === "verified" ? "Verified entry" : "Anyone in chat",
-    rules.winnerRepeat === "again" ? "Can win again" : "Win once",
-  ];
-  if (rules.subscriberOnly || rules.vipOnly) {
-    parts.push([rules.subscriberOnly && "Subscribers", rules.vipOnly && "VIPs"].filter(Boolean).join(" and ") + " only");
-  }
-  if (rules.excludePreviousWinners) parts.push("Exclude past winners");
-  if (rules.onePerIp) parts.push("One entry per IP");
-  if (rules.vpnDetection) parts.push("VPN blocked");
-  parts.push(rules.winnerMustRespond ? "Winner response required" : "No chat response");
-  return parts.join(" · ");
 }
 
 function formatAdvancedSummary(rules: GiveawayRules) {
@@ -641,6 +628,7 @@ function ChatGiveaway({
   const capabilities = data.capabilities || {};
   const winner = data.winner || null;
   const winnerId = winner?.id || null;
+  const drawCount = data.draws?.length || (winner ? 1 : 0);
   const active = session?.status === "active";
   const settingsLocked = active || Boolean(session?.winner_entry_id && !session.winner_finalized_at);
   const manualSetup = !connection.connected && !active;
@@ -1087,14 +1075,6 @@ function ChatGiveaway({
     try { window.localStorage.setItem("yr:gw-advanced-open", open ? "1" : "0"); } catch { /* storage unavailable */ }
   };
 
-  const elapsed = session?.started_at
-    ? (() => {
-      const start = Date.parse(session.started_at || "");
-      const end = session.status === "active" ? Date.now() : Date.parse(session.stopped_at || session.started_at || "");
-      const seconds = Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.floor((end - start) / 1000)) : 0;
-      return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-    })()
-    : "00:00";
   const statusLabel = active
     ? "LIVE"
     : !connection.connected
@@ -1111,25 +1091,21 @@ function ChatGiveaway({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 min-[961px]:grid-cols-2 min-[1280px]:grid-cols-[minmax(18rem,1fr)_minmax(0,1.35fr)_minmax(17rem,0.95fr)]">
+      <div className="grid gap-6 min-[961px]:grid-cols-2 min-[1280px]:grid-cols-[minmax(17rem,0.9fr)_minmax(0,1.4fr)_minmax(17rem,1fr)]">
         <div className={cn("min-w-0 space-y-6 min-[961px]:max-[1279px]:row-span-2", active ? "max-[960px]:order-3" : "max-[960px]:order-1")}>
           <Card id="gw-setup-card">
             <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
-              <div>
-                <CardTitle className="text-lg">Start collecting entries</CardTitle>
-                <CardDescription className="mt-2">Collect entries from Kick chat, or add viewer names yourself.</CardDescription>
-              </div>
+              <CardTitle className="text-lg">Settings</CardTitle>
               <Badge className={cn("shrink-0 rounded-full", active ? "border-emerald-700/25 bg-emerald-600/10 text-emerald-800" : "")} aria-live="polite">
                 <span className={cn("mr-1.5 size-1.5 rounded-full bg-muted-foreground", active && "bg-emerald-600")} />
                 {statusLabel}
               </Badge>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-4">
               {connection.connected ? (
-                <div id="gw-channel-connected" className="rounded-lg border bg-muted/30 p-3 text-sm">
-                  <span className="text-muted-foreground">Kick channel</span>
-                  <div id="gw-channel-name" className="mt-1 flex items-center gap-2 font-semibold">
-                    {connection.channelName || ""}
+                <div id="gw-channel-connected" className="space-y-2 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>Kick: <strong id="gw-channel-name">{connection.channelName || ""}</strong></span>
                     <Badge className="border-emerald-700/25 bg-emerald-600/5 text-emerald-800">✓ Connected</Badge>
                   </div>
                   {connection.chatReady === false && (
@@ -1161,32 +1137,12 @@ function ChatGiveaway({
                     <p className="text-xs text-muted-foreground">Viewers who type this word in chat are entered once each. Matching ignores upper/lowercase.</p>
                   </div>
                 )}
-                <Button
-                  id="gw-btn-listen"
-                  type="submit"
-                  disabled={starting || (!active && !(connection.connected && connection.chatReady) && !manualSetup)}
-                  variant={active ? "destructive" : "default"}
-                  className="w-full"
-                >
-                  {starting && <Loader2 className="animate-spin" />}
-                  <span id="gw-listen-btn-label">{active ? "Stop entries" : manualSetup ? "Start manual giveaway" : "Start giveaway"}</span>
-                </Button>
-                <p className="text-xs text-muted-foreground">Entries keep collecting on our servers even if you close or refresh this page.</p>
               </form>
-            </CardContent>
-          </Card>
-
-          <Card id="gw-rules-card">
-            <CardHeader>
-              <CardTitle className="text-lg">Giveaway rules</CardTitle>
-              <CardDescription id="gw-rules-summary">{formatRulesSummary(rules)}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <fieldset id="gw-settings" disabled={settingsLocked} className="mx-0 min-w-0 border-0 p-0 space-y-5">
-                <fieldset id="gw-entry-modes" disabled={settingsLocked} hidden={manualUi} className="mx-0 min-w-0 border-0 p-0 space-y-3">
-                  <legend id="gw-entry-mode-legend" hidden={manualUi} className="text-sm font-semibold">Entry Mode</legend>
+              <fieldset id="gw-settings" disabled={settingsLocked} className="mx-0 min-w-0 border-0 p-0">
+                <fieldset id="gw-entry-modes" disabled={settingsLocked} hidden={manualUi} className="mx-0 min-w-0 border-0 p-0 space-y-2">
+                  <legend id="gw-entry-mode-legend" hidden={manualUi} className="mb-2 text-sm font-semibold">Entry mode</legend>
                   {(["chat", "members", "verified"] as const).map((mode) => (
-                    <label key={mode} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm">
+                    <label key={mode} className="flex cursor-pointer items-center gap-2 text-sm">
                       <input
                         type="radio"
                         name="gw-entry-mode"
@@ -1195,16 +1151,7 @@ function ChatGiveaway({
                         disabled={settingsLocked}
                         onChange={(event) => setRule("entryMode", event.target.value)}
                       />
-                      <span>
-                        <strong>{mode === "chat" ? "Anyone in chat" : mode === "members" ? "Members only" : "Verified Entry"}</strong>
-                        <small className="mt-1 block text-muted-foreground">
-                          {mode === "chat"
-                            ? "Anyone who types the keyword can participate."
-                            : mode === "members"
-                              ? "Requires a YourRank account linked to the Kick account used in chat."
-                              : "Viewers type the keyword, then verify through YourRank before entering the draw."}
-                        </small>
-                      </span>
+                      <span>{mode === "chat" ? "Anyone in chat" : mode === "members" ? "Members only" : "Verified Entry"}</span>
                     </label>
                   ))}
                   <p id="gw-entry-mode-desc" hidden={manualUi} className="text-xs text-muted-foreground" aria-live="polite">
@@ -1215,41 +1162,23 @@ function ChatGiveaway({
                         : "Anyone who types the keyword can participate."}
                   </p>
                 </fieldset>
-                <fieldset id="gw-kick-eligibility-section" hidden={manualUi} className="mx-0 min-w-0 border-0 p-0 space-y-2">
-                  <legend id="gw-eligibility-title" className="text-sm font-semibold">Eligibility</legend>
-                  <label id="gw-kick-identity-rule" className="flex items-center gap-2 text-sm">
-                    <Checkbox checked disabled aria-label="One entry per Kick account" />
-                    <span>
-                      <strong>One entry per Kick account</strong>
-                      <small className="mt-1 block text-muted-foreground">Always enforced by Kick account ID.</small>
-                    </span>
-                  </label>
-                </fieldset>
-                <fieldset id="gw-winner-repeat-modes" disabled={settingsLocked} className="mx-0 min-w-0 border-0 p-0 space-y-2">
-                  <legend id="gw-winner-repeat-title" className="text-sm font-medium">Winner repeat</legend>
-                  {(["once", "again"] as const).map((value) => (
-                    <label key={value} className="flex items-center gap-2 text-sm">
-                      <input id={`gw-winner-repeat-${value}`} type="radio" name="gw-winner-repeat" value={value} checked={(rules.winnerRepeat || "once") === value} disabled={settingsLocked} onChange={() => setRule("winnerRepeat", value)} />
-                      <span>
-                        <strong>{value === "once" ? "Win once" : "Can win again"}</strong>
-                        <small className="mt-1 block text-muted-foreground">
-                          {value === "once"
-                            ? "Winners are excluded from later draws and re-rolls in this giveaway."
-                            : "A re-roll may pick the same participant again."}
-                        </small>
-                      </span>
-                    </label>
-                  ))}
-                  <p id="gw-winner-repeat-desc" className="text-xs text-muted-foreground" aria-live="polite">
-                    {rules.winnerRepeat === "again"
-                      ? "A re-roll may pick the same participant again."
-                      : "Winners are excluded from later draws and re-rolls in this giveaway."}
-                  </p>
-                </fieldset>
+              </fieldset>
+              {session?.rules?.entryMode === "verified" && (session.status === "active" || session.status === "stopped") && (
+                <section id="gw-verification-share" aria-labelledby="gw-verification-share-title" className="space-y-2">
+                  <Label id="gw-verification-share-title" htmlFor="gw-verification-url">Verification link</Label>
+                  <div className="flex items-center gap-2">
+                    <Input id="gw-verification-url" readOnly aria-label="Verification link" value={verificationUrl} onFocus={(event) => event.currentTarget.select()} className="min-w-0 flex-1 font-mono text-xs" />
+                    <Button id="gw-btn-copy-verification" type="button" size="icon" variant="outline" aria-label="Copy verification link" title="Copy link" onClick={() => void copyVerificationLink()}>
+                      <Copy aria-hidden="true" />
+                    </Button>
+                  </div>
+                </section>
+              )}
+              <fieldset id="gw-winner-repeat-modes" disabled={settingsLocked} className="mx-0 min-w-0 border-0 p-0">
+                <RuleCheckbox id="gw-opt-winner-repeat" label="Same person can win again" checked={rules.winnerRepeat === "again"} disabled={settingsLocked} onChange={(value) => setRule("winnerRepeat", value ? "again" : "once")} />
               </fieldset>
               <fieldset id="gw-response-settings" className="mx-0 min-w-0 border-0 p-0 space-y-4">
                 <div id="gw-winner-verification-section" hidden={manualUi} className="space-y-3">
-                  <h3 id="gw-winner-verification-title" className="text-sm font-medium">Winner verification</h3>
                   <RuleCheckbox id="gw-opt-claim-req" label="Winner must respond in chat" checked={Boolean(rules.winnerMustRespond)} disabled={savingResponseRules} onChange={(value) => setRule("winnerMustRespond", value)} />
                   <div id="gw-claim-duration-wrap" className="space-y-2" hidden={!rules.winnerMustRespond}>
                     <Label htmlFor="gw-opt-claim-duration">Response timeout</Label>
@@ -1267,10 +1196,19 @@ function ChatGiveaway({
                 </div>
               </fieldset>
               {responseRulesEditable && <p id="gw-response-live-note" className="text-xs text-muted-foreground">Changes apply to the next draw or re-roll.</p>}
-              <p id="gw-settings-note" className="text-xs text-muted-foreground">
-                {settingsLocked ? "Entry rules are locked for the current giveaway. Winner verification can still change until you confirm a winner." : "Settings are saved when you start a giveaway. Changes apply to the next giveaway."}
-              </p>
               {manualUi && <p id="gw-manual-rules-note" className="text-xs text-muted-foreground">Other rules need a connected Kick channel.</p>}
+              {settingsLocked && <p id="gw-settings-note" className="text-xs text-muted-foreground">Entry rules are locked for the current giveaway. Winner verification can still change until you confirm a winner.</p>}
+              <Button
+                id="gw-btn-listen"
+                type="submit"
+                form="gw-setup-form"
+                disabled={starting || (!active && !(connection.connected && connection.chatReady) && !manualSetup)}
+                variant={active ? "destructive" : "default"}
+                className="w-full"
+              >
+                {starting && <Loader2 className="animate-spin" />}
+                <span id="gw-listen-btn-label">{active ? "Stop entries" : manualSetup ? "Start manual giveaway" : "Start giveaway"}</span>
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -1282,35 +1220,21 @@ function ChatGiveaway({
         )}>
           <Card id="gw-entrants-card">
             <CardHeader className="flex flex-col gap-3">
-              <div>
-                <CardTitle className="text-lg">Entrants (<span id="gw-count-header">{entries.length.toLocaleString()}</span>)</CardTitle>
-                <CardDescription className="mt-2">Collect entries from chat or add viewer names here.</CardDescription>
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle className="text-lg">Participants (<span id="gw-count-header">{entries.length.toLocaleString()}</span>)</CardTitle>
+                {pendingCount > 0 && <p id="gw-verification-pending" className="text-xs text-muted-foreground" role="status">{pendingCount} waiting for verification</p>}
               </div>
               <div className="flex w-full items-center gap-2">
                 <div className="relative min-w-0 flex-1">
                   <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <Input aria-label="Search entrants" id="gw-search-entrants" className="w-full pl-9" placeholder="Search entrant…" value={search} onChange={(event) => setSearch(event.target.value)} />
+                  <Input aria-label="Search participants" id="gw-search-entrants" className="w-full pl-9" placeholder="Search participant…" value={search} onChange={(event) => setSearch(event.target.value)} />
                 </div>
-                <Button id="gw-btn-export" type="button" variant="outline" size="sm" disabled={!entries.length} onClick={exportCsv}>Export CSV</Button>
+                <Button id="gw-btn-export" type="button" variant="outline" size="icon" aria-label="Export CSV" title="Export CSV" disabled={!entries.length} onClick={exportCsv}>
+                  <Download aria-hidden="true" />
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {session?.rules?.entryMode === "verified" && (session.status === "active" || session.status === "stopped") && (
-                <section id="gw-verification-share" aria-labelledby="gw-verification-share-title" className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
-                  <div>
-                    <h3 id="gw-verification-share-title" className="text-sm font-semibold">Verification link</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">Share this with your chat. Entries stay pending until the viewer opens it and selects Verify Entry. Only verified entries can win.</p>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input id="gw-verification-url" readOnly aria-label="Verification link" value={verificationUrl} onFocus={(event) => event.currentTarget.select()} className="font-mono text-xs" />
-                    <div className="flex gap-2">
-                      <Button id="gw-btn-copy-verification" type="button" size="sm" onClick={() => void copyVerificationLink()}>Copy link</Button>
-                      <Button asChild size="sm" variant="outline"><a id="gw-verification-link" href={verificationPath} target="_blank" rel="noopener noreferrer">Open</a></Button>
-                    </div>
-                  </div>
-                  {pendingCount > 0 && <p id="gw-verification-pending" className="text-xs text-muted-foreground" role="status">{pendingCount} {pendingCount === 1 ? "entry is" : "entries are"} waiting for verification.</p>}
-                </section>
-              )}
               {linkedCount > 0 && (
                 <div id="gw-linked-banner" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-700/20 bg-amber-500/5 px-4 py-3 text-sm" role="status">
                   <span id="gw-linked-banner-text">{linkedCount} entrant{linkedCount === 1 ? " is" : "s are"} linked to another entrant.</span>
@@ -1318,34 +1242,41 @@ function ChatGiveaway({
                 </div>
               )}
               {active && (
-                <form id="gw-add-entrant-form" className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto]" onSubmit={(event) => void addEntrant(event)}>
-                  <div className="space-y-2">
-                    <Label htmlFor="gw-add-entrant-name">Add entrant</Label>
-                    <Input ref={manualInputRef} id="gw-add-entrant-name" name="username" type="text" maxLength={40} autoComplete="off" required value={manualName} onChange={(event) => setManualName(event.target.value)} />
-                    {manualError && <p id="gw-add-entrant-error" className="text-sm text-destructive" role="alert" aria-live="assertive">{manualError}</p>}
+                <form id="gw-add-entrant-form" className="space-y-2" onSubmit={(event) => void addEntrant(event)}>
+                  <div className="flex items-center gap-2">
+                    <Label className="sr-only" htmlFor="gw-add-entrant-name">Add viewer name</Label>
+                    <Input ref={manualInputRef} id="gw-add-entrant-name" name="username" type="text" maxLength={40} autoComplete="off" required value={manualName} onChange={(event) => setManualName(event.target.value)} className="min-w-0 flex-1" placeholder="Add viewer name…" />
+                    <Button size="sm" type="submit" disabled={adding}>{adding ? <Loader2 className="animate-spin" /> : null}Add</Button>
                   </div>
-                  <Button className="self-end" type="submit" disabled={adding}>{adding ? <Loader2 className="animate-spin" /> : null}Add</Button>
+                  {manualError && <p id="gw-add-entrant-error" className="text-sm text-destructive" role="alert" aria-live="assertive">{manualError}</p>}
                 </form>
               )}
-              {entries.length === 0 ? (
-                <EmptyState id="gw-entrants-empty" title="No entrants yet" description="Start a giveaway, then add viewer names or collect entries from Kick chat." />
-              ) : filteredEntries.length === 0 ? (
-                <div id="gw-entrants-no-match" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-5" role="status">
-                  <div><strong id="gw-entrants-no-match-text">No entrants match "{search.trim()}"</strong><p className="mt-1 text-sm text-muted-foreground">Clear the search to see all entrants.</p></div>
-                  <Button id="gw-btn-clear-search" variant="outline" size="sm" onClick={() => setSearch("")}>Clear search</Button>
-                </div>
-              ) : (
-                <div className="overflow-x-auto rounded-lg border min-[1280px]:max-h-[70vh] min-[1280px]:overflow-y-auto">
-                  <table className="w-full min-w-[560px] min-[1280px]:min-w-0 text-left text-sm">
+              <div className="h-[28rem] overflow-y-auto rounded-lg border">
+                {entries.length === 0 ? (
+                  <div id="gw-entrants-empty" className="flex min-h-full flex-col items-center justify-center px-5 py-8 text-center" role="status">
+                    <p className="font-semibold">No entrants yet</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Start a giveaway, then add viewer names or collect entries from Kick chat.</p>
+                  </div>
+                ) : filteredEntries.length === 0 ? (
+                  <div id="gw-entrants-no-match" className="flex min-h-full flex-col items-center justify-center gap-3 px-5 py-8 text-center" role="status">
+                    <div><strong id="gw-entrants-no-match-text">No entrants match "{search.trim()}"</strong><p className="mt-1 text-sm text-muted-foreground">Clear the search to see all entrants.</p></div>
+                    <Button id="gw-btn-clear-search" variant="outline" size="sm" onClick={() => setSearch("")}>Clear search</Button>
+                  </div>
+                ) : (
+                  <table className="w-full text-left text-sm">
                     <thead className="sticky top-0 z-10 bg-muted/50 text-xs uppercase text-muted-foreground">
-                      <tr><th className="px-3 py-3">#</th><th className="px-3 py-3">Viewer</th><th className="px-3 py-3">Status</th><th className="px-3 py-3 min-[1280px]:hidden">Chat Message</th><th className="px-3 py-3 min-[1280px]:hidden">Entered At</th><th className="px-3 py-3 text-right">Action</th></tr>
+                      <tr>
+                        <th className="px-3 py-3">Viewer</th>
+                        <th className="px-3 py-3">Status</th>
+                        <th className="px-3 py-3 text-right"><span className="sr-only">Action</span></th>
+                      </tr>
                     </thead>
                     <tbody id="gw-entrants-list" className="divide-y">
                       {filteredEntries.map((entrant) => (
                         <EntrantRow
                           key={entrant.id}
                           entrant={entrant}
-                          index={entries.indexOf(entrant) + 1}
+                          verifiedMode={session?.rules?.entryMode === "verified"}
                           onInclude={() => void mutateEntry("/entries/include", { entryId: entrant.id }, "Could not include the entrant again.")}
                           onExclude={() => void mutateEntry("/entries/exclude", { entryIds: [entrant.id] }, "Could not exclude linked entrants.")}
                           onRemove={() => void mutateEntry("/entries/remove", { entryId: entrant.id }, "Could not remove entrant.")}
@@ -1353,8 +1284,11 @@ function ChatGiveaway({
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
+                )}
+              </div>
+              <Button id="gw-btn-roll" type="button" className="mt-3 w-full" hidden={Boolean(winner && !isRolling)} disabled={!entries.length || !session || isRolling} onClick={() => void drawWinner()}>
+                {isRolling ? "Drawing…" : "Draw winner"}
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -1368,96 +1302,87 @@ function ChatGiveaway({
           id="gw-layout"
         >
           <Card id="gw-stage-card">
-            <CardHeader className="gap-4 border-b md:flex-row md:items-center md:justify-between">
-              <div>
-                <CardTitle className="text-lg">Giveaway draw</CardTitle>
-                <CardDescription className="mt-2">See who is eligible, then draw when you are ready.</CardDescription>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <Stat id="gw-stat-entrants" label="Entrants" value={entries.length.toLocaleString()} />
-                <Stat id="gw-stat-keyword" label="Keyword" value={session ? session.provider === "manual" ? "Manual" : session.keyword : "—"} />
-                <Stat id="gw-stat-time" label="Time" value={elapsed} />
-              </div>
+            <CardHeader className="flex-row items-center justify-between gap-3">
+              <CardTitle className="text-lg">Winners ({drawCount})</CardTitle>
+              {drawCount > 1 && <span className="text-xs text-muted-foreground">Newest first</span>}
             </CardHeader>
-            <CardContent className="space-y-5 p-5 md:p-6">
-              {winner && !isRolling && (
-                <div id="gw-winner-stage" role="status" aria-live="polite" className={cn("gw-winner-stage relative overflow-hidden rounded-xl border bg-gradient-to-br from-primary/5 to-transparent p-5", finalized && "gw-winner-stage--confirmed")}>
-                  {winnerJustDrawn && <WinnerConfetti key={session?.drawn_at || winner.id} />}
-                  <div className="flex flex-col items-center gap-3 text-center">
-                    <Crown className="size-7 text-amber-500" aria-hidden="true" />
-                    <img className="size-16 rounded-full border object-cover" src={safeAvatarUrl(winner.avatar_url)} alt="Winner avatar" />
-                    <div>
-                      <Badge className="mb-2 rounded-full">Winner drawn</Badge>
-                      <h3 id="gw-winner-name" className="text-xl font-bold">{winner.username}</h3>
-                      <p id="gw-winner-trust" className="text-sm text-muted-foreground">{winner.provider === "manual" ? "Added manually" : "Viewer"}</p>
-                    </div>
-                  </div>
-                  {winner.message && <p id="gw-winner-message" className="mt-4 text-center text-sm">{winner.message}</p>}
-                  {customRule.trim() && <p id="gw-winner-instruction" className="mt-2 text-center text-sm text-muted-foreground">{customRule.trim()}</p>}
-                  {winner.provider === "manual" && session?.rules?.winnerMustRespond && (
-                    <p id="gw-winner-manual-hint" className="mt-3 text-center text-sm text-muted-foreground">This entrant was added manually; no chat response needed.</p>
-                  )}
-                  {responseRequired && (
-                    <ClaimStatus
-                      remaining={responseRemaining}
-                      claimed={winnerClaimed}
-                      message={session?.winner_confirmation_message}
-                      timeout={responseTimeout}
-                      exhausted={autoRerollExhausted}
-                      winnerName={winner.username}
-                    />
-                  )}
-                  <div className="mt-5 flex flex-wrap justify-center gap-2">
-                    <Button id="gw-btn-copy-winner" type="button" variant="outline" size="sm" onClick={() => void copyWinner()}>Copy Info</Button>
-                    <Button id="gw-btn-reroll" type="button" variant={claimExpired ? "default" : "outline"} size="sm" disabled={Boolean(winnerAction) || finalized} onClick={() => void rerollWinner()}>
-                      <RefreshCw /> Re-roll Winner
-                    </Button>
-                    <Button id="gw-btn-confirm" type="button" size="sm" disabled={!canConfirm || winnerAction === "confirming"} title={responseRequired && !winnerClaimed ? claimExpired ? "The winner did not respond — re-roll to pick another winner" : "Waiting for the winner to respond in chat" : undefined} onClick={() => void confirmWinner()}>
-                      <Check /> {finalized ? "Winner confirmed" : "Confirm Winner"}
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {isRolling && (
-                <div id="gw-roulette" className="space-y-3 rounded-xl border bg-muted/30 p-5 text-center" role="status" aria-live="polite">
-                  {rouletteNames.length ? (
-                    <div className="relative mx-auto h-[92px] max-w-md overflow-hidden rounded-lg border bg-card">
-                      <div
-                        id="gw-roller-track"
-                        aria-hidden="true"
-                        className={cn("will-change-transform", rouletteBlur && "blur-[1px]")}
-                        style={{ transform: `translateY(${(1 - roulettePosition) * 46}px)` }}
-                      >
-                        {rouletteNames.map((name, index) => (
-                          <div key={`${index}-${name}`} className="gw-roulette-item flex h-[46px] items-center justify-center font-semibold">
-                            @{name}
+            <CardContent className="p-4">
+              <div className="h-[28rem] overflow-y-auto rounded-lg border">
+                <div className="min-h-full space-y-3 p-3">
+                  {isRolling && (
+                    <div id="gw-roulette" className="space-y-3 rounded-xl border bg-muted/30 p-5 text-center" role="status" aria-live="polite">
+                      {rouletteNames.length ? (
+                        <div className="relative mx-auto h-[92px] max-w-md overflow-hidden rounded-lg border bg-card">
+                          <div
+                            id="gw-roller-track"
+                            aria-hidden="true"
+                            className={cn("will-change-transform", rouletteBlur && "blur-[1px]")}
+                            style={{ transform: `translateY(${(1 - roulettePosition) * 46}px)` }}
+                          >
+                            {rouletteNames.map((name, index) => (
+                              <div key={`${index}-${name}`} className="gw-roulette-item flex h-[46px] items-center justify-center font-semibold">
+                                @{name}
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                      <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t-2 border-primary/60" aria-hidden="true" />
+                          <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t-2 border-primary/60" aria-hidden="true" />
+                        </div>
+                      ) : <Loader2 className="mx-auto size-7 animate-spin text-primary" aria-hidden="true" />}
+                      <p className="font-semibold">Drawing winner…</p>
                     </div>
-                  ) : <Loader2 className="mx-auto size-7 animate-spin text-primary" aria-hidden="true" />}
-                  <p className="font-semibold">Drawing winner…</p>
+                  )}
+                  {winner && !isRolling && (
+                    <div id="gw-winner-stage" role="status" aria-live="polite" className={cn("gw-winner-stage relative overflow-hidden rounded-lg border bg-primary/5 p-3", finalized && "gw-winner-stage--confirmed")}>
+                      {winnerJustDrawn && <WinnerConfetti key={session?.drawn_at || winner.id} />}
+                      <div className="flex items-center gap-3">
+                        <img className="size-10 shrink-0 rounded-full border object-cover" src={safeAvatarUrl(winner.avatar_url)} alt="Winner avatar" />
+                        <div className="min-w-0 flex-1">
+                          <h3 id="gw-winner-name" className="truncate font-semibold">{winner.username}</h3>
+                          {winner.message && <p id="gw-winner-message" className="mt-0.5 text-xs text-muted-foreground">{winner.message}</p>}
+                        </div>
+                      </div>
+                      {customRule.trim() && <p id="gw-winner-instruction" className="mt-3 text-sm text-muted-foreground">{customRule.trim()}</p>}
+                      {winner.provider === "manual" && session?.rules?.winnerMustRespond && (
+                        <p id="gw-winner-manual-hint" className="mt-3 text-sm text-muted-foreground">This entrant was added manually; no chat response needed.</p>
+                      )}
+                      {responseRequired && (
+                        <ClaimStatus
+                          remaining={responseRemaining}
+                          claimed={winnerClaimed}
+                          message={session?.winner_confirmation_message}
+                          timeout={responseTimeout}
+                          exhausted={autoRerollExhausted}
+                          winnerName={winner.username}
+                        />
+                      )}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Button id="gw-btn-confirm" type="button" size="sm" disabled={!canConfirm || winnerAction === "confirming"} title={responseRequired && !winnerClaimed ? claimExpired ? "The winner did not respond — re-roll to pick another winner" : "Waiting for the winner to respond in chat" : undefined} onClick={() => void confirmWinner()}>
+                          <Check /> {finalized ? "Winner confirmed" : "Confirm Winner"}
+                        </Button>
+                        <Button id="gw-btn-reroll" type="button" variant={claimExpired ? "default" : "outline"} size="sm" disabled={Boolean(winnerAction) || finalized} onClick={() => void rerollWinner()}>
+                          <RefreshCw /> Re-roll
+                        </Button>
+                        <Button id="gw-btn-copy-winner" type="button" variant="outline" size="icon" aria-label="Copy winner info" title="Copy info" onClick={() => void copyWinner()}>
+                          <Copy aria-hidden="true" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <DrawHistory
+                    draws={data.draws || []}
+                    currentWinner={Boolean(winner)}
+                    autoRerollExhausted={autoRerollExhausted}
+                    winnerName={winner?.username || "the winner"}
+                    exhaustedAt={session?.auto_reroll_exhausted_at}
+                  />
+                  {!winner && !isRolling && !data.draws?.length && (
+                    <div id="gw-stage-idle" className="flex min-h-full flex-col items-center justify-center px-5 py-10 text-center">
+                      <h3 className="font-semibold">No winners yet</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">Draw a winner from the participants list.</p>
+                    </div>
+                  )}
                 </div>
-              )}
-              {!winner && !isRolling && (
-                <div id="gw-stage-idle" className="flex flex-col items-center rounded-xl border border-dashed bg-muted/20 px-5 py-10 text-center">
-                  <span className="mb-4 flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary"><Gift className="size-7" /></span>
-                  <h3 className="font-semibold">Ready to draw</h3>
-                  <p className="mt-1 text-sm text-muted-foreground"><span id="gw-idle-entrant-count">{entries.length.toLocaleString()}</span> entrants waiting. Everyone who types your keyword lands here.</p>
-                  <Button id="gw-btn-roll" size="lg" className="mt-5" disabled={!entries.length || !session || isRolling} onClick={() => void drawWinner()}>
-                    Draw Random Winner
-                  </Button>
-                </div>
-              )}
-              {data.draws?.length || autoRerollExhausted ? (
-                <DrawHistory
-                  draws={data.draws || []}
-                  autoRerollExhausted={autoRerollExhausted}
-                  winnerName={winner?.username || "the winner"}
-                  exhaustedAt={session?.auto_reroll_exhausted_at}
-                />
-              ) : null}
+              </div>
             </CardContent>
           </Card>
 
@@ -1474,6 +1399,16 @@ function ChatGiveaway({
                 <div className="mt-4 grid gap-6 md:grid-cols-3">
                   <fieldset id="gw-advanced-eligibility-section" disabled={settingsLocked} hidden={manualUi} className="mx-0 min-w-0 border-0 p-0 space-y-3">
                     <h3 id="gw-advanced-eligibility-title" className="text-sm font-semibold">Eligibility</h3>
+                    <fieldset id="gw-kick-eligibility-section" hidden={manualUi} className="mx-0 min-w-0 border-0 p-0">
+                      <legend id="gw-eligibility-title" className="sr-only">Eligibility</legend>
+                      <label id="gw-kick-identity-rule" className="flex items-center gap-2 text-sm">
+                        <Checkbox checked disabled aria-label="One entry per Kick account" />
+                        <span>
+                          <strong>One entry per Kick account</strong>
+                          <small className="mt-1 block text-muted-foreground">Always enforced by Kick account ID.</small>
+                        </span>
+                      </label>
+                    </fieldset>
                     <div id="gw-subscriber-rule" hidden={manualUi}>
                       <RuleCheckbox id="gw-opt-subscriber" label="Subscriber only" checked={Boolean(rules.subscriberOnly)} onChange={(value) => setRule("subscriberOnly", value)} />
                     </div>
@@ -1595,15 +1530,6 @@ function RuleCheckbox({
       <Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={(value) => onChange(value === true)} />
       {label}
     </label>
-  );
-}
-
-function Stat({ id, label, value }: { id: string; label: string; value: string }) {
-  return (
-    <div className="min-w-16 rounded-lg border bg-muted/30 px-3 py-2">
-      <strong id={id} className="block text-sm tabular-nums">{value}</strong>
-      <span className="block text-[10px] text-muted-foreground">{label}</span>
-    </div>
   );
 }
 
@@ -1751,25 +1677,30 @@ function WinnerChatLog({
 
 function EntrantRow({
   entrant,
-  index,
+  verifiedMode,
   onInclude,
   onExclude,
   onRemove,
 }: {
   entrant: GiveawayEntrant;
-  index: number;
+  verifiedMode: boolean;
   onInclude: () => void;
   onExclude: () => void;
   onRemove: () => void;
 }) {
   const manual = entrant.provider === "manual";
   const linked = entrant.linked || [];
+  const excluded = entrant.eligibility_reason === "excluded_linked_account";
+  const pending = !excluded && entrant.eligibility_status === "pending_verification";
+  const rejected = excluded || entrant.eligibility_status === "rejected";
   const status = entrant.eligibility_reason === "excluded_linked_account"
     ? "Excluded: linked account"
-    : entrant.eligibility_status === "pending_verification"
-      ? "Pending verification"
+    : pending
+      ? "Pending"
       : entrant.eligibility_status === "rejected"
         ? entrant.eligibility_reason_label || `Rejected: ${String(entrant.eligibility_reason || "ineligible").replaceAll("_", " ")}`
+        : verifiedMode && entrant.eligibility_status === "eligible"
+          ? "Verified"
         : manual
           ? "Added manually"
           : entrant.badges?.some((badge) => badge.type === "subscriber")
@@ -1777,29 +1708,31 @@ function EntrantRow({
             : entrant.badges?.some((badge) => badge.type === "vip")
               ? "VIP"
               : "Entered";
+  const statusClass = pending
+    ? "border-amber-700/20 bg-amber-500/10 text-amber-800"
+    : rejected
+      ? "border-destructive/30 bg-destructive/5 text-destructive"
+      : "border-emerald-700/20 bg-emerald-600/10 text-emerald-800";
   return (
     <tr id={`entrant-${entrant.id}`} data-username={entrant.username.toLowerCase()} className="align-middle">
-      <td className="px-3 py-3 text-muted-foreground" data-label="#">{index}</td>
-      <td className="px-3 py-3 min-[1280px]:w-full min-[1280px]:max-w-0" data-label="Viewer">
-        <div className="flex items-center gap-2">
+      <td className="w-full max-w-0 px-3 py-3" data-label="Viewer">
+        <div className="flex min-w-0 items-center gap-2">
           <img className="size-8 shrink-0 rounded-full bg-muted object-cover" src={manual ? DEFAULT_AVATAR : safeAvatarUrl(entrant.avatar_url)} alt="" />
           <div className="min-w-0 flex-1">
-            {manual ? <span className="gw-entrant-name font-medium min-[1280px]:block min-[1280px]:truncate">{entrant.username}</span> : <a className="gw-entrant-name font-medium underline-offset-4 hover:underline min-[1280px]:block min-[1280px]:truncate" href={safeKickProfileUrl(entrant.username)} target="_blank" rel="noopener">{entrant.username}</a>}
-            {!manual && entrant.message && <p className="gw-entrant-msg-inline hidden truncate text-xs text-muted-foreground min-[1280px]:block">{entrant.message}</p>}
+            {manual ? <span className="gw-entrant-name block truncate font-medium">{entrant.username}</span> : <a className="gw-entrant-name block truncate font-medium underline-offset-4 hover:underline" href={safeKickProfileUrl(entrant.username)} target="_blank" rel="noopener">{entrant.username}</a>}
+            {!manual && entrant.message && <p className="gw-entrant-msg truncate text-xs text-muted-foreground">{entrant.message}</p>}
           </div>
         </div>
       </td>
       <td className="px-3 py-3 whitespace-nowrap" data-label="Status">
-        <Badge className={cn("rounded-full", entrant.eligibility_status === "rejected" && "border-destructive/30 bg-destructive/5 text-destructive")}>{status}</Badge>
+        <Badge className={cn("rounded-full whitespace-nowrap", statusClass)} title={pending ? "Waiting for verification — can't win yet" : undefined}>{status}</Badge>
         {linked.length > 0 && entrant.eligibility_reason !== "excluded_linked_account" && (
           <Badge className="gw-linked-badge ml-1 mt-1 rounded-full border-amber-700/20 bg-amber-500/5 text-amber-900" title={linked.map((link) => `${link.username}: ${(link.reasons || []).map(linkedReasonLabel).join(", ")}`).join(" · ")}>
             Linked · {linked[0].username}{linked.length > 1 ? ` (+${linked.length - 1})` : ""}
           </Badge>
         )}
       </td>
-      <td className="gw-entrant-msg max-w-48 truncate px-3 py-3 text-muted-foreground min-[1280px]:hidden" data-label="Chat message">{manual ? "—" : entrant.message || ""}</td>
-      <td className="px-3 py-3 text-muted-foreground min-[1280px]:hidden" data-label="Entered">{formatEnteredAt(entrant.entered_at)}</td>
-      <td className="px-3 py-3 text-right whitespace-nowrap min-[1280px]:px-2" data-label="Action">
+      <td className="px-3 py-3 text-right whitespace-nowrap" data-label="Action">
         {entrant.eligibility_reason === "excluded_linked_account" && <Button type="button" size="sm" variant="outline" onClick={onInclude}>Include again</Button>}
         {linked.length > 0 && entrant.eligibility_reason !== "excluded_linked_account" && <Button type="button" size="sm" variant="outline" onClick={onExclude}>Exclude</Button>}
         <Button className="ml-1" type="button" size="icon" variant="ghost" title="Remove entrant" aria-label={`Remove ${entrant.username}`} onClick={onRemove}><X /></Button>
@@ -1810,37 +1743,43 @@ function EntrantRow({
 
 function DrawHistory({
   draws,
+  currentWinner,
   autoRerollExhausted,
   winnerName,
   exhaustedAt,
 }: {
   draws: GiveawayDraw[];
+  currentWinner: boolean;
   autoRerollExhausted: boolean;
   winnerName: string;
   exhaustedAt?: string | null;
 }) {
   const newestFirst = [...draws].reverse();
+  const earlierDraws = newestFirst.slice(currentWinner ? 1 : 0);
   return (
-    <details id="gw-draw-history" className="rounded-lg border p-3">
-      <summary className="cursor-pointer text-sm font-semibold">Draw history</summary>
-      <ul id="gw-draw-history-list" className="mt-3 space-y-2 text-sm text-muted-foreground">
+    <div id="gw-draw-history" className={cn((autoRerollExhausted || earlierDraws.length > 0) && "border-t pt-3")}>
+      <ul id="gw-draw-history-list" className="space-y-2 text-sm">
         {autoRerollExhausted && (
-          <li className="gw-draw-history-row">
+          <li className="gw-draw-history-row text-xs text-muted-foreground">
             Auto re-roll stopped — no other eligible entrants left ({winnerName} didn't respond) · {formatEnteredAt(exhaustedAt)}
           </li>
         )}
-        {newestFirst.map((draw, index) => {
+        {earlierDraws.map((draw, index) => {
           const name = draw.username || "a previous entrant";
-          const replaced = draw.replaced_username || "the previous winner";
-          const label = draw.reason === "auto_reroll"
-            ? `Auto re-roll to ${name} — ${replaced} didn't respond in time`
-            : draw.reason === "reroll"
-              ? `Re-rolled to ${name} (replaced ${replaced})`
-              : `Drew ${name}`;
-          return <li key={draw.id || `${draw.drawn_at}-${index}`}>{label} · {formatEnteredAt(draw.drawn_at)}</li>;
+          const replacedBy = newestFirst[index + (currentWinner ? 0 : -1)];
+          const label = replacedBy?.reason === "auto_reroll" ? "Didn't respond" : "Re-rolled";
+          return (
+            <li key={draw.id || `${draw.drawn_at}-${index}`} className="gw-draw-history-row flex items-center justify-between gap-3">
+              <span className="min-w-0 truncate">
+                <span className="font-medium">{name}</span>
+                <span className="ml-2 text-xs text-muted-foreground">{label}</span>
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">{formatEnteredAt(draw.drawn_at)}</span>
+            </li>
+          );
         })}
       </ul>
-    </details>
+    </div>
   );
 }
 
