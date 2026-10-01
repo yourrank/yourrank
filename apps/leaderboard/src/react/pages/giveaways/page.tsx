@@ -1385,7 +1385,7 @@ function ChatGiveaway({
                     <p id="gw-device-requirement" className="text-xs text-muted-foreground">
                       {rules.entryMode === "verified" ? "Unavailable — No supported device check" : "Locked — Requires Verified Entry and a supported device check"}
                     </p>
-                    <p className="text-xs text-muted-foreground">Needs Verified Entry — Kick chat doesn’t expose IP or device.</p>
+                    <p className="text-xs text-muted-foreground">Chat entries: one entry per Kick account.</p>
                     <Button
                       id="gw-enable-verified"
                       type="button"

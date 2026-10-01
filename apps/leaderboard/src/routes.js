@@ -35,10 +35,11 @@ import {
   handleTeamAcceptInvite,
   handleGetInviteInfo,
 } from "./handlers/team.js";
-import { handleTrial, handleBillingFunnel } from "./handlers/billing.js";
+import { handleTrial, handleEndPlanAccess, handleBillingFunnel } from "./handlers/billing.js";
 import { handleLead } from "./handlers/leads.js";
 import { handleAttribution, handleAttributionExport, handlePostback, handleRotatePostbackKey, handleRevokePostbackKey } from "./handlers/attribution.js";
 import {
+  handleAccountProfile,
   handleAccountPostbacks,
   handleAccountPostbacksRotate,
   handleAccountPostbacksRevoke,
@@ -475,6 +476,7 @@ export const ROUTES = [
   { path: "/api/billing/change", method: "POST", handler: withHandler(handlePolarPlanChange) },
   { path: "/api/billing/webhook/polar", method: "POST", handler: withHandler(handlePolarWebhook) },
   { path: "/api/billing/trial", method: "POST", handler: withHandler(handleTrial) },
+  { path: "/api/billing/end-access", method: "POST", handler: withHandler(handleEndPlanAccess) },
   { path: "/api/billing/funnel", method: "POST", handler: withHandler(handleBillingFunnel) },
   { path: "/api/account/payments", method: "GET", handler: withHandler(handleUserPayments) },
   { path: "/api/account/usage", method: "GET", handler: withHandler(handleAccountUsage) },
@@ -482,6 +484,7 @@ export const ROUTES = [
   // Bot lifecycle is owned by the bot Worker; obsolete leaderboard routes removed (C-06).
 
   // Account
+  { path: "/api/account/profile", method: "PATCH", handler: withHandler(handleAccountProfile) },
   { path: "/api/account/postbacks", method: "GET", handler: withHandler(handleAccountPostbacks) },
   { path: "/api/account/postbacks/rotate", method: "POST", handler: withHandler(handleAccountPostbacksRotate) },
   { path: "/api/account/postbacks", method: "DELETE", handler: withHandler(handleAccountPostbacksRevoke) },

@@ -4,12 +4,16 @@ import { renderGiveawaysHtml } from "../pages/giveaway-pages.js";
 import {
   actAndFlush,
   clickReactTarget,
+  createElement,
+  createRoot,
   document,
   mountTournamentPage,
   restoreTournamentDomGlobals,
   unmountTournamentPage,
   window,
 } from "./tournament-react-utils.js";
+import { Popover, PopoverContent, PopoverTrigger } from "../react/components/ui/popover.tsx";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../react/components/ui/select.tsx";
 
 const site = { id: "site-1", name: "Cup Site", slug: "cup-site", published: true, userRole: "owner", kickChannelName: "board-channel" };
 const base = {
@@ -440,10 +444,54 @@ describe("React tournament workspace rendering", () => {
     await click("tournament-tab-bracket");
     await click("tournament-bracket-expand");
     expect($id("tournament-bracket-modal")).toBeTruthy();
+    expect($id("tournament-bracket-modal").className).toContain("z-[1201]");
+    const overlay = Array.from(document.querySelectorAll('[data-state="open"]'))
+      .find((element) => element.classList.contains("bg-black/50"));
+    expect(overlay).toBeTruthy();
+    expect(overlay.className).toContain("z-[1200]");
     expect($id("tournament-bracket-full").querySelector('.tn-bracket[data-mode="expanded"]')).toBeTruthy();
     expect($id("tournament-bracket-full").querySelectorAll("input,button[data-score-match]")).toHaveLength(0);
     expect(document.body.textContent).toContain("Read-only, sized for screen sharing. Enter scores in the Bracket tab.");
     await click("tournament-bracket-close");
     expect($id("tournament-bracket-modal")).toBeNull();
+  });
+
+  it("keeps select and popover portal content above dialogs", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await actAndFlush(() => {
+        root.render(createElement(
+          "div",
+          null,
+          createElement(
+            Popover,
+            { open: true },
+            createElement(PopoverTrigger, { asChild: true }, createElement("button", { type: "button" }, "Open popover")),
+            createElement(PopoverContent, { "data-testid": "popover-content" }, "Popover"),
+          ),
+          createElement(
+            Select,
+            { open: true, defaultValue: "one" },
+            createElement(SelectTrigger, { "aria-label": "Select an option" }, createElement(SelectValue)),
+            createElement(SelectContent, { "data-testid": "select-content" },
+              createElement(SelectItem, { value: "one" }, "One"),
+            ),
+          ),
+        ));
+      });
+
+      const selectContent = document.querySelector('[data-testid="select-content"]');
+      const popoverContent = document.querySelector('[data-testid="popover-content"]');
+      expect(selectContent).toBeTruthy();
+      expect(selectContent.className).toContain("z-[1300]");
+      expect(popoverContent).toBeTruthy();
+      expect(popoverContent.className).toContain("z-[1300]");
+    } finally {
+      await actAndFlush(() => root.unmount());
+      container.remove();
+    }
   });
 });
