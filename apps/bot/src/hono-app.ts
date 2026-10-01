@@ -510,17 +510,17 @@ export function buildHonoApp({
     try { new URL(body.referral_url); } catch { return c.json({ error: "referral_url must be a valid URL" }, 400); }
 
     const out = await withPlanLimit(body.owner_id, "offers", async (tx) => {
-      const slug = body.casino.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      const casinoRow = (await tx.one<{ id: string }>(
-        `INSERT INTO casinos (slug, name, is_global, created_by)
+      const slug = body.partner.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const partnerRow = (await tx.one<{ id: string }>(
+        `INSERT INTO partners (slug, name, is_global, created_by)
          VALUES ($1, $2, false, $3)
-         ON CONFLICT (slug) DO UPDATE SET name = casinos.name RETURNING id`,
-        [slug, body.casino, body.owner_id]
+         ON CONFLICT (slug) DO UPDATE SET name = partners.name RETURNING id`,
+        [slug, body.partner, body.owner_id]
       ))!;
       const offer = (await tx.one<{ id: string }>(
-        `INSERT INTO offers (owner_id, casino_id, label, referral_url, promo_code, bonus_text, priority)
+        `INSERT INTO offers (owner_id, partner_id, label, referral_url, promo_code, bonus_text, priority)
          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-        [body.owner_id, casinoRow.id, body.label, body.referral_url,
+        [body.owner_id, partnerRow.id, body.label, body.referral_url,
          body.promo_code ?? null, body.bonus_text ?? null, body.priority ?? 0]
       ))!;
       const linkSlug = newLinkSlug();
@@ -540,10 +540,10 @@ export function buildHonoApp({
     const days = Number.isFinite(rawDays) && rawDays >= 1 && rawDays <= 365 ? rawDays : 7;
     if (!owner_id) return c.json({ error: "owner_id required" }, 400);
     return c.json(await query(
-      `SELECT o.label, c.name AS casino,
+      `SELECT o.label, c.name AS partner,
               count(cl.*)::int AS clicks,
               count(cl.*) FILTER (WHERE cl.is_unique)::int AS unique_clicks
-         FROM offers o JOIN casinos c ON c.id = o.casino_id
+         FROM offers o JOIN partners c ON c.id = o.partner_id
          LEFT JOIN short_links sl ON sl.offer_id = o.id
          LEFT JOIN clicks cl ON cl.short_link_id = sl.id AND cl.ts > now() - make_interval(days => $2::int)
         WHERE o.owner_id = $1

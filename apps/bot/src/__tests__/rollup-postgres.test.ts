@@ -27,7 +27,7 @@ if (DB_URL) {
 
 type Fixture = {
   userId: string;
-  casinoId: string;
+  partnerId: string;
   offerId: string;
   linkIds: string[];
 };
@@ -40,13 +40,13 @@ async function createFixture(linkCount = 2): Promise<Fixture> {
     INSERT INTO users (email, status, email_verified)
     VALUES (${`rollup-${suffix}@test.local`}, 'active', true)
     RETURNING id`;
-  const [casino] = await sql`
-    INSERT INTO casinos (slug, name, created_by)
+  const [partner] = await sql`
+    INSERT INTO partners (slug, name, created_by)
     VALUES (${`rollup-${suffix}`}, 'Rollup Test Sponsor', ${user.id})
     RETURNING id`;
   const [offer] = await sql`
-    INSERT INTO offers (owner_id, casino_id, label, referral_url)
-    VALUES (${user.id}, ${casino.id}, 'Rollup Test Offer', 'https://example.test')
+    INSERT INTO offers (owner_id, partner_id, label, referral_url)
+    VALUES (${user.id}, ${partner.id}, 'Rollup Test Offer', 'https://example.test')
     RETURNING id`;
   const links = await Promise.all(
     Array.from({ length: linkCount }, (_, index) => sql`
@@ -57,7 +57,7 @@ async function createFixture(linkCount = 2): Promise<Fixture> {
   );
   return {
     userId: user.id,
-    casinoId: casino.id,
+    partnerId: partner.id,
     offerId: offer.id,
     linkIds: links.map(([link]) => link.id),
   };

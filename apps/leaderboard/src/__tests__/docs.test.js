@@ -19,7 +19,7 @@ import {
   SCALAR_SCRIPT_INTEGRITY,
 } from "../handlers/docs.js";
 import { scoreBodySchema, scorePatchBodySchema } from "../handlers/scores.js";
-import { SCORE_MAX, WIN_RATE_MAX, INT32_MAX, INT32_MIN } from "../player-rules.js";
+import { SCORE_MAX, INT32_MAX, INT32_MIN } from "../player-rules.js";
 import { ROUTES } from "../routes.js";
 
 const origin = "https://yourrank.site";
@@ -106,16 +106,10 @@ describe("OpenAPI document", () => {
 
   it("PlayerWrite bounds and players limits match the handler validation", () => {
     const props = spec.components.schemas.PlayerWrite.properties;
-    for (const field of ["wagered", "prize", "score"]) {
+    for (const field of ["amount", "prize", "score"]) {
       expect(props[field].minimum).toBe(0);
       expect(props[field].maximum).toBe(SCORE_MAX);
     }
-    expect(props.hands.minimum).toBe(0);
-    expect(props.hands.maximum).toBe(INT32_MAX);
-    expect(props.netProfit.minimum).toBe(-SCORE_MAX);
-    expect(props.netProfit.maximum).toBe(SCORE_MAX);
-    expect(props.winRate.minimum).toBe(-WIN_RATE_MAX);
-    expect(props.winRate.maximum).toBe(WIN_RATE_MAX);
     expect(props.change.minimum).toBe(INT32_MIN);
     expect(props.change.maximum).toBe(INT32_MAX);
 
@@ -135,5 +129,11 @@ describe("OpenAPI document", () => {
       expect(serialized).toContain(`X-Postback-Signature: ${hex}`);
     }
     expect(serialized).toContain("YOURRANK_API_KEY");
+  });
+
+  it("keeps legacy schema identifiers out of public docs output", () => {
+    const legacyIdentifiers = /\b(?:casino|casinos|casino_id|casino_name|wagered|hands|netProfit|net_profit|winRate|win_rate|deposit|deposited|depositors)\b/i;
+    expect(JSON.stringify(spec)).not.toMatch(legacyIdentifiers);
+    expect(renderDocsPage({ origin })).not.toMatch(legacyIdentifiers);
   });
 });

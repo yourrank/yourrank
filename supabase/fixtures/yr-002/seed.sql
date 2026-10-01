@@ -64,7 +64,7 @@ VALUES (
 
 -- Community 1 is populated; community 2 is deliberately an empty catalog.
 INSERT INTO sites (
-  id, user_id, slug, name, tagline, casino, code, prize_pool, period,
+  id, user_id, slug, name, tagline, sponsor, code, prize_pool, period,
   published, is_draft, shop_enabled, credits_enabled, extra_json, theme_json, updated_at
 )
 VALUES

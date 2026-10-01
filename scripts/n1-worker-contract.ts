@@ -84,8 +84,9 @@ async function seedBaselineFixture() {
 }
 
 async function verifyFixtureSurvival() {
+  const amountSelect = phase === "baseline" ? "" : ", p.amount::text AS amount";
   const [row] = await sql.unsafe(
-    `SELECT u.email, u.plan::text AS plan, s.slug, s.rank_by, p.name, p.wagered::text AS wagered
+    `SELECT u.email, u.plan::text AS plan, s.slug, s.rank_by, p.name, p.wagered::text AS wagered${amountSelect}
        FROM public.users u
        JOIN public.sites s ON s.user_id = u.id
        JOIN public.players p ON p.site_id = s.id
@@ -98,6 +99,7 @@ async function verifyFixtureSurvival() {
   assert.equal(row?.rank_by, "wagered");
   assert.equal(row?.name, "Existing Player");
   assert.equal(row?.wagered, "125.50");
+  if (phase !== "baseline") assert.equal(row?.amount, row?.wagered);
 }
 
 async function verifyExpandedEdges() {

@@ -26,7 +26,7 @@ const top3Row = (i, overrides = {}) => ({
   resolved_at: null,
   last_replay_error: null,
   received_at: `SENTINEL_RECEIVED_${i}`,
-  body: envelope([{ name: `SENTINEL_PLAYER_${i}`, rank: 1, wagered: 0, score: 0, rankBy: "score" }]),
+  body: envelope([{ name: `SENTINEL_PLAYER_${i}`, rank: 1, amount: 0, score: 0, rankBy: "score" }]),
   ...overrides,
 });
 
@@ -71,7 +71,7 @@ describe("production DLQ acknowledge selector", () => {
     const page = pageOf(16, (row, i) => i === 3
       ? {
           ...row,
-          body: envelope(Array.from({ length: 11 }, (_, j) => ({ name: `SENTINEL_PLAYER_${j}`, rank: 1, wagered: 0 }))),
+          body: envelope(Array.from({ length: 11 }, (_, j) => ({ name: `SENTINEL_PLAYER_${j}`, rank: 1, amount: 0 }))),
         }
       : row);
     expect(expectRefusal(page, 16)).toContain("1 of 16");

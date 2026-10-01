@@ -22,7 +22,7 @@ const site = await one("SELECT ... postback_key ... FROM sites WHERE postback_ke
 
 // AFTER (fixed):
 const site = await one(
-  `SELECT s.id, s.user_id, s.slug, s.name, s.tagline, s.casino, s.code, s.cta_url,
+  `SELECT s.id, s.user_id, s.slug, s.name, s.tagline, s.sponsor, s.code, s.cta_url,
           s.prize_pool, s.period, s.ends_at, s.reset_note, s.blurb, s.extra_json,
           s.published, s.theme_json, s.updated_at
    FROM sites s JOIN users u ON u.id = s.user_id
@@ -60,14 +60,14 @@ const result = await sendTelegramMessage(token, chatId, text);
 | sites | ✅ | 22 columns (except postback_key - see BUG-DB-001) |
 | payments | ✅ | 12 columns, all match |
 | subscriptions | ✅ | 7 columns, all match |
-| players | ✅ | 6 columns (id, site_id, name, wagered, prize, sort) |
+| players | ✅ | 6 columns (id, site_id, name, amount, prize, sort) |
 | bots | ✅ | 12 columns, all match |
 | broadcasts | ✅ | 13 columns, all match (cursor_tg_user_id correct) |
 | archives | ✅ | 5 columns, all match |
 | clicks | ✅ | 9 columns, all match |
 | click_daily | ✅ | 4 columns, all match |
 | short_links | ✅ | 5 columns, all match |
-| casinos | ✅ | 8 columns, all match |
+| partners | ✅ | 8 columns, all match |
 | offers | ✅ | 10 columns, all match |
 | conversions | ✅ | 9 columns, all match |
 | leads | ✅ | 6 columns, all match |

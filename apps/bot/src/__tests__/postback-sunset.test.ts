@@ -57,9 +57,9 @@ describe("postback conversion durability", () => {
 
   it("returns 503 and releases the claim when signed conversion delivery fails", async () => {
     const { app } = failingApp();
-    const signature = await sign("postback-key", "event=deposit&amount=50&click_ref=click-1");
+    const signature = await sign("postback-key", "event=conversion&amount=50&click_ref=click-1");
     const request = () => app.request(
-      "https://bot.example/pb?event=deposit&amount=50&click_ref=click-1",
+      "https://bot.example/pb?event=conversion&amount=50&click_ref=click-1",
       {
         method: "POST",
         headers: {
@@ -80,7 +80,7 @@ describe("postback conversion durability", () => {
   it("returns 503 and releases the claim when legacy conversion delivery fails", async () => {
     const { app } = failingApp();
     const request = () => app.request(
-      "https://bot.example/pb/postback-key?event=deposit&amount=50&click_ref=click-1",
+      "https://bot.example/pb/postback-key?event=conversion&amount=50&click_ref=click-1",
       { method: "POST" },
       { RL_FAIL_OPEN: "true" },
     );

@@ -198,7 +198,7 @@ export async function handleLeads(request, env) {
   const offset = (page - 1) * pageSize;
   const [rows, total] = await Promise.all([
     query(
-      "SELECT id, handle, casino, contact, note, (EXTRACT(EPOCH FROM created_at) * 1000)::double precision AS created_at FROM leads ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+      "SELECT id, handle, brand, contact, note, (EXTRACT(EPOCH FROM created_at) * 1000)::double precision AS created_at FROM leads ORDER BY created_at DESC LIMIT $1 OFFSET $2",
       [pageSize, offset]
     ),
     one("SELECT COUNT(*)::int AS n FROM leads"),

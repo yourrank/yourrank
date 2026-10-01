@@ -160,7 +160,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
             AND owner_offer.owner_id = $1
           GROUP BY sl.offer_id
        )
-       SELECT o.id, o.label, ca.name AS casino, o.promo_code, o.bonus_text, o.referral_url,
+       SELECT o.id, o.label, ca.name AS partner, o.promo_code, o.bonus_text, o.referral_url,
               o.is_active, o.priority, sl.slug,
               (coalesce(lc.clicks, 0) + coalesce(tc.clicks, 0))::int               AS clicks,
               (coalesce(lc.unique_clicks, 0) + coalesce(tc.unique_clicks, 0))::int AS unique_clicks,
@@ -176,7 +176,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
                    ELSE 0
               END AS cr
          FROM offers o
-         JOIN casinos ca ON ca.id = o.casino_id
+         JOIN partners ca ON ca.id = o.partner_id
          LEFT JOIN short_links sl ON sl.offer_id = o.id
          LEFT JOIN link_clicks  lc ON lc.short_link_id = sl.id
          LEFT JOIN today_clicks tc ON tc.short_link_id = sl.id
@@ -201,16 +201,16 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
     // so two concurrent create-offer requests can't both pass the count and
     // both insert (TOCTOU plan-limit bypass).
     const out = await withPlanLimit(uid, "offers", async (tx) => {
-      const slug = b.casino.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      const casinoRow = (await tx.one<{ id: string }>(
-        `INSERT INTO casinos (slug, name, is_global, created_by) VALUES ($1, $2, false, $3)
-         ON CONFLICT (slug) DO UPDATE SET name = casinos.name RETURNING id`,
-        [slug, b.casino, uid]
+      const slug = b.partner.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const partnerRow = (await tx.one<{ id: string }>(
+        `INSERT INTO partners (slug, name, is_global, created_by) VALUES ($1, $2, false, $3)
+         ON CONFLICT (slug) DO UPDATE SET name = partners.name RETURNING id`,
+        [slug, b.partner, uid]
       ))!;
       const offer = (await tx.one<{ id: string }>(
-        `INSERT INTO offers (owner_id, casino_id, label, referral_url, promo_code, bonus_text)
+        `INSERT INTO offers (owner_id, partner_id, label, referral_url, promo_code, bonus_text)
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [uid, casinoRow.id, b.label, b.referral_url, b.promo_code ?? null, b.bonus_text ?? null]
+        [uid, partnerRow.id, b.label, b.referral_url, b.promo_code ?? null, b.bonus_text ?? null]
       ))!;
       const linkSlug = newLinkSlug();
       await tx.query(`INSERT INTO short_links (offer_id, slug, source) VALUES ($1, $2, 'telegram')`, [offer.id, linkSlug]);
@@ -243,16 +243,16 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
     } catch { return c.json({ error: "referral_url must be a valid URL" }, 400); }
     const uid = c.get("uid");
     const updated = await withTransaction(async (tx) => {
-      const slug = b.casino.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      const casinoRow = (await tx.one<{ id: string }>(
-        `INSERT INTO casinos (slug, name, is_global, created_by) VALUES ($1, $2, false, $3)
-         ON CONFLICT (slug) DO UPDATE SET name = casinos.name RETURNING id`,
-        [slug, b.casino, uid]
+      const slug = b.partner.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const partnerRow = (await tx.one<{ id: string }>(
+        `INSERT INTO partners (slug, name, is_global, created_by) VALUES ($1, $2, false, $3)
+         ON CONFLICT (slug) DO UPDATE SET name = partners.name RETURNING id`,
+        [slug, b.partner, uid]
       ))!;
       return tx.one<{ id: string }>(
-        `UPDATE offers SET casino_id = $1, label = $2, referral_url = $3, promo_code = $4, bonus_text = $5, updated_at = now()
+        `UPDATE offers SET partner_id = $1, label = $2, referral_url = $3, promo_code = $4, bonus_text = $5, updated_at = now()
          WHERE id = $6 AND owner_id = $7 RETURNING id`,
-        [casinoRow.id, b.label, b.referral_url, b.promo_code ?? null, b.bonus_text ?? null, c.req.param("id"), uid]
+        [partnerRow.id, b.label, b.referral_url, b.promo_code ?? null, b.bonus_text ?? null, c.req.param("id"), uid]
       );
     });
     return updated ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);

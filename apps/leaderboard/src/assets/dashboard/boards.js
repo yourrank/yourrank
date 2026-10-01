@@ -54,12 +54,12 @@ export function renderBoardSwitcher() {
       $("nb_slug").focus();
       return;
     }
-    const casino = $("nb_casino").value.trim();
+    const sponsor = $("nb_sponsor").value.trim();
     $("nb_err").textContent = "Creating…";
     createBtn.disabled = true;
     try {
       const code = $("nb_code").value.trim();
-      const res = await fetch("/api/site/create", { method: "POST", credentials: "include", headers: { "content-type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify({ slug, name, casino, code }) });
+      const res = await fetch("/api/site/create", { method: "POST", credentials: "include", headers: { "content-type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify({ slug, name, sponsor, code }) });
       const d = await res.json();
       if (res.ok && d.ok) {
         requestDashboardRoute("board", "setup", { query: `board=${encodeURIComponent(d.id)}`, reload: true });
@@ -272,7 +272,7 @@ export function renderBoardsPage() {
       const statusText = b.published ? "Published" : "Draft";
       // Sponsor and promo code stay searchable even though the row keeps them
       // out of the way.
-      tr.dataset.search = [b.name, b.slug, b.casino, b.code].filter(Boolean).join(" ").toLowerCase();
+      tr.dataset.search = [b.name, b.slug, b.sponsor, b.code].filter(Boolean).join(" ").toLowerCase();
       tr.classList.toggle("is-current", isActive);
       tr.innerHTML = `<td data-label="Site"><a class="site-name" href="/dashboard?board=${encodeURIComponent(b.id)}"${isActive ? ' aria-current="true"' : ""}>${esc(b.name)}</a>${isActive ? '<span class="site-current">Current site</span>' : ''}<span class="site-meta"><a class="site-slug mono" href="/${esc(b.slug)}" target="_blank" rel="noopener">/${esc(b.slug)}</a></span></td><td data-label="Status"><span class="site-state" data-state="${b.published ? "published" : "draft"}">${statusText}</span></td><td data-label="Players">${b.players || 0}</td><td class="ta-r" data-label="Actions"><div class="site-row-actions"><button class="btn btn--xs btn--ghost" data-action="edit" type="button" aria-label="Manage ${esc(b.name)}">Manage</button>${effectiveBoardRole(b) === "owner" ? `<details class="site-row-menu"><summary class="btn btn--xs btn--ghost" title="More actions" aria-label="More actions for ${esc(b.name)}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></summary><div class="site-row-menu-body"><button data-action="dup" type="button">Duplicate</button><button data-action="del" type="button">Delete</button></div></details>` : ""}</div></td>`;
       tr.querySelector(".site-name")?.addEventListener("click", (e) => {

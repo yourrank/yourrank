@@ -26,7 +26,7 @@ Now cross that against your actual SQL:
 |---|---|---|
 | `SELECT ... FROM sessions WHERE token=$1 AND expires_at > now()` (`shared/session.ts:208,262`) | **No** — contains `now()` | Every authenticated request always hits Postgres. Correct, but it means auth load is irreducible. |
 | `SELECT ... FROM sites WHERE slug=$1` (`site.js:156`) | **Yes** | Public reads may already be absorbed at the edge |
-| `SELECT ... FROM players WHERE site_id=$1 ORDER BY wagered DESC` (`site.js:186`) | **Yes** | ” |
+| `SELECT ... FROM players WHERE site_id=$1 ORDER BY amount DESC` (`site.js:186`) | **Yes** | ” |
 | `SELECT max(updated_at) FROM players WHERE site_id=$1` (SSE tick, `public.js:130`) | **Yes** | If caching is on, your "live" leaderboard is up to **75s stale** (60s max_age + 15s SWR) and the 4s poll interval is theatre |
 | `SELECT ... FROM sites WHERE user_id=$1 ORDER BY CASE WHEN id=(SELECT active_site_id ...)` (`site.js:161`) | **Yes** | The code comment above this line says it is deliberately *not* cached so "the dashboard … must see the latest saves immediately". Hyperdrive can cache it anyway for up to 60s. If you have ever had a "I saved and it didn't change" report, this is a prime suspect. |
 | every `INSERT`/`UPDATE`, `bumpStat` transaction, click inserts | **No** (writes) | Write load is never absorbed |
@@ -96,7 +96,7 @@ These are **not** interchangeable and the ratios are load-bearing: 50,000 regist
 
 ### 2.5 Supabase/PostgreSQL — the resource that saturates
 
-**[FACT]** Indexing is genuinely good: `idx_players_site_wagered ON players(site_id, wagered DESC)` exists precisely for the hot query (`20260705000008_players_composite_index.sql`), `sessions` is PK-on-token, `site_viewers` has `UNIQUE (site_id, viewer_id)`, and `clicks` is monthly-partitioned. **I found no missing index on any hot path.** Your database problem is *round-trip count and polling*, not query plans — do not go index-hunting.
+**[FACT]** Indexing is genuinely good: `idx_players_site_amount ON players(site_id, amount DESC)` exists precisely for the hot query (`20260705000008_players_composite_index.sql`), `sessions` is PK-on-token, `site_viewers` has `UNIQUE (site_id, viewer_id)`, and `clicks` is monthly-partitioned. **I found no missing index on any hot path.** Your database problem is *round-trip count and polling*, not query plans — do not go index-hunting.
 
 * **Limit [ASSUMPTION + DERIVED]:** 2 shared vCPU on Small; short indexed point queries cost ~0.2-0.5 ms CPU each, so ~700-900 q/s is the wall and p95 degrades from ~450-600 q/s. Large (2 dedicated cores) roughly triples that; each step up is a config change, not a rewrite.
 * **Connections are *not* your first wall [FACT+DERIVED]:** Hyperdrive holds ~100 origin connections on Paid and pools them, so the per-query `postgres()` client churn in `shared/db.ts` does not create Postgres backends. At ~2 ms average query time, 100 connections is >10,000 q/s of headroom — DB CPU gives out long before. **But** see 2.6.
@@ -272,7 +272,7 @@ Tenancy model **[FACT]**: `users` → `sites` (boards) → `players` / `site_vie
 
 ## 7. Database detail
 
-**Good, verified [FACT]:** every hot-path predicate has a matching index (`sites.slug` unique, `sites(user_id)`, `players(site_id, wagered DESC)`, `sessions` PK token + `user_id` + `expires_at`, `viewer_sessions(viewer_id/expires_at)`, `site_viewers UNIQUE(site_id, viewer_id)`, `credit_ledger(site_viewer_id)`, `site_clicks(site_id, created_at)`, `conversions(site_id, ts)` partial, `click_daily` uniques, monthly `clicks` partitions). No `OFFSET` pagination anywhere; broadcasts use keyset pagination; exports and history use `LIMIT`. Triggers are cheap (`updated_at`, suspension sync).
+**Good, verified [FACT]:** every hot-path predicate has a matching index (`sites.slug` unique, `sites(user_id)`, `players(site_id, amount DESC)`, `sessions` PK token + `user_id` + `expires_at`, `viewer_sessions(viewer_id/expires_at)`, `site_viewers UNIQUE(site_id, viewer_id)`, `credit_ledger(site_viewer_id)`, `site_clicks(site_id, created_at)`, `conversions(site_id, ts)` partial, `click_daily` uniques, monthly `clicks` partitions). No `OFFSET` pagination anywhere; broadcasts use keyset pagination; exports and history use `LIMIT`. Triggers are cheap (`updated_at`, suspension sync).
 
 **Queries most likely to become bottlenecks, and how each scales:**
 

@@ -6,6 +6,7 @@ import { getStats, getHeatmap, getTopReferrers, isStatementTimeout } from "../st
 import { effectivePlan, getPlanLimit } from "@yourrank/shared/plans";
 import { one, exec, query } from "@yourrank/shared/db";
 import { fromJsonb } from "@yourrank/shared/jsonb";
+import { readArchiveAmount } from "@yourrank/shared/legacy-schema";
 import { logAudit } from "@yourrank/shared/audit";
 import { buildTop3Embed, sendDiscordWebhook, sendTelegramMessage } from "@yourrank/shared/notifications";
 import { decryptToken, decryptCredential } from "@yourrank/shared/crypto";
@@ -116,18 +117,15 @@ export async function handleExportPlayers(request, env, {
   const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
   if (authorization.res) return authorization.res;
   const rows = await queryImpl(
-    "SELECT name, wagered, prize, score, hands, net_profit, win_rate, change FROM players WHERE site_id=$1 ORDER BY sort ASC",
+    "SELECT name, amount, prize, score, change FROM players WHERE site_id=$1 ORDER BY sort ASC",
     [site.id]
   );
-  const header = "name,wagered,prize,score,hands,net_profit,win_rate,change\n";
+  const header = "name,amount,prize,score,change\n";
   const body = (rows || []).map((p) => [
     p.name,
-    p.wagered,
+    p.amount,
     p.prize,
     p.score ?? "",
-    p.hands ?? "",
-    p.net_profit ?? "",
-    p.win_rate ?? "",
     p.change ?? "",
   ].map(csvCell).join(",")).join("\n") + (rows?.length ? "\n" : "");
   const csv = header + body;
@@ -232,7 +230,7 @@ export async function handleGetSite(request, env, {
   const boards = await getUserBoardsListImpl(env, user.id);
   const onboarding = await onboardingForSiteImpl(env, s, user.id, selectedPlan);
   const data = { ...(s.data || {}), playerCount: Array.isArray(s.data?.players) ? s.data.players.length : 0 };
-  return json({ ok: true, slug: s.slug, published: s.published, isDraft: !!s.isDraft, plan: selectedPlan, data, socials: s.socials, notify: s.notify || {}, archives: (s.archives || []).map((a) => ({ id: a.id, label: a.label, at: a.at, players: a.players, createdAt: a.at ? new Date(a.at).toISOString() : null, playerCount: a.players })), boards, siteId: s.id, customDomain: s.customDomain || "", domainStatus: s.customDomain ? (s.domainStatus || "pending") : "not_configured", onboarding, updatedAt: s.updatedAt, publishedAt: s.publishedAt, passwordProtected: !!s.passwordProtected, autoReset: { enabled: !!s.autoReset?.enabled, clear: s.autoReset?.clear || "wagers" } }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
+  return json({ ok: true, slug: s.slug, published: s.published, isDraft: !!s.isDraft, plan: selectedPlan, data, socials: s.socials, notify: s.notify || {}, archives: (s.archives || []).map((a) => ({ id: a.id, label: a.label, at: a.at, players: a.players, createdAt: a.at ? new Date(a.at).toISOString() : null, playerCount: a.players })), boards, siteId: s.id, customDomain: s.customDomain || "", domainStatus: s.customDomain ? (s.domainStatus || "pending") : "not_configured", onboarding, updatedAt: s.updatedAt, publishedAt: s.publishedAt, passwordProtected: !!s.passwordProtected, autoReset: { enabled: !!s.autoReset?.enabled, clear: s.autoReset?.clear || "amount" } }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
 }
 
 export async function handleListBoards(request, env) {
@@ -256,14 +254,14 @@ export async function handleCreateBoard(request, env) {
   const slug = handle.handle;
   const name = String(body.name || "").trim().slice(0, 80) || slug;
   // Sponsor / prize source is optional; empty values are stored as-is.
-  const r = await createBoard(env, user.id, { slug, name, casino: body.casino, code: body.code }, request);
+  const r = await createBoard(env, user.id, { slug, name, sponsor: body.sponsor, code: body.code }, request);
   if (r.denial) return denied(r.denial, { actorId: user.id, request });
   return r.error
     ? json({ ok: false, error: r.error, code: r.code || "create_failed" }, 400)
     : json({ ok: true, id: r.id, slug: r.slug });
 }
 
-// POST /api/site/archive — { label?, clear: "wagers"|"players"|"none" }
+// POST /api/site/archive — { label?, clear: "amount"|"players"|"none" }
 export async function handleArchive(request, env, {
   requireUserImpl = requireUser,
   rateLimitImpl = rateLimit,
@@ -343,12 +341,9 @@ export async function handleRestoreArchive(request, env) {
   if (!snap.length) return bad("Archive is empty.");
   const players = snap.map((p) => ({
     name: String(p.name || "").slice(0, 80),
-    wagered: Number(p.wagered) || 0,
+    amount: Number(readArchiveAmount(p)) || 0,
     prize: Number(p.prize) || 0,
     score: p.score ?? undefined,
-    hands: p.hands ?? undefined,
-    netProfit: p.net_profit ?? p.netProfit ?? undefined,
-    winRate: p.win_rate ?? p.winRate ?? undefined,
     change: p.change ?? undefined,
   })).filter((p) => p.name);
   if (!players.length) return bad("No valid players in archive.");

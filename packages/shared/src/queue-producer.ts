@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { currentCorrelationId } from "./request-id.js";
+import { addLegacyQueueAliases, normalizeLegacyQueueInput } from "./legacy-schema.js";
 
 const id = z.string().min(1).max(128);
 const label = z.string().max(256);
@@ -44,9 +45,9 @@ const top3NotifyEventSchema = z.object({
   changes: z.array(z.object({
     name: label,
     rank: z.number().int().positive(),
-    wagered: z.number().finite(),
+    amount: z.number().finite(),
     score: z.number().finite().optional(),
-    rankBy: z.enum(["wagered", "score"]).optional(),
+    rankBy: z.enum(["amount", "score"]).optional(),
   }).strict()).max(TOP3_CHANGES_MAX),
 }).strict();
 
@@ -57,7 +58,7 @@ const resetNotifyEventSchema = z.object({
   siteName: label,
   players: z.array(z.object({
     name: label,
-    wagered: z.number().finite(),
+    amount: z.number().finite(),
     prize: z.number().finite().optional(),
   }).strict()).max(10_000),
   period: z.string().max(64),
@@ -94,7 +95,7 @@ const viewerExportEventSchema = z.object({
   viewerId: id,
 }).strict();
 
-export const queueEventSchema = z.union([
+const canonicalQueueEventSchema = z.union([
   clickEventSchema,
   conversionEventSchema,
   bumpEventSchema,
@@ -105,6 +106,8 @@ export const queueEventSchema = z.union([
   accountExportEventSchema,
   viewerExportEventSchema,
 ]);
+
+export const queueEventSchema = z.preprocess(normalizeLegacyQueueInput, canonicalQueueEventSchema);
 
 export type QueueEvent = z.infer<typeof queueEventSchema>;
 export type ClickEvent = z.infer<typeof clickEventSchema>;
@@ -209,7 +212,11 @@ export function buildQueueEnvelope(event: QueueEvent, options: EnvelopeOptions =
   const correlationId = options.correlationId === undefined ? currentCorrelationId() : options.correlationId;
   if (correlationId) envelope.correlationId = String(correlationId).slice(0, 160);
   if (options.causationId) envelope.causationId = options.causationId;
-  return queueEnvelopeSchema.parse(envelope);
+  const validated = queueEnvelopeSchema.parse(envelope);
+  return {
+    ...validated,
+    payload: addLegacyQueueAliases(validated.payload as Record<string, unknown>) as QueueEvent,
+  };
 }
 
 export type QueueFallback = (event: QueueEvent, env: any, envelope: QueueEnvelope) => Promise<void>;

@@ -165,7 +165,7 @@ UPDATE conversions      SET owner_id = $keep WHERE owner_id = $drop;
 UPDATE stream_channels  SET owner_id = $keep WHERE owner_id = $drop;
 UPDATE subscriptions    SET user_id  = $keep WHERE user_id  = $drop;
 UPDATE payments         SET user_id  = $keep WHERE user_id  = $drop;
-UPDATE casinos          SET created_by = $keep WHERE created_by = $drop;
+UPDATE partners          SET created_by = $keep WHERE created_by = $drop;
 
 -- Fold the loser's credentials/plan onto the survivor where the survivor lacks
 -- them (survivor is password row, loser is telegram row -> pull telegram id).

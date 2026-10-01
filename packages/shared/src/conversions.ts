@@ -3,6 +3,7 @@ import { withTransaction } from "./db.js";
 import { effectivePlan, getPlanLimit } from "./plans.js";
 import { limitDenial } from "./entitlements.js";
 import { logAudit } from "./audit.js";
+import { normalizeConversionEvent } from "./legacy-schema.js";
 
 /**
  * Parsed query type for partner conversion postbacks.
@@ -20,12 +21,12 @@ function normalizePlayerName(name: string): string {
     .replace(/\s+/g, " ");
 }
 
-function eventToPlayerColumn(event: string): "wagered" | "prize" {
+export function eventToPlayerColumn(event: string): "amount" | "prize" {
   const e = event.toLowerCase();
   if (["win", "prize", "withdrawal", "reward", "cashback", "payout"].includes(e)) {
     return "prize";
   }
-  return "wagered";
+  return "amount";
 }
 
 function extractPlayerName(q: PostbackQuery): string | null {
@@ -51,7 +52,7 @@ export async function recordConversion(
   notify?: (siteId: string, version?: string) => void | Promise<void>,
 ): Promise<void> {
   const clickRef = first(q.yr_click) ?? first(q.click_ref) ?? first(q.clickid) ?? first(q.subid) ?? first(q.sub_id) ?? null;
-  const event = (first(q.event) ?? first(q.goal) ?? "deposit").toLowerCase().slice(0, 32);
+  const event = normalizeConversionEvent(first(q.event) ?? first(q.goal));
   const rawAmt = first(q.amount) == null ? NaN : Number(first(q.amount));
   const amount = Number.isFinite(rawAmt) && rawAmt >= 0 && rawAmt <= 1e12 ? rawAmt : null;
   const currency = (first(q.currency) ?? "USD").toUpperCase().slice(0, 8);

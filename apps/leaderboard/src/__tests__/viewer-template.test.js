@@ -48,6 +48,15 @@ describe("optional viewer template", () => {
     expect(saved.branding.template).toBe("spotlight");
   });
 
+  it("normalizes archived players in public JSON", () => {
+    const saved = publicShape(
+      { name: "Northstar", slug: "northstar", extra_json: {} },
+      [],
+      [{ label: "Previous", created_at: 1, top3_json: [{ name: "Alex", wagered: 5, hands: 2 }] }],
+    );
+    expect(saved.pastWinners[0].top).toEqual([{ name: "Alex", amount: 5, wagered: 5 }]);
+  });
+
   it("uses the original top-ranked rows as podium places with honest monograms", async () => {
     const html = await renderSite({ r: { slug: "northstar", plan: "pro", data: { ...data, players: [...data.players, { name: "Jo", rank: 3, score: 500 }], branding: { template: "spotlight" } } }, section: "leaderboard", opts: { slug: "northstar", homeUrl: "https://test.com", nonce: "n" } });
     expect(html).toContain('data-podium="3"');

@@ -13,8 +13,8 @@ const baseData = {
   brand: { name: "Creator Name", tagline: "Weekly board and free rewards", period: "Monthly", prizePool: "$500" },
   branding: { template: "cyber_arcade", font: "Inter", options: {} },
   players: [
-    { name: "Alice", rank: 1, wagered: 5000, prize: "$100" },
-    { name: "Bob", rank: 2, wagered: 3000, prize: "$60" },
+    { name: "Alice", rank: 1, amount: 5000, prize: "$100" },
+    { name: "Bob", rank: 2, amount: 3000, prize: "$60" },
   ],
   prizes: { currency: "$", prizeLabel: "Prize" },
   shopItems: [

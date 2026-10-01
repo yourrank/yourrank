@@ -18,7 +18,7 @@ const PANELS = ["membership-history", "membership-claims", "membership-participa
 const baseData = {
   brand: { name: "Creator Name", tagline: "Weekly board", period: "Monthly", prizePool: "$500" },
   branding: { template: "cyber_arcade", font: "Inter", options: {} },
-  players: [{ name: "Alice", rank: 1, wagered: 5000, prize: "$100" }],
+  players: [{ name: "Alice", rank: 1, amount: 5000, prize: "$100" }],
   prizes: { currency: "$", prizeLabel: "Prize" },
   shopItems: [{ id: 1, name: "Song request", cost: 600, active: true }],
   socials: [],

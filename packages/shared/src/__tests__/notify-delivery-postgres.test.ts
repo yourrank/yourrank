@@ -78,8 +78,8 @@ describeDb("per-destination notify delivery identities (real PostgreSQL)", () =>
   });
 
   const changes = [
-    { name: "Alice", rank: 1, wagered: 100 },
-    { name: "Bob", rank: 2, wagered: 90 },
+    { name: "Alice", rank: 1, amount: 100 },
+    { name: "Bob", rank: 2, amount: 90 },
   ];
 
   it("a mid-sequence Discord failure retries only the failed leg; delivered legs and Telegram are not resent", async () => {

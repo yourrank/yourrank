@@ -2,9 +2,10 @@
 // Keeps hand-rolled validation in dashboard-api.ts/hono-app.ts from drifting.
 
 import { z } from "zod";
+import { normalizeLegacyPartnerInput } from "@yourrank/shared/legacy-schema";
 
 export const offerCreateSchema = z.object({
-  casino: z.string().min(1).max(100),
+  partner: z.string().min(1).max(100),
   label: z.string().min(1).max(200),
   referral_url: z.string().url().max(2048),
   promo_code: z.string().max(100).optional(),
@@ -74,21 +75,30 @@ export const adminBotSchema = z.object({
   welcome_message: z.string().max(500).optional(),
 }).strict();
 
-export const adminOfferSchema = z.object({
+const adminOfferFieldsSchema = z.object({
   owner_id: z.string().uuid(),
-  casino: z.string().min(1).max(100),
+  partner: z.string().min(1).max(100),
   label: z.string().min(1).max(200),
   referral_url: z.string().url().max(2048),
   promo_code: z.string().max(100).optional(),
   bonus_text: z.string().max(500).optional(),
   priority: z.coerce.number().int().min(0).optional(),
 }).strict();
+export const adminOfferSchema: z.ZodType<
+  z.infer<typeof adminOfferFieldsSchema>,
+  z.ZodTypeDef,
+  unknown
+> =
+  z.preprocess(normalizeLegacyPartnerInput, adminOfferFieldsSchema);
 
 function friendly(error: z.ZodError): string {
   return error.issues.slice(0, 3).map((i) => `${i.path.join(".") || "request"}: ${i.message}`).join("; ");
 }
 
-export async function parseBody<T>(c: { req: { json(): Promise<unknown> }; json?: (obj: T) => any }, schema: z.ZodSchema<T>): Promise<T> {
+export async function parseBody<T extends z.ZodTypeAny>(
+  c: { req: { json(): Promise<unknown> }; json?: (obj: z.infer<T>) => any },
+  schema: T,
+): Promise<z.infer<T>> {
   let raw: unknown;
   try {
     raw = await c.req.json();
@@ -102,7 +112,10 @@ export async function parseBody<T>(c: { req: { json(): Promise<unknown> }; json?
   return parsed.data;
 }
 
-export async function validatedBody<T>(c: { req: { json(): Promise<unknown> }; json: (obj: any, status?: number) => Response }, schema: z.ZodSchema<T>): Promise<T | Response> {
+export async function validatedBody<T extends z.ZodTypeAny>(
+  c: { req: { json(): Promise<unknown> }; json: (obj: any, status?: number) => Response },
+  schema: T,
+): Promise<z.infer<T> | Response> {
   try {
     return await parseBody(c, schema);
   } catch (err) {

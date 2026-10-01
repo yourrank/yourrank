@@ -40,7 +40,7 @@ const mockGetBoardById = mock(() => Promise.resolve({
   extra_json: "{}",
 }));
 const mockGetPlayers = mock(() => Promise.resolve([
-  { name: "Alice", wagered: 100, prize: 0, score: 100, hands: 0, net_profit: 0, win_rate: 0, change: 0 },
+  { name: "Alice", amount: 100, prize: 0, score: 100, change: 0 },
 ]));
 const mockSaveSite = mock(() => Promise.resolve({ ok: true }));
 
@@ -343,10 +343,10 @@ describe("handleQuickAdd", () => {
     mockOne.mockReset();
     mockOne.mockResolvedValueOnce(USER_ROW); // loadUser
     mockGetBoardById.mockReset();
-    mockGetBoardById.mockResolvedValue({ id: "site-1", slug: "testboard", published: true, user_id: "user-1", rank_by: "wagered", extra_json: "{}" });
+    mockGetBoardById.mockResolvedValue({ id: "site-1", slug: "testboard", published: true, user_id: "user-1", rank_by: "amount", extra_json: "{}" });
     mockGetPlayers.mockReset();
     mockGetPlayers.mockResolvedValue([
-      { name: "Alice", wagered: 100, prize: 0, score: 100, hands: 0, net_profit: 0, win_rate: 0, change: 0 },
+      { name: "Alice", amount: 100, prize: 0, score: 100, change: 0 },
     ]);
     mockSaveSite.mockReset();
     mockSaveSite.mockResolvedValue({ ok: true });
@@ -365,10 +365,10 @@ describe("handleQuickAdd", () => {
     const payload = mockSaveSite.mock.calls[0][2];
     expect(payload.siteId).toBe("site-1");
     expect(payload.players[0]).toMatchObject({
-      name: "Alice", wagered: 100, netProfit: 0, winRate: 0,
+      name: "Alice", amount: 100,
     });
     expect(payload.players[1]).toMatchObject({
-      name: "Bob", wagered: 50,
+      name: "Bob", amount: 50,
     });
   });
 
@@ -378,16 +378,16 @@ describe("handleQuickAdd", () => {
     const res = await handleQuickAdd(request, env);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.players[0].wagered).toBe(125);
+    expect(body.players[0].amount).toBe(125);
   });
 
-  it("adds points without deriving them from wagered on a score board", async () => {
+  it("adds points without deriving them from amount on a score board", async () => {
     mockGetBoardById.mockResolvedValue({ id: "site-1", slug: "testboard", published: true, user_id: "user-1", rank_by: "score", extra_json: "{}" });
     const request = req("https://test.com/api/sites/site-1/quick-add", "POST", { name: "Bob", amount: 50 });
     const res = await handleQuickAdd(request, mockEnv());
     expect(res.status).toBe(200);
     const payload = mockSaveSite.mock.calls[0][2];
-    expect(payload.players.find((player) => player.name === "Bob")).toMatchObject({ score: 50, wagered: 0 });
+    expect(payload.players.find((player) => player.name === "Bob")).toMatchObject({ score: 50, amount: 0 });
   });
 });
 

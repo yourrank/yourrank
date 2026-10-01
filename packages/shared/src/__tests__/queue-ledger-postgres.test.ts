@@ -127,7 +127,7 @@ describeDb("queue event ledger (real PostgreSQL)", () => {
     kind: "top3" as const,
     siteId: "",
     siteName: "ledger",
-    changes: [{ name, rank: 1, wagered: 1 }],
+    changes: [{ name, rank: 1, amount: 1 }],
   });
 
   it("delivers a notification once and suppresses the duplicate without calling the provider again", async () => {

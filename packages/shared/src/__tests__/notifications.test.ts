@@ -36,9 +36,9 @@ describe("notification delivery", () => {
       {},
       "site-1",
       "Board",
-      [{ name: "Alice", wagered: 100 }, { name: "Bob", wagered: 50 }],
-      [{ name: "Alice", wagered: 100 }, { name: "Bob", wagered: 50 }],
-      "wagered"
+      [{ name: "Alice", amount: 100 }, { name: "Bob", amount: 50 }],
+      [{ name: "Alice", amount: 100 }, { name: "Bob", amount: 50 }],
+      "amount"
     );
 
     expect(query).not.toHaveBeenCalled();
@@ -46,18 +46,18 @@ describe("notification delivery", () => {
 
   it("selects exactly the players whose notification eligibility changed", () => {
     const oldPlayers = [
-      { name: "Alice", wagered: 100 },
-      { name: "Bob", wagered: 90 },
-      { name: "Cara", wagered: 80 },
+      { name: "Alice", amount: 100 },
+      { name: "Bob", amount: 90 },
+      { name: "Cara", amount: 80 },
     ];
     const newPlayers = [
-      { name: "Bob", wagered: 110 },
-      { name: "Alice", wagered: 100 },
-      { name: "Cara", wagered: 80 },
-      { name: "Drew", wagered: 70 },
+      { name: "Bob", amount: 110 },
+      { name: "Alice", amount: 100 },
+      { name: "Cara", amount: 80 },
+      { name: "Drew", amount: 70 },
     ];
 
-    expect(getRankChangedPlayerNames(oldPlayers, newPlayers, "wagered")).toEqual(["Bob", "Alice", "Drew"]);
+    expect(getRankChangedPlayerNames(oldPlayers, newPlayers, "amount")).toEqual(["Bob", "Alice", "Drew"]);
   });
 
   it("continues notifying other subscribers when one send fails", async () => {
@@ -76,9 +76,9 @@ describe("notification delivery", () => {
       {},
       "site-1",
       "Board",
-      [{ name: "Alice", wagered: 100 }, { name: "Bob", wagered: 90 }, { name: "Cara", wagered: 80 }],
-      [{ name: "Bob", wagered: 110 }, { name: "Alice", wagered: 100 }, { name: "Cara", wagered: 70 }],
-      "wagered",
+      [{ name: "Alice", amount: 100 }, { name: "Bob", amount: 90 }, { name: "Cara", amount: 80 }],
+      [{ name: "Bob", amount: 110 }, { name: "Alice", amount: 100 }, { name: "Cara", amount: 70 }],
+      "amount",
       async (_db, message) => {
         sent.push(message.playerName);
         if (message.playerName === "Bob") throw new Error("send failed");

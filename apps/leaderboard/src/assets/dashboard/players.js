@@ -4,7 +4,6 @@ import { state, markDirty, subscribe, clearDirty } from "./state.js";
 
 export const PLAYER_NAME_LIMIT = 80;
 const SCORE_MAX = 9_999_999_999_999.99;
-const WIN_RATE_MAX = 999.99;
 const INT32_MAX = 2_147_483_647;
 
 function normalizePlayerIdentity(value) {
@@ -25,12 +24,9 @@ export function truncatePlayerName(value, max = PLAYER_NAME_LIMIT) {
 }
 const PLAYER_DRAFT_PREFIX = "yourrank:players-draft:";
 const PLAYER_NUMBER_FIELDS = [
-  { key: "wagered", selector: ".p-wager", label: "Amount", money: true },
+  { key: "amount", selector: ".p-amount", label: "Amount", money: true },
   { key: "prize", selector: ".p-prize", label: "Prize", money: true },
   { key: "score", selector: ".p-score", label: "Score", max: SCORE_MAX },
-  { key: "hands", selector: ".p-hands", label: "Rounds", integer: true, max: INT32_MAX },
-  { key: "netProfit", selector: ".p-net-profit", label: "Net amount", signed: true, max: SCORE_MAX },
-  { key: "winRate", selector: ".p-win-rate", label: "Success rate", signed: true, max: WIN_RATE_MAX },
   { key: "change", selector: ".p-change", label: "Change", signed: true, integer: true, max: INT32_MAX },
 ];
 
@@ -198,7 +194,7 @@ export function playerLimitMessage() {
   return `${planLabel} allows up to ${limit} players. Upgrade to add more.`;
 }
 
-export function validateQuickAddValues({ name = "", wagered = "", prize = "", score = "" } = {}) {
+export function validateQuickAddValues({ name = "", amount = "", prize = "", score = "" } = {}) {
   const errors = [];
   if (!String(name).trim()) errors.push({ field: "name", message: "Enter a player name." });
   else {
@@ -209,14 +205,14 @@ export function validateQuickAddValues({ name = "", wagered = "", prize = "", sc
       if (exists) errors.push({ field: "name", message: `“${name.trim()}” is already on the leaderboard. Use the existing row instead.` });
     }
   }
-  const amount = parsePlayerNumber(wagered);
-  if (!amount.ok) errors.push({ field: "wagered", message: amount.message });
+  const amountValue = parsePlayerNumber(amount);
+  if (!amountValue.ok) errors.push({ field: "amount", message: amountValue.message });
   const prizeValue = parsePlayerNumber(prize);
   if (!prizeValue.ok) errors.push({ field: "prize", message: prizeValue.message });
   // DEF-24: Allow negative scores — custom game formats can have deductions.
   const scoreValue = parsePlayerNumber(score, { signed: true });
   if (!scoreValue.ok) errors.push({ field: "score", message: scoreValue.message });
-  return { ok: errors.length === 0, errors, wagered: amount.value, prize: prizeValue.value, score: scoreValue.value };
+  return { ok: errors.length === 0, errors, amount: amountValue.value, prize: prizeValue.value, score: scoreValue.value };
 }
 
 function playerDraftStorageKey() {
@@ -248,7 +244,7 @@ function rawPlayerRows() {
 function rawQuickAdd() {
   return {
     name: $("qa_name")?.value || "",
-    wagered: $("qa_wager")?.value || "",
+    amount: $("qa_amount")?.value || "",
     prize: $("qa_prize")?.value || "",
     score: $("qa_score")?.value || "",
   };
@@ -301,7 +297,7 @@ function showPlayersDraftNotice(show) {
 
 function restoreQuickAdd(values = {}) {
   if ($("qa_name")) $("qa_name").value = values.name || "";
-  if ($("qa_wager")) $("qa_wager").value = values.wagered || "";
+  if ($("qa_amount")) $("qa_amount").value = values.amount || "";
   if ($("qa_prize")) $("qa_prize").value = values.prize || "";
   if ($("qa_score")) $("qa_score").value = values.score || "";
   updateNameCounter($("qa_name"));
@@ -349,7 +345,7 @@ export function collectPlayers({ focusInvalid = false, reportErrors = true } = {
         clearPlayerFieldError(input);
       }
       if (parsed.ok) {
-        if (field.key === "wagered" || field.key === "prize" || !parsed.empty) player[field.key] = parsed.value;
+        if (field.key === "amount" || field.key === "prize" || !parsed.empty) player[field.key] = parsed.value;
       }
     }
     return player;
@@ -366,18 +362,15 @@ subscribe((keys) => {
   if (keys.includes("draft") && state.ACTIVE_SITE_ID && $("rows")) persistPlayersDraft();
 });
 
-export function playerRow(p = { name: "", wagered: "", prize: "", score: "", hands: "", netProfit: "", winRate: "", change: "" }) {
+export function playerRow(p = { name: "", amount: "", prize: "", score: "", change: "" }) {
   const tr = document.createElement("tr");
   const rowId = `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   tr.innerHTML = `<td class="sel" data-label="Select"><input type="checkbox" class="row-sel" title="Select" aria-label="Select player" /></td>
     <td class="rank" data-label="Rank"></td>
     <td class="player-name" data-label="Player"><input class="p-name" placeholder="Player name" aria-label="Player name" title="${esc(p.name)}" maxlength="160" value="${esc(p.name)}" aria-describedby="${rowId}-name-counter ${rowId}-name-warning"><span class="player-name-counter" id="${rowId}-name-counter" hidden aria-live="polite"></span><span class="field-err" data-field-error="p-name" hidden role="alert" aria-live="polite"></span><span class="field-warn" data-field-warning="p-name" id="${rowId}-name-warning" hidden role="status" aria-live="polite"></span></td>
-    <td class="num col-legacy" data-label="Amount"><input class="p-wager" data-field="p-wager" aria-label="Amount for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.wagered)}" aria-describedby="${rowId}-wager-error"><span class="field-err" data-field-error="p-wager" id="${rowId}-wager-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-legacy" data-label="Prize"><input class="p-prize" data-field="p-prize" aria-label="Prize for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.prize)}" aria-describedby="${rowId}-prize-error"><span class="field-err" data-field-error="p-prize" id="${rowId}-prize-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-amount" data-label="Amount"><input class="p-amount" data-field="p-amount" aria-label="Amount for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.amount)}" aria-describedby="${rowId}-amount-error"><span class="field-err" data-field-error="p-amount" id="${rowId}-amount-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-prize" data-label="Prize"><input class="p-prize" data-field="p-prize" aria-label="Prize for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.prize)}" aria-describedby="${rowId}-prize-error"><span class="field-err" data-field-error="p-prize" id="${rowId}-prize-error" hidden role="alert" aria-live="polite"></span></td>
     <td class="num col-score" data-label="Score" hidden><input class="p-score" data-field="p-score" aria-label="Score for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.score ?? "")}" aria-describedby="${rowId}-score-error"><span class="field-err" data-field-error="p-score" id="${rowId}-score-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-hands" data-label="Rounds" hidden><input class="p-hands" data-field="p-hands" aria-label="Rounds for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.hands)}" aria-describedby="${rowId}-hands-error"><span class="field-err" data-field-error="p-hands" id="${rowId}-hands-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-net" data-label="Net amount" hidden><input class="p-net-profit" data-field="p-net-profit" aria-label="Net amount for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.netProfit)}" aria-describedby="${rowId}-net-error"><span class="field-err" data-field-error="p-net-profit" id="${rowId}-net-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-win" data-label="Success rate" hidden><input class="p-win-rate" data-field="p-win-rate" aria-label="Success rate for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.winRate)}" aria-describedby="${rowId}-win-error"><span class="field-err" data-field-error="p-win-rate" id="${rowId}-win-error" hidden role="alert" aria-live="polite"></span></td>
     <td class="num col-change" data-label="Change" hidden><input class="p-change" data-field="p-change" aria-label="Rank change for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.change)}" aria-describedby="${rowId}-change-error"><span class="field-err" data-field-error="p-change" id="${rowId}-change-error" hidden role="alert" aria-live="polite"></span></td>
     <td class="act" data-label="Actions"><button class="row-edit" title="Edit player" aria-label="Edit player" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="row-x" title="Remove" aria-label="Remove ${esc(p.name || "player")}" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg></button></td>`;
   tr.querySelector(".row-edit").addEventListener("click", () => {
@@ -388,12 +381,9 @@ export function playerRow(p = { name: "", wagered: "", prize: "", score: "", han
   tr.querySelector(".p-name")?.addEventListener("input", (event) => {
     const currentName = event.currentTarget.value.trim() || "player";
     event.currentTarget.title = event.currentTarget.value;
-    tr.querySelector(".p-wager")?.setAttribute("aria-label", `Amount for ${currentName}`);
+    tr.querySelector(".p-amount")?.setAttribute("aria-label", `Amount for ${currentName}`);
     tr.querySelector(".p-prize")?.setAttribute("aria-label", `Prize for ${currentName}`);
     tr.querySelector(".p-score")?.setAttribute("aria-label", `Score for ${currentName}`);
-    tr.querySelector(".p-hands")?.setAttribute("aria-label", `Rounds for ${currentName}`);
-    tr.querySelector(".p-net-profit")?.setAttribute("aria-label", `Net amount for ${currentName}`);
-    tr.querySelector(".p-win-rate")?.setAttribute("aria-label", `Success rate for ${currentName}`);
     tr.querySelector(".p-change")?.setAttribute("aria-label", `Rank change for ${currentName}`);
     tr.querySelector(".row-x")?.setAttribute("aria-label", `Remove ${currentName}`);
     updateNameCounter(event.currentTarget);
@@ -438,7 +428,7 @@ export function playerRow(p = { name: "", wagered: "", prize: "", score: "", han
     });
   });
 
-  wireNumberInput(tr.querySelector(".p-wager"), { money: true });
+  wireNumberInput(tr.querySelector(".p-amount"), { money: true });
   wireNumberInput(tr.querySelector(".p-prize"), { money: true });
   PLAYER_NUMBER_FIELDS.slice(2).forEach((field) => wireNumberInput(tr.querySelector(field.selector), field));
   updateNameCounter(tr.querySelector(".p-name"));
@@ -447,16 +437,10 @@ export function playerRow(p = { name: "", wagered: "", prize: "", score: "", han
 
 const FIELD_COLS = {
   score: "col-score",
-  hands: "col-hands",
-  netProfit: "col-net",
-  winRate: "col-win",
   change: "col-change",
 };
 const DEFAULT_EDITOR_PLAYER_FIELDS = Object.freeze({
   score: false,
-  hands: false,
-  netProfit: false,
-  winRate: false,
   change: false,
 });
 const PLAYER_TABLE_BASE_WIDTH = 44 + 56 + 200 + 112 + 112 + 96;
@@ -471,9 +455,9 @@ function syncColumnDropdown(fields) {
 export function applyPlayerFieldVisibility(fields) {
   const table = $("rows")?.closest("table");
   const merged = { ...DEFAULT_EDITOR_PLAYER_FIELDS, ...state.EXTRA?.playerFields, ...(fields || {}) };
-  const scoreMode = state.RANK_BY !== "wagered";
+  const scoreMode = state.RANK_BY !== "amount";
   if (scoreMode) merged.score = true;
-  table?.querySelectorAll(".col-legacy").forEach((el) => { el.hidden = scoreMode; });
+  table?.querySelectorAll(".col-amount").forEach((el) => { el.hidden = scoreMode; });
   const visibleOptionalCount = Object.keys(FIELD_COLS).reduce((count, key) => count + (merged[key] !== false ? 1 : 0), 0);
   const baseWidth = scoreMode ? 44 + 56 + 200 + 96 : PLAYER_TABLE_BASE_WIDTH;
   table?.style.setProperty(
@@ -547,7 +531,7 @@ export function renderPlayers(list, { restoreDraft = false } = {}) {
 
 export function renumber() {
   const rows = [...$("rows").children];
-  const rankSelector = state.RANK_BY === "score" ? ".p-score" : ".p-wager";
+  const rankSelector = state.RANK_BY === "score" ? ".p-score" : ".p-amount";
   const ranked = rows.slice().sort((a, b) => {
     const metric = parseAmount(b.querySelector(rankSelector)?.value) - parseAmount(a.querySelector(rankSelector)?.value);
     return metric || a.querySelector(".p-name").value.localeCompare(b.querySelector(".p-name").value, undefined, { sensitivity: "base" });
@@ -633,7 +617,7 @@ function sortRows() {
     if (sort === "name") {
       return a.querySelector(".p-name").value.localeCompare(b.querySelector(".p-name").value, undefined, { sensitivity: "base" });
     }
-    const selector = sort === "prize" ? ".p-prize" : sort === "score" ? ".p-score" : ".p-wager";
+    const selector = sort === "prize" ? ".p-prize" : sort === "score" ? ".p-score" : ".p-amount";
     const av = parseAmount(a.querySelector(selector).value);
     const bv = parseAmount(b.querySelector(selector).value);
     if (bv !== av) return bv - av;
@@ -687,13 +671,13 @@ function onSortableInput() {
 
 $("rows")?.addEventListener("input", (e) => {
   if (!e.target?.classList) return;
-  if (e.target.classList.contains("p-wager") || e.target.classList.contains("p-score") || e.target.classList.contains("p-prize")) onSortableInput();
+  if (e.target.classList.contains("p-amount") || e.target.classList.contains("p-score") || e.target.classList.contains("p-prize")) onSortableInput();
   if (e.target.classList.contains("p-name")) {
     if (playerNameSegments(e.target.value).length > PLAYER_NAME_LIMIT) e.target.value = playerNameSegments(e.target.value).slice(0, PLAYER_NAME_LIMIT).join("");
     updateNameCounter(e.target);
     updateDuplicateWarnings();
     clearPlayerFieldError(e.target);
-  } else if (e.target.matches(".p-wager, .p-prize, .p-score, .p-hands, .p-net-profit, .p-win-rate, .p-change")) {
+  } else if (e.target.matches(".p-amount, .p-prize, .p-score, .p-change")) {
     clearPlayerFieldError(e.target);
   }
 });
@@ -715,22 +699,22 @@ $("addRow")?.addEventListener("click", () => {
 function addQuickRow() {
   const nameInput = $("qa_name");
   const name = nameInput.value.trim();
-  const wagerInput = $("qa_wager");
+  const amountInput = $("qa_amount");
   const prizeInput = $("qa_prize");
   const scoreInput = $("qa_score");
-  const scoreMode = state.RANK_BY !== "wagered";
+  const scoreMode = state.RANK_BY !== "amount";
   const quickValidation = validateQuickAddValues({
     name,
-    wagered: scoreMode ? "" : wagerInput.value,
+    amount: scoreMode ? "" : amountInput.value,
     prize: scoreMode ? "" : prizeInput.value,
     score: scoreMode ? scoreInput.value : "",
   });
   if (!quickValidation.ok) {
     const firstError = quickValidation.errors[0];
-    const input = firstError.field === "name" ? nameInput : firstError.field === "wagered" ? wagerInput : firstError.field === "score" ? scoreInput : prizeInput;
+    const input = firstError.field === "name" ? nameInput : firstError.field === "amount" ? amountInput : firstError.field === "score" ? scoreInput : prizeInput;
     setPlayerFieldError(input, firstError.message);
     quickValidation.errors.slice(1).forEach((error) => {
-      const target = error.field === "wagered" ? wagerInput : error.field === "score" ? scoreInput : prizeInput;
+      const target = error.field === "amount" ? amountInput : error.field === "score" ? scoreInput : prizeInput;
       setPlayerFieldError(target, error.message);
     });
     input.focus();
@@ -742,19 +726,19 @@ function addQuickRow() {
     return;
   }
   clearPlayerFieldError(nameInput);
-  clearPlayerFieldError(wagerInput);
+  clearPlayerFieldError(amountInput);
   clearPlayerFieldError(prizeInput);
   clearPlayerFieldError(scoreInput);
   updateDuplicateWarnings();
   commitDraftMutation(() => {
     $("rows").appendChild(playerRow({
       name,
-      wagered: quickValidation.wagered,
+      amount: quickValidation.amount,
       prize: quickValidation.prize,
       score: quickValidation.score,
     }));
     $("qa_name").value = "";
-    $("qa_wager").value = "";
+    $("qa_amount").value = "";
     $("qa_prize").value = "";
     $("qa_score").value = "";
     renumber();
@@ -772,12 +756,12 @@ $("qa_name")?.addEventListener("input", (e) => {
   updateDuplicateWarnings();
 });
 $("playersDraftNoticeDismiss")?.addEventListener("click", () => showPlayersDraftNotice(false));
-$("qa_wager") && wireNumberInput($("qa_wager"), { money: true });
+$("qa_amount") && wireNumberInput($("qa_amount"), { money: true });
 $("qa_prize") && wireNumberInput($("qa_prize"), { money: true });
 $("qa_score") && wireNumberInput($("qa_score"));
-$("qa_name")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); (state.RANK_BY === "wagered" ? $("qa_wager") : $("qa_score"))?.focus(); } });
+$("qa_name")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); (state.RANK_BY === "amount" ? $("qa_amount") : $("qa_score"))?.focus(); } });
 $("qa_score")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addQuickRow(); $("qa_name")?.focus(); } });
-$("qa_wager")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("qa_prize")?.focus(); } });
+$("qa_amount")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("qa_prize")?.focus(); } });
 $("qa_prize")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addQuickRow(); $("qa_name")?.focus(); } });
 
 export function sanitizeImportName(s) {
@@ -808,17 +792,14 @@ function parseImportNumber(s) {
 // columns in ANY order (or extra columns) without silently corrupting data.
 const HEADER_ALIASES = {
   name: "name", player: "name", username: "name", user: "name", handle: "name",
-  wagered: "wagered", volume: "wagered",
-  prize: "prize", reward: "prize", payout: "prize", winnings: "prize",
+  amount: "amount", volume: "amount",
+  prize: "prize", reward: "prize",
   score: "score", points: "score", pts: "score",
-  hands: "hands", rounds: "hands", games: "hands",
-  netprofit: "netProfit", "net profit": "netProfit", net: "netProfit", profit: "netProfit", pnl: "netProfit",
-  winrate: "winRate", "win rate": "winRate", "win %": "winRate", winpct: "winRate",
   change: "change", delta: "change", movement: "change",
 };
 // Positional order used when there is no recognizable header row.
-const POSITIONAL = ["name", "wagered", "prize", "score", "hands", "netProfit", "winRate", "change"];
-const NUMERIC_FIELDS = ["score", "hands", "netProfit", "winRate", "change"];
+const POSITIONAL = ["name", "amount", "prize", "score", "change"];
+const NUMERIC_FIELDS = ["score", "change"];
 
 function normalizeHeader(h) {
   return String(h || "").trim().toLowerCase().replace(/^"+|"+$/g, "").replace(/\s+/g, " ");
@@ -894,11 +875,11 @@ export function parseImportText(text, source = "text") {
     const key = normalizePlayerIdentity(name);
     if (seen.has(key)) { errors.push(`Row ${index + 1}: duplicate "${name}"`); return; }
     seen.add(key);
-    const wagered = parseImportAmount(cell(parts, "wagered"));
-    if (wagered === null || wagered > SCORE_MAX) { errors.push(`Row ${index + 1}: invalid amount for "${name}"`); return; }
+    const amount = parseImportAmount(cell(parts, "amount"));
+    if (amount === null || amount > SCORE_MAX) { errors.push(`Row ${index + 1}: invalid amount for "${name}"`); return; }
     const prize = parseImportAmount(cell(parts, "prize"));
     if (prize === null || prize > SCORE_MAX) { errors.push(`Row ${index + 1}: invalid prize for "${name}"`); return; }
-    const imported = { name, wagered, prize };
+    const imported = { name, amount, prize };
     for (const field of NUMERIC_FIELDS) {
       const value = parseImportNumber(cell(parts, field));
       if (value !== undefined) imported[field] = value;
@@ -944,18 +925,12 @@ $("importApply")?.addEventListener("click", () => {
   const existing = replace ? [] : [...$("rows").children].map((tr) => {
     const p = {
       name: tr.querySelector(".p-name").value.trim(),
-      wagered: parseAmount(tr.querySelector(".p-wager").value),
+      amount: parseAmount(tr.querySelector(".p-amount").value),
       prize: parseAmount(tr.querySelector(".p-prize").value),
     };
     const score = tr.querySelector(".p-score").value.trim();
-    const hands = tr.querySelector(".p-hands").value.trim();
-    const netProfit = tr.querySelector(".p-net-profit").value.trim();
-    const winRate = tr.querySelector(".p-win-rate").value.trim();
     const change = tr.querySelector(".p-change").value.trim();
     if (score) p.score = parseFloat(score);
-    if (hands) p.hands = parseFloat(hands);
-    if (netProfit) p.netProfit = parseFloat(netProfit);
-    if (winRate) p.winRate = parseFloat(winRate);
     if (change) p.change = parseFloat(change);
     return p;
   }).filter((p) => p.name);
@@ -983,7 +958,7 @@ $("csvFileInput")?.addEventListener("change", () => {
     const result = parseImportText(reader.result, "csv");
     if (!result.rows.length) { showToast("No players found. Use headers such as name and score; historical amount and prize columns remain optional.", "error"); return; }
     $("importPanel").hidden = false;
-    $("importText").value = result.rows.map((p) => [p.name, p.wagered, p.prize, p.score ?? "", p.hands ?? "", p.netProfit ?? "", p.winRate ?? "", p.change ?? ""].join("\t")).join("\n");
+    $("importText").value = result.rows.map((p) => [p.name, p.amount, p.prize, p.score ?? "", p.change ?? ""].join("\t")).join("\n");
     $("importText").dispatchEvent(new Event("input"));
     showToast(`CSV loaded: ${result.rows.length} valid player${result.rows.length === 1 ? "" : "s"}${result.errors.length ? `, ${result.errors.length} problem${result.errors.length === 1 ? "" : "s"}` : ""}. Review and click "Add to table".`, "success");
   };
@@ -1066,7 +1041,7 @@ $("gsheetFetch")?.addEventListener("click", async () => {
     if (!result.rows.length) { status.textContent = result.errors.length ? result.errors[0] : "No players found. Use headers such as name and score; historical amount and prize columns remain optional."; return; }
     $("gsheetPanel").hidden = true;
     $("importPanel").hidden = false;
-    $("importText").value = result.rows.map((p) => [p.name, p.wagered, p.prize, p.score ?? "", p.hands ?? "", p.netProfit ?? "", p.winRate ?? "", p.change ?? ""].join("\t")).join("\n");
+    $("importText").value = result.rows.map((p) => [p.name, p.amount, p.prize, p.score ?? "", p.change ?? ""].join("\t")).join("\n");
     $("importText").dispatchEvent(new Event("input"));
     status.textContent = `Loaded ${result.rows.length} player${result.rows.length === 1 ? "" : "s"} from Google Sheets. Review and click “Add to table”.`;
   } catch (err) {
@@ -1157,7 +1132,7 @@ $("bulkClearWager")?.addEventListener("click", () => {
   let cleared = 0;
   for (const row of $("rows").children) {
     if (row.querySelector(".row-sel")?.checked) {
-      const input = row.querySelector(".p-wager");
+      const input = row.querySelector(".p-amount");
       if (input && parseAmount(input.value) !== 0) { input.value = "0"; showMoneyValue(input); cleared++; }
     }
   }

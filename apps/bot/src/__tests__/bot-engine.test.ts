@@ -64,7 +64,7 @@ mock.module(cryptoUrlTs, cryptoMockFactory);
 
 // ── Import REAL functions after mocks are in place ─────────────────────
 import { esc } from "../botEngine.js";
-import { recordConversion } from "@yourrank/shared/conversions";
+import { eventToPlayerColumn, recordConversion } from "@yourrank/shared/conversions";
 import { getPlanLimit } from "@yourrank/shared/plans";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 
@@ -182,6 +182,11 @@ describe("rateLimit (shared/ratelimit)", () => {
 
 // ── recordConversion: real conversion recording with mocked DB ─────────
 describe("recordConversion (conversions)", () => {
+  it("maps canonical conversion events to amount and reward events to prize", () => {
+    expect(eventToPlayerColumn("conversion")).toBe("amount");
+    expect(eventToPlayerColumn("win")).toBe("prize");
+  });
+
   beforeEach(() => {
     mockOne.mockReset();
     mockExec.mockReset();
@@ -194,7 +199,7 @@ describe("recordConversion (conversions)", () => {
     // (Idempotency is now handled in the INSERT)
     mockOne.mockResolvedValue(null);
 
-    await recordConversion("owner-1", { click_ref: "abc123", event: "deposit", amount: "50" });
+    await recordConversion("owner-1", { click_ref: "abc123", event: "conversion", amount: "50" });
 
     // Should have called one() once: offer lookup
     expect(mockOne).toHaveBeenCalledTimes(1);
@@ -206,16 +211,22 @@ describe("recordConversion (conversions)", () => {
 
   it("extracts click_ref from clickid fallback", async () => {
     mockOne.mockResolvedValue(null);
-    await recordConversion("owner-1", { clickid: "fallback-id", event: "deposit", amount: "50" });
+    await recordConversion("owner-1", { clickid: "fallback-id", event: "conversion", amount: "50" });
     expect(mockOne.mock.calls[0][1]).toContain("fallback-id");
   });
 
-  it("defaults event to 'deposit' when missing", async () => {
+  it("defaults event to 'conversion' when missing", async () => {
     mockOne.mockResolvedValue(null);
     await recordConversion("owner-1", { click_ref: "abc" });
-    // The INSERT should use "deposit" as event
+    // The INSERT should use "conversion" as event
     const insertCall = mockUnsafe.mock.calls[0];
-    expect(insertCall[1][3]).toBe("deposit");
+    expect(insertCall[1][3]).toBe("conversion");
+  });
+
+  it("normalizes the legacy event name to conversion", async () => {
+    mockOne.mockResolvedValue(null);
+    await recordConversion("owner-1", { click_ref: "abc", event: "deposit", amount: "50" });
+    expect(mockUnsafe.mock.calls[0][1][3]).toBe("conversion");
   });
 
   it("clamps negative amounts to null", async () => {
@@ -250,7 +261,7 @@ describe("recordConversion (conversions)", () => {
     // tx.unsafe returning [] means the ON CONFLICT DO NOTHING clause dropped the insert
     mockUnsafe.mockResolvedValueOnce([]);
 
-    await recordConversion("owner-1", { click_ref: "abc", event: "deposit", amount: "50", player: "bob" });
+    await recordConversion("owner-1", { click_ref: "abc", event: "conversion", amount: "50", player: "bob" });
 
     // The INSERT fired but returned no rows
     expect(mockUnsafe).toHaveBeenCalledTimes(1);
@@ -259,7 +270,7 @@ describe("recordConversion (conversions)", () => {
 
   it("skips offer lookup when no click_ref", async () => {
     mockOne.mockResolvedValue(null);
-    await recordConversion("owner-1", { event: "deposit", amount: "50" });
+    await recordConversion("owner-1", { event: "conversion", amount: "50" });
 
     // No click_ref means offer lookup is skipped
     expect(mockOne).not.toHaveBeenCalled();

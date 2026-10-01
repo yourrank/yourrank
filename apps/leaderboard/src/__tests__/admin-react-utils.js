@@ -129,7 +129,7 @@ export const adminPayloads = {
     pageSize: 50,
   },
   leads: {
-    leads: [{ id: "lead-1", handle: "ava", casino: "Example Sponsor", contact: "ava@example.com", note: "Interested", created_at: 1700000000000 }],
+    leads: [{ id: "lead-1", handle: "ava", brand: "Example Sponsor", contact: "ava@example.com", note: "Interested", created_at: 1700000000000 }],
     total: 1,
     pageSize: 50,
   },

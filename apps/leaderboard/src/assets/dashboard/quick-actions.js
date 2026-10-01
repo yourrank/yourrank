@@ -120,7 +120,7 @@ export function openNewSite() {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json", "x-csrf-token": getCsrf() },
-        body: JSON.stringify({ slug, name: siteName, casino: "", code: "" }),
+        body: JSON.stringify({ slug, name: siteName, sponsor: "", code: "" }),
       }).then(guardAuth);
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.ok) {

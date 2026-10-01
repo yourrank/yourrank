@@ -7,10 +7,10 @@ const record = {
   slug: "demo-board",
   plan: "pro",
   data: {
-    rankBy: "wagered",
+    rankBy: "amount",
     brand: { name: "Demo Board", tagline: "A sample board", period: "Monthly", prizePool: "$500" },
     prizes: { hidePrizeAmounts: false },
-    players: [{ name: "Alex", wagered: 100, prize: 25 }],
+    players: [{ name: "Alex", amount: 100, prize: 25 }],
     socials: [],
     pastWinners: [],
   },
@@ -28,8 +28,8 @@ describe("new-shell auxiliary renderers", () => {
     };
     const profile = await renderNewPlayerProfile(
       data,
-      { name: "Score Player", rank: 2, score: 77, wagered: 900, prize: 0 },
-      [{ label: "August", rank: 1, score: 65, wagered: 800, prize: 0 }],
+      { name: "Score Player", rank: 2, score: 77, amount: 900, prize: 0 },
+      [{ label: "August", rank: 1, score: 65, amount: 800, prize: 0 }],
       opts,
     );
 
@@ -183,8 +183,8 @@ describe("new-shell auxiliary renderers", () => {
   it("formats player profile currency consistently", async () => {
     const profile = await renderNewPlayerProfile(
       record.data,
-      { name: "Alex", rank: 1, wagered: 12500, prize: 250 },
-      [{ label: "Monthly", rank: 1, wagered: 12500, prize: 250 }],
+      { name: "Alex", rank: 1, amount: 12500, prize: 250 },
+      [{ label: "Monthly", rank: 1, amount: 12500, prize: 250 }],
       opts,
     );
     expect(profile).toContain("$12,500");
@@ -195,8 +195,8 @@ describe("new-shell auxiliary renderers", () => {
   it("puts the player's name, rank and archived results first without a KPI wall", async () => {
     const profile = await renderNewPlayerProfile(
       record.data,
-      { name: "Alex", rank: 3, wagered: 12500, prize: 250 },
-      [{ label: "Monthly", rank: 1, wagered: 12500, prize: 250 }],
+      { name: "Alex", rank: 3, amount: 12500, prize: 250 },
+      [{ label: "Monthly", rank: 1, amount: 12500, prize: 250 }],
       opts,
     );
     expect(profile).toContain('<h1 class="yr-h1">Alex</h1>');
@@ -214,7 +214,7 @@ describe("new-shell auxiliary renderers", () => {
   });
 
   it("gives the player page a way back, the current period and a modest archive empty state", async () => {
-    const empty = await renderNewPlayerProfile(record.data, { name: "Alex", rank: 3, wagered: 100, prize: 25 }, [], opts);
+    const empty = await renderNewPlayerProfile(record.data, { name: "Alex", rank: 3, amount: 100, prize: 25 }, [], opts);
     expect(empty).toContain('<header class="yr-vhead"><a class="yr-sec-link" href="/demo-board/leaderboard">');
     expect(empty).toContain("Back to leaderboard</a>");
     expect(empty).toContain("in the monthly board right now");
@@ -225,8 +225,8 @@ describe("new-shell auxiliary renderers", () => {
 
     const two = await renderNewPlayerProfile(
       record.data,
-      { name: "Alex", rank: 3, wagered: 100, prize: 25 },
-      [{ label: "August", rank: 1, wagered: 900, prize: 40 }, { label: "July", rank: 4, wagered: 300, prize: 0 }],
+      { name: "Alex", rank: 3, amount: 100, prize: 25 },
+      [{ label: "August", rank: 1, amount: 900, prize: 40 }, { label: "July", rank: 4, amount: 300, prize: 0 }],
       opts,
     );
     expect(two).toContain('id="yr-player-history">Archived results</h2><span class="yr-panel-meta">2 boards</span>');
@@ -244,8 +244,8 @@ describe("new-shell auxiliary renderers", () => {
   it("names the field an archived row's leading value belongs to", async () => {
     const profile = await renderNewPlayerProfile(
       record.data,
-      { name: "Alex", rank: 3, wagered: 12500, prize: 250 },
-      [{ label: "Monthly", rank: 2, wagered: 9900, prize: 40 }],
+      { name: "Alex", rank: 3, amount: 12500, prize: 250 },
+      [{ label: "Monthly", rank: 2, amount: 9900, prize: 40 }],
       opts,
     );
     // The row has no column heading, so the value carries its own label for both
@@ -264,7 +264,7 @@ describe("new-shell auxiliary renderers", () => {
 
   it("keeps a pathological player name safe while retaining the accessible name", async () => {
     const long = "Ω".repeat(50) + "🎮".repeat(10) + "x".repeat(40);
-    const profile = await renderNewPlayerProfile(record.data, { name: long, rank: 0, wagered: 9e15, prize: 0 }, [], opts);
+    const profile = await renderNewPlayerProfile(record.data, { name: long, rank: 0, amount: 9e15, prize: 0 }, [], opts);
     expect(profile).toContain(long);
     expect(profile).toContain(`<h1 class="yr-h1">${long}</h1>`);
     expect(profile).toContain("Unranked");
@@ -276,8 +276,8 @@ describe("new-shell auxiliary renderers", () => {
     const hidden = { ...record.data, prizes: { hidePrizeAmounts: true } };
     const profile = await renderNewPlayerProfile(
       hidden,
-      { name: "Alex", rank: 1, wagered: 100, prize: 25 },
-      [{ label: "Monthly", rank: 1, wagered: 100, prize: 25 }],
+      { name: "Alex", rank: 1, amount: 100, prize: 25 },
+      [{ label: "Monthly", rank: 1, amount: 100, prize: 25 }],
       opts,
     );
     expect(profile).toContain("Amount");

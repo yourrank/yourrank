@@ -24,7 +24,7 @@ describe("demo credibility invariants", () => {
     const data = demoLeaderboardData();
     expect(data.rankBy).toBe("score");
     expect(data.brand.prizePool).toBe("");
-    expect(data.players.every((player) => player.score > 0 && player.wagered === 0 && player.prize === 0)).toBe(true);
+    expect(data.players.every((player) => player.score > 0 && player.amount === 0 && player.prize === 0)).toBe(true);
 
     const html = await render("leaderboard", data);
     expect(html).toContain("Points");

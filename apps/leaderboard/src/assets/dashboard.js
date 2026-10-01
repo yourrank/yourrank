@@ -159,7 +159,7 @@ async function init() {
   state.PUBLISHED_AT = p.publishedAt || null;
   state.PUBLISHED = !!p.published;
   state.IS_DRAFT = !!p.isDraft;
-  state.RANK_BY = p.data?.rankBy === "wagered" ? "wagered" : "score";
+  state.RANK_BY = p.data?.rankBy === "amount" ? "amount" : "score";
   state.ONBOARDING = p.onboarding || {};
   state.SAMPLE_PLAYERS = Boolean(p.data?.samplePlayers);
   setQuickActionsSite({ id: state.ACTIVE_SITE_ID, slug: state.SLUG, published: state.PUBLISHED && state.ME.emailVerified !== false });
@@ -192,7 +192,7 @@ async function init() {
   if (hasEditor) {
     $("f_name").value = b.name || "";
     $("f_tagline").value = b.tagline || "";
-    $("f_casino").value = b.casino || "";
+    $("f_sponsor").value = b.sponsor || "";
     $("f_code").value = b.code || "";
     $("f_cta").value = b.ctaUrl || "";
     $("f_pool").value = b.prizePool || "";
@@ -200,7 +200,7 @@ async function init() {
     $("f_rank_by").value = state.RANK_BY;
     if ($("playerSort")) $("playerSort").value = state.RANK_BY;
     $("f_rank_by").addEventListener("change", () => {
-      setState({ RANK_BY: $("f_rank_by").value === "wagered" ? "wagered" : "score" });
+      setState({ RANK_BY: $("f_rank_by").value === "amount" ? "amount" : "score" });
       applyPlayerFieldVisibility();
       if ($("playerSort")) {
         $("playerSort").value = state.RANK_BY;
@@ -248,7 +248,7 @@ async function init() {
     if (arToggle) {
       arToggle.checked = !!(p.autoReset && p.autoReset.enabled);
       if (arClear) {
-        arClear.value = (p.autoReset && p.autoReset.clear) || "wagers";
+        arClear.value = (p.autoReset && p.autoReset.clear) || "amount";
         arClear.disabled = !arToggle.checked;
       }
       arToggle.addEventListener("change", () => { if (arClear) arClear.disabled = !arToggle.checked; });
@@ -400,10 +400,10 @@ function wireStreamerHud() {
           // Trigger a quick highlight flash
           setTimeout(() => {
             row.style.animation = "bg-flash 1s ease-out";
-            const wagerInput = row.querySelector(".p-wager");
-            if (wagerInput) {
-              wagerInput.focus();
-              wagerInput.select();
+            const amountInput = row.querySelector(".p-amount");
+            if (amountInput) {
+              amountInput.focus();
+              amountInput.select();
             } else {
               input.focus();
             }

@@ -50,7 +50,7 @@ const saveDeps = (siteRow) => ({
     unsafe: (text, params = []) => tx.unsafe(text, params),
   })),
   getBoardById: async () => siteRow,
-  getPlayers: async () => run("SELECT name, score, hands, sort AS rank FROM players WHERE site_id=$1", [siteRow.id]),
+  getPlayers: async () => run("SELECT name, amount, score, sort AS rank FROM players WHERE site_id=$1", [siteRow.id]),
   invalidateSiteCache: () => {},
   invalidatePublicBoardCache: () => {},
   logAudit: async () => {},
@@ -59,7 +59,7 @@ const saveDeps = (siteRow) => ({
 });
 const owner = () => ({ id: ownerId, plan: "pro", plan_expires_at: Date.now() + 86_400_000 * 30, status: "active" });
 const minimalPayload = { brand: { name: "API Board", period: "Monthly" }, partner: {} };
-const playersOf = (id) => sql`SELECT name, score, wagered FROM players WHERE site_id=${id} ORDER BY sort`;
+const playersOf = (id) => sql`SELECT name, score, amount FROM players WHERE site_id=${id} ORDER BY sort`;
 
 describe("API key scope + idempotency (Postgres)", () => {
   integrationIt("persists a board scope on postback_keys and round-trips it", async () => {
@@ -111,7 +111,7 @@ describe("API key scope + idempotency (Postgres)", () => {
     expect(names).toContain("Alpha");
     expect(names).toContain("Beta");
     // A third merge updates one player and creates another; totals accumulate.
-    const c = await saveSite({}, owner(), minimalPayload, siteId, null, { scorePatch: [{ name: "alpha", score: 99 }, { name: "Gamma", wagered: 5 }], deps: saveDeps(siteRow) });
+    const c = await saveSite({}, owner(), minimalPayload, siteId, null, { scorePatch: [{ name: "alpha", score: 99 }, { name: "Gamma", amount: 5 }], deps: saveDeps(siteRow) });
     expect(c.patch).toEqual({ total: 3, updated: 1, created: 1 });
     const rows = await playersOf(siteId);
     expect(rows).toHaveLength(3);

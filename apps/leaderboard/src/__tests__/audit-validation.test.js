@@ -268,7 +268,7 @@ describe("saveSite Free player limit", () => {
   const SITE = { id: "site-1", slug: "x", user_id: "user-1", cta_url: "", published: true, updated_at: null };
   const players = (count) => Array.from({ length: count }, (_, index) => ({
     name: `Player ${index + 1}`,
-    wagered: count - index,
+    amount: count - index,
     prize: 0,
   }));
 

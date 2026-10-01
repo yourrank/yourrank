@@ -19,22 +19,13 @@ import {
 } from "@yourrank/shared/api-idempotency";
 import { z } from "@yourrank/shared/validation";
 import { validateAndNormalizePlayers } from "../player-rules.js";
-import { SCORE_MAX, WIN_RATE_MAX, INT32_MAX, INT32_MIN } from "../player-rules.js";
+import { normalizeLegacyPublicInput } from "@yourrank/shared/legacy-schema";
+import { SCORE_MAX, INT32_MAX, INT32_MIN } from "../player-rules.js";
 
 const scoreNumber = z
   .union([z.number(), z.string()])
   .transform((value) => Number(value))
   .pipe(z.number().finite().min(0).max(SCORE_MAX));
-
-const signedNumber = z
-  .union([z.number(), z.string()])
-  .transform((value) => Number(value))
-  .pipe(z.number().finite().min(-SCORE_MAX).max(SCORE_MAX));
-
-const signedRateNumber = z
-  .union([z.number(), z.string()])
-  .transform((value) => Number(value))
-  .pipe(z.number().finite().min(-WIN_RATE_MAX).max(WIN_RATE_MAX));
 
 const intNumber = z
   .union([z.number(), z.string()])
@@ -43,12 +34,9 @@ const intNumber = z
 
 const playerEntry = z.object({
   name: z.string().trim().min(1).max(80),
-  wagered: scoreNumber.optional(),
+  amount: scoreNumber.optional(),
   prize: scoreNumber.optional(),
   score: scoreNumber.optional(),
-  hands: intNumber.optional(),
-  netProfit: signedNumber.optional(),
-  winRate: signedRateNumber.optional(),
   change: intNumber.optional(),
 }).strict();
 
@@ -68,22 +56,22 @@ const noDuplicateNames = (body, ctx) => {
 };
 
 export const scoreBodySchema = z
-  .object({
+  .preprocess(normalizeLegacyPublicInput, z.object({
     slug: z.string().trim().min(1).max(80).optional(),
     siteId: z.string().uuid().optional(),
     players: z.array(playerEntry).max(9999),
   })
   .strict()
-  .superRefine(noDuplicateNames);
+  .superRefine(noDuplicateNames));
 
 export const scorePatchBodySchema = z
-  .object({
+  .preprocess(normalizeLegacyPublicInput, z.object({
     slug: z.string().trim().min(1).max(80).optional(),
     siteId: z.string().uuid().optional(),
     players: z.array(playerEntry).min(1).max(9999),
   })
   .strict()
-  .superRefine(noDuplicateNames);
+  .superRefine(noDuplicateNames));
 
 // Shared pipeline for POST (bulk replace) and PATCH (incremental) /api/scores:
 // auth -> rate limit -> HMAC -> owner -> schema -> board resolve + key scope ->
@@ -134,7 +122,7 @@ async function handleScoreWrite(request, env, deps, { method, rateLimitPerMinute
     // board reference (slug or siteId, in body or X-Postback-Site header).
     const boardRef = body.slug || body.siteId || request.headers.get("x-postback-site");
     if (!boardRef || typeof boardRef !== "string") return bad("Missing board slug or siteId. Use body.slug, body.siteId, or X-Postback-Site header.", 400);
-    const site = await one("SELECT s.id, s.user_id, s.slug, s.name, s.tagline, s.casino, s.code, s.cta_url, s.prize_pool, s.period, s.starts_at, s.ends_at, s.reset_note, s.blurb, s.extra_json, s.published, s.theme_json, s.updated_at FROM sites s WHERE s.user_id=$1 AND (s.slug=$2 OR s.id::text=$2)", [keyOwner.userId, boardRef]);
+    const site = await one("SELECT s.id, s.user_id, s.slug, s.name, s.tagline, s.sponsor, s.code, s.cta_url, s.prize_pool, s.period, s.starts_at, s.ends_at, s.reset_note, s.blurb, s.extra_json, s.published, s.theme_json, s.updated_at FROM sites s WHERE s.user_id=$1 AND (s.slug=$2 OR s.id::text=$2)", [keyOwner.userId, boardRef]);
     if (!site) return bad("Invalid postback key or board reference.", 401);
     if (keyOwner.siteId && keyOwner.siteId !== site.id) return bad("This API key is scoped to another board.", 403);
     // Gate behind the signed_api feature (site owner's plan decides).
@@ -193,7 +181,7 @@ async function handleScoreWrite(request, env, deps, { method, rateLimitPerMinute
 }
 
 const brandPayload = (site) => ({
-  brand: { name: site.name, tagline: site.tagline, casino: site.casino, code: site.code, ctaUrl: site.cta_url, prizePool: site.prize_pool, period: site.period, resetNote: site.reset_note },
+  brand: { name: site.name, tagline: site.tagline, sponsor: site.sponsor, code: site.code, ctaUrl: site.cta_url, prizePool: site.prize_pool, period: site.period, resetNote: site.reset_note },
   partner: { blurb: site.blurb },
 });
 

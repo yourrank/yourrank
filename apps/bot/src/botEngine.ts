@@ -48,7 +48,7 @@ interface OfferRow {
   promo_code: string | null;
   bonus_text: string | null;
   referral_url: string;
-  casino_name: string;
+  partner_name: string;
   slug: string | null;
 }
 
@@ -163,12 +163,12 @@ export function wireHandlers(bot: Bot, botRow: BotRow, env?: any): void {
   async function sendLeaderboardTop(ctx: Context): Promise<void> {
     const site = await getOwnerSite();
     if (!site) { await ctx.reply("This bot doesn't have an active leaderboard yet."); return; }
-    const players = await query<{ name: string; wagered: number }>(
-      `SELECT name, wagered FROM players WHERE site_id = $1 ORDER BY wagered DESC LIMIT 5`,
+    const players = await query<{ name: string; amount: number }>(
+      `SELECT name, amount FROM players WHERE site_id = $1 ORDER BY amount DESC LIMIT 5`,
       [site.id]
     );
     if (!players.length) { await ctx.reply("This leaderboard is empty. Ask the streamer to add players!"); return; }
-    const lines = players.map((p, i) => `${i + 1}. ${p.name} — ${fmtMoney(p.wagered)}`);
+    const lines = players.map((p, i) => `${i + 1}. ${p.name} — ${fmtMoney(p.amount)}`);
     const url = config.publicBaseUrl ? `${config.publicBaseUrl}/${site.slug}` : "";
     let msg = `🏆 ${site.name || "Leaderboard"}'s Leaderboard\n${lines.join("\n")}`;
     if (url) msg += `\n\n🔗 ${url}`;
@@ -364,13 +364,13 @@ export function wireHandlers(bot: Bot, botRow: BotRow, env?: any): void {
     // Compute the exact ordinal and total in the database rather than loading
     // up to 1,000 players into the Worker. The id tie-breaker makes equal
     // amount values deterministic while preserving one position per player.
-    const player = await one<{ name: string; wagered: number; rank: number; total: number }>(
-      `SELECT p.name, p.wagered,
+    const player = await one<{ name: string; amount: number; rank: number; total: number }>(
+      `SELECT p.name, p.amount,
               (
                 SELECT count(*) FROM players ahead
                  WHERE ahead.site_id = p.site_id
-                   AND (ahead.wagered > p.wagered
-                     OR (ahead.wagered = p.wagered AND ahead.id < p.id))
+                   AND (ahead.amount > p.amount
+                     OR (ahead.amount = p.amount AND ahead.id < p.id))
               )::int + 1 AS rank,
               (SELECT count(*) FROM players total WHERE total.site_id = p.site_id)::int AS total
          FROM players p
@@ -390,7 +390,7 @@ export function wireHandlers(bot: Bot, botRow: BotRow, env?: any): void {
     const displayName = site.name || "this streamer";
     const url = config.publicBaseUrl ? `${config.publicBaseUrl}/${site.slug}` : "";
 
-    let msg = `🏆 @${username} is ranked #${player.rank} of ${player.total} on ${displayName}'s leaderboard! Amount: ${fmtMoney(player.wagered)}`;
+    let msg = `🏆 @${username} is ranked #${player.rank} of ${player.total} on ${displayName}'s leaderboard! Amount: ${fmtMoney(player.amount)}`;
     if (url) msg += `\n\n🔗 ${url}`;
 
     await ctx.reply(msg, {
@@ -416,8 +416,8 @@ export function wireHandlers(bot: Bot, botRow: BotRow, env?: any): void {
       return;
     }
 
-    const players = await query<{ name: string; wagered: number }>(
-      `SELECT name, wagered FROM players WHERE site_id = $1 ORDER BY wagered DESC LIMIT 5`,
+    const players = await query<{ name: string; amount: number }>(
+      `SELECT name, amount FROM players WHERE site_id = $1 ORDER BY amount DESC LIMIT 5`,
       [site.id]
     );
 
@@ -430,7 +430,7 @@ export function wireHandlers(bot: Bot, botRow: BotRow, env?: any): void {
 
     const displayName = site.name || "Leaderboard";
     const lines = players.map(
-      (p, i) => `${i + 1}. ${p.name} — ${fmtMoney(p.wagered)}`
+      (p, i) => `${i + 1}. ${p.name} — ${fmtMoney(p.amount)}`
     );
 
     const url = config.publicBaseUrl ? `${config.publicBaseUrl}/${site.slug}` : "";
@@ -508,9 +508,9 @@ export async function syncMyCommandsForBot(botId: string): Promise<void> {
 async function sendOffers(ctx: Context, botRow: BotRow): Promise<void> {
   const offers = await query<OfferRow>(
     `SELECT o.id, o.label, o.promo_code, o.bonus_text, o.referral_url,
-            c.name AS casino_name, sl.slug
+            c.name AS partner_name, sl.slug
        FROM offers o
-       JOIN casinos c ON c.id = o.casino_id
+       JOIN partners c ON c.id = o.partner_id
        LEFT JOIN LATERAL (
          SELECT slug FROM short_links
           WHERE offer_id = o.id AND source = 'telegram'
@@ -540,7 +540,7 @@ async function sendOffers(ctx: Context, botRow: BotRow): Promise<void> {
       ? `${config.publicBaseUrl}/r/${offer.slug}${u}`
       : offer.referral_url;
     const kb = new InlineKeyboard().url(
-      `Claim at ${offer.casino_name}`,
+      `Claim at ${offer.partner_name}`,
       buttonUrl
     );
 

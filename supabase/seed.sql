@@ -23,7 +23,7 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Sites ────────────────────────────────────────────────────────────────
-INSERT INTO sites (id, user_id, slug, name, tagline, casino, code, prize_pool, period, published, extra_json, theme_json)
+INSERT INTO sites (id, user_id, slug, name, tagline, sponsor, code, prize_pool, period, published, extra_json, theme_json)
 VALUES
   ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002',
    'testboard', 'Test Leaderboard', 'Community standings for streamers', 'Acme', 'WELCOME',
@@ -43,7 +43,7 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Players ──────────────────────────────────────────────────────────────
-INSERT INTO players (id, site_id, name, wagered, prize, sort)
+INSERT INTO players (id, site_id, name, amount, prize, sort)
 VALUES
   ('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'StreamChampion', 152000, 1500, 1),
   ('c0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'CommunityBuilder', 98000, 700, 2),
@@ -83,22 +83,22 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Leads ────────────────────────────────────────────────────────────────
-INSERT INTO leads (id, handle, casino, contact, note)
+INSERT INTO leads (id, handle, brand, contact, note)
 VALUES
   ('10000000-0000-0000-0000-000000000001', 'streamer_42', 'Acme', 'tg:@streamer_42', 'Creator interested in Pro'),
   ('10000000-0000-0000-0000-000000000002', 'community_creator', 'Northstar', 'email:fan@example.com', 'Community account')
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Partners ──────────────────────────────────────────────────────────────
-INSERT INTO casinos (id, name, slug, website_url, is_global, created_by)
+INSERT INTO partners (id, name, slug, website_url, is_global, created_by)
 VALUES
   ('11500000-0000-0000-0000-000000000001', 'Acme', 'acme', 'https://example.com/acme', true, 'a0000000-0000-0000-0000-000000000002'),
   ('11500000-0000-0000-0000-000000000002', 'Northstar', 'northstar', 'https://example.com/northstar', true, 'a0000000-0000-0000-0000-000000000002'),
   ('11500000-0000-0000-0000-000000000003', 'Brightside', 'brightside', 'https://example.com/brightside', true, 'a0000000-0000-0000-0000-000000000004')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET name = partners.name;
 
 -- ── Offers ───────────────────────────────────────────────────────────────
-INSERT INTO offers (id, owner_id, casino_id, label, referral_url, bonus_text, promo_code, is_active)
+INSERT INTO offers (id, owner_id, partner_id, label, referral_url, bonus_text, promo_code, is_active)
 VALUES
   ('11000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002',
    '11500000-0000-0000-0000-000000000001', 'Welcome offer', 'https://example.com/acme/welcome', 'A welcome offer for your community', 'WELCOME', true),
@@ -145,7 +145,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO archives (id, site_id, label, snapshot_json)
 VALUES
   ('17000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001',
-   'June 2026', '{"players":[{"name":"OldKing","wagered":100000,"prize":1000}]}'::jsonb)
+   'June 2026', '{"players":[{"name":"OldKing","amount":100000,"prize":1000}]}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Site Stats ───────────────────────────────────────────────────────────

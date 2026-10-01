@@ -124,7 +124,7 @@ function row(values = {}) {
   name.value = values.name || "";
   const warning = nameCell.appendChild(new FakeElement("span", "field-warn"));
   warning.setAttribute("data-field-warning", "p-name");
-  for (const [className, key] of [["p-wager", "wagered"], ["p-prize", "prize"], ["p-score", "score"], ["p-hands", "hands"], ["p-net-profit", "netProfit"], ["p-win-rate", "winRate"], ["p-change", "change"]]) {
+  for (const [className, key] of [["p-amount", "amount"], ["p-prize", "prize"], ["p-score", "score"], ["p-change", "change"]]) {
     field(tr, className, values[key] || "");
   }
   return tr;
@@ -149,19 +149,19 @@ beforeAll(async () => {
 
 describe("Players CRUD validation", () => {
   it("preserves invalid numeric input and marks the offending cell", () => {
-    const rows = setupRows({ name: "Alice", wagered: "abc", prize: "-500" });
+    const rows = setupRows({ name: "Alice", amount: "abc", prize: "-500" });
     const result = players.collectPlayers({ focusInvalid: true });
-    expect(rows.querySelector(".p-wager").value).toBe("abc");
-    expect(rows.querySelector(".p-wager").getAttribute("aria-invalid")).toBe("true");
-    expect(rows.querySelector(".p-wager").closest("td").querySelector(".field-err").textContent).toContain("Enter a number from 0 to");
+    expect(rows.querySelector(".p-amount").value).toBe("abc");
+    expect(rows.querySelector(".p-amount").getAttribute("aria-invalid")).toBe("true");
+    expect(rows.querySelector(".p-amount").closest("td").querySelector(".field-err").textContent).toContain("Enter a number from 0 to");
     expect(result.invalid.map(({ label }) => label)).toEqual(["Amount", "Prize"]);
-    expect(fakeDocument.activeElement).toBe(rows.querySelector(".p-wager"));
+    expect(fakeDocument.activeElement).toBe(rows.querySelector(".p-amount"));
   });
 
   it("keeps empty numbers distinct from invalid numbers in collection", () => {
-    setupRows({ name: "Alice", wagered: "", prize: "abc", score: "" });
+    setupRows({ name: "Alice", amount: "", prize: "abc", score: "" });
     const result = players.collectPlayers();
-    expect(result.players[0].wagered).toBe(0);
+    expect(result.players[0].amount).toBe(0);
     expect(result.players[0]).not.toHaveProperty("score");
     expect(result.players[0]).not.toHaveProperty("prize");
     expect(result.invalid).toHaveLength(1);
@@ -170,10 +170,10 @@ describe("Players CRUD validation", () => {
   it("skips blank rows while collecting valid players", () => {
     const rows = setupRows({});
     const blankName = rows.children[0].querySelector(".p-name");
-    const blankWager = rows.children[0].querySelector(".p-wager");
+    const blankAmount = rows.children[0].querySelector(".p-amount");
     players.setPlayerFieldError(blankName, "Old name error");
-    players.setPlayerFieldError(blankWager, "Old wager error");
-    rows.appendChild(row({ name: "Alice", wagered: "5" }));
+    players.setPlayerFieldError(blankAmount, "Old amount error");
+    rows.appendChild(row({ name: "Alice", amount: "5" }));
 
     const result = players.collectPlayers();
 
@@ -181,11 +181,11 @@ describe("Players CRUD validation", () => {
     expect(result.players).toHaveLength(1);
     expect(result.players[0].name).toBe("Alice");
     expect(blankName.getAttribute("aria-invalid")).toBeNull();
-    expect(blankWager.getAttribute("aria-invalid")).toBeNull();
+    expect(blankAmount.getAttribute("aria-invalid")).toBeNull();
   });
 
   it("still rejects a number-only row without a player name", () => {
-    setupRows({ wagered: "5" });
+    setupRows({ amount: "5" });
 
     const result = players.collectPlayers();
 
@@ -194,9 +194,9 @@ describe("Players CRUD validation", () => {
   });
 
   it("does not report validation errors during preview collection", () => {
-    const rows = setupRows({ name: "Alice", wagered: "abc" });
+    const rows = setupRows({ name: "Alice", amount: "abc" });
     const result = players.collectPlayers({ reportErrors: false });
-    const input = rows.querySelector(".p-wager");
+    const input = rows.querySelector(".p-amount");
     const error = input.closest("td").querySelector(".field-err");
     expect(result.invalid).toHaveLength(1);
     expect(input.getAttribute("aria-invalid")).toBeNull();
@@ -205,12 +205,12 @@ describe("Players CRUD validation", () => {
   });
 
   it("returns visible quick-add validation errors for blank names and bad numbers", () => {
-    const blank = players.validateQuickAddValues({ name: "   ", wagered: "", prize: "" });
+    const blank = players.validateQuickAddValues({ name: "   ", amount: "", prize: "" });
     expect(blank.ok).toBe(false);
     expect(blank.errors[0]).toEqual({ field: "name", message: "Enter a player name." });
-    const invalid = players.validateQuickAddValues({ name: "Zoe", wagered: "abc", prize: "-5" });
+    const invalid = players.validateQuickAddValues({ name: "Zoe", amount: "abc", prize: "-5" });
     expect(invalid.ok).toBe(false);
-    expect(invalid.errors.map(({ field }) => field)).toEqual(["wagered", "prize"]);
+    expect(invalid.errors.map(({ field }) => field)).toEqual(["amount", "prize"]);
   });
 
   it("explains a reached player limit at the add control", () => {
@@ -220,23 +220,23 @@ describe("Players CRUD validation", () => {
 
   it("warns and blocks duplicate names as a validation failure", () => {
     const rows = register("rows", new FakeElement("tbody"));
-    rows.appendChild(row({ name: "Alice", wagered: "1", prize: "0" }));
-    rows.appendChild(row({ name: "alice", wagered: "2", prize: "0" }));
+    rows.appendChild(row({ name: "Alice", amount: "1", prize: "0" }));
+    rows.appendChild(row({ name: "alice", amount: "2", prize: "0" }));
     players.updateDuplicateWarnings();
     expect(rows.children[0].querySelector(".field-warn").textContent).toContain("Duplicate name");
     expect(players.collectPlayers().invalid).toHaveLength(2);
   });
 
   it("round-trips staged rows through per-site session storage and clears them", () => {
-    setupRows({ name: "Draft", wagered: "abc", prize: "" });
+    setupRows({ name: "Draft", amount: "abc", prize: "" });
     register("qa_name", Object.assign(new FakeElement("input"), { value: "Quick" }));
     register("qa_score", Object.assign(new FakeElement("input"), { value: "" }));
-    register("qa_wager", Object.assign(new FakeElement("input"), { value: "12" }));
+    register("qa_amount", Object.assign(new FakeElement("input"), { value: "12" }));
     register("qa_prize", Object.assign(new FakeElement("input"), { value: "" }));
     players.persistPlayersDraft();
     expect(players.loadPlayersDraft()).toEqual({
-      players: [{ name: "Draft", wagered: "abc", prize: "", score: "", hands: "", netProfit: "", winRate: "", change: "" }],
-      quickAdd: { name: "Quick", score: "", wagered: "12", prize: "" },
+      players: [{ name: "Draft", amount: "abc", prize: "", score: "", change: "" }],
+      quickAdd: { name: "Quick", score: "", amount: "12", prize: "" },
     });
     players.clearPlayersDraft();
     expect(players.loadPlayersDraft()).toBeNull();
@@ -244,7 +244,7 @@ describe("Players CRUD validation", () => {
 
   it("omits blank rows from persisted drafts", () => {
     const rows = setupRows({});
-    rows.appendChild(row({ name: "Alice", wagered: "5" }));
+    rows.appendChild(row({ name: "Alice", amount: "5" }));
 
     players.persistPlayersDraft();
 
@@ -255,11 +255,11 @@ describe("Players CRUD validation", () => {
   // A staged draft identical to the saved rows used to be restored and marked
   // dirty on the next render, so "Draft changes" reappeared with no user edit.
   it("only treats a staged draft as changes when it differs from the saved rows", () => {
-    const saved = [{ name: "Alice", wagered: 1000, prize: 0 }];
-    const identical = { players: [{ name: "Alice", wagered: "1,000", prize: "0" }], quickAdd: { name: "", wagered: "", prize: "" } };
+    const saved = [{ name: "Alice", amount: 1000, prize: 0 }];
+    const identical = { players: [{ name: "Alice", amount: "1,000", prize: "0" }], quickAdd: { name: "", amount: "", prize: "" } };
     expect(players.draftHasChanges(identical, saved)).toBe(false);
     expect(players.draftHasChanges({ ...identical, quickAdd: { name: "Zoe" } }, saved)).toBe(true);
-    expect(players.draftHasChanges({ players: [{ name: "Alice", wagered: "2000" }] }, saved)).toBe(true);
+    expect(players.draftHasChanges({ players: [{ name: "Alice", amount: "2000" }] }, saved)).toBe(true);
     expect(players.draftHasChanges({ players: [] }, saved)).toBe(true);
     expect(players.draftHasChanges(null, saved)).toBe(false);
   });
@@ -267,21 +267,21 @@ describe("Players CRUD validation", () => {
   // Formatting-only redraws must not create an unsaved change. Score is an
   // independent metric, so an empty saved score remains empty after redraw.
   it("does not read a redrawn table's formatting as a change", () => {
-    const saved = [{ name: "Alice", wagered: 1000, prize: 0 }];
+    const saved = [{ name: "Alice", amount: 1000, prize: 0 }];
     const redrawn = {
-      players: [{ name: "Alice", wagered: "$1,000.00", prize: "$0.00", score: "", hands: "", netProfit: "", winRate: "", change: "" }],
-      quickAdd: { name: "", score: "", wagered: "", prize: "" },
+      players: [{ name: "Alice", amount: "$1,000.00", prize: "$0.00", score: "", change: "" }],
+      quickAdd: { name: "", score: "", amount: "", prize: "" },
     };
     expect(players.draftHasChanges(redrawn, saved)).toBe(false);
     expect(players.draftHasChanges({ players: [{ ...redrawn.players[0], score: "5" }] }, saved)).toBe(true);
   });
 
   it("discard restores the saved snapshot and clears dirty state", () => {
-    dashboardState.SAVED_PLAYERS = [{ name: "Saved", wagered: 1, prize: 0 }];
+    dashboardState.SAVED_PLAYERS = [{ name: "Saved", amount: 1, prize: 0 }];
     dashboardState._dirty = true;
     let rendered;
     players.discardPlayersDraft({ render: (value) => { rendered = value; } });
-    expect(rendered).toEqual([{ name: "Saved", wagered: 1, prize: 0 }]);
+    expect(rendered).toEqual([{ name: "Saved", amount: 1, prize: 0 }]);
     expect(dashboardState._dirty).toBe(false);
   });
 });
