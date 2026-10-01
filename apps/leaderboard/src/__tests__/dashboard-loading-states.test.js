@@ -169,6 +169,7 @@ describe("dashboard loading states", () => {
     const shell = fs.readFileSync(path.resolve(assets, "../../../../packages/shared/src/page-shell.ts"), "utf8");
     const watchdog = read("dashboard-boot-watchdog.js");
     const giveawaysPage = fs.readFileSync(path.resolve(assets, "../react/pages/giveaways/page.tsx"), "utf8");
+    const tournamentsShim = read("tournaments.js");
     expect(shell).toContain("DASHBOARD_BOOT_WATCHDOG");
     expect(shell).toContain('/assets/dashboard-boot-watchdog.js?v=2');
     expect(watchdog).toContain("setTimeout(function ()");
@@ -180,6 +181,8 @@ describe("dashboard loading states", () => {
     expect(giveawaysPage).toContain("window.__yrBoot?.fail");
     expect(giveawaysPage).toContain("window.__yrBoot?.signal()");
     expect(giveawaysPage).not.toContain("await fetch(");
+    expect(tournamentsShim).toContain("window.__yrBoot?.fail");
+    expect(tournamentsShim).toContain("window.__yrBoot?.signal()");
   });
 
   it("ignores third-party boot errors but catches same-origin assets", () => {
