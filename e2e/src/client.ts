@@ -57,6 +57,12 @@ export class Client {
   ): Promise<ResponseLike> {
     const url = `${this.baseUrl}${path}`;
     const headers: Record<string, string> = { ...(opts.headers || {}) };
+    const accessClientId = process.env.E2E_CF_ACCESS_CLIENT_ID;
+    const accessClientSecret = process.env.E2E_CF_ACCESS_CLIENT_SECRET;
+    if (accessClientId && accessClientSecret) {
+      headers["CF-Access-Client-Id"] = accessClientId;
+      headers["CF-Access-Client-Secret"] = accessClientSecret;
+    }
     const cookie = this.cookieHeader();
     if (cookie) {
       headers["Cookie"] = cookie;
