@@ -484,6 +484,7 @@ export function renderPlan() {
   const subStatus = String(state.ME.subscriptionStatus || "").toLowerCase();
   const hasSubscription = Boolean(billingInfo?.hasSubscription);
   const planExpired = expiresMs != null && expiresMs <= Date.now();
+  const grantedPlan = plan !== "free" && !hasSubscription && !planExpired;
   const current = currentSubscription();
   if (current && !billingIntervalTouched) billingInterval = current.interval;
 
@@ -493,6 +494,19 @@ export function renderPlan() {
     chipLabel = "Free";
     chipClass = "";
     dateLine = "No paid features. Upgrade to add capacity.";
+  } else if (grantedPlan) {
+    if (isTrial) {
+      chipLabel = "Trial";
+      chipClass = "v3-chip--pending";
+      dateLine = expiryDate
+        ? `Trial ends ${expiryDate}. No charge — it doesn't renew.`
+        : "Granted plan — no renewal and no charges.";
+    } else {
+      chipLabel = "Active";
+      dateLine = expiryDate
+        ? `Access until ${expiryDate}. This plan doesn't renew, so you won't be charged.`
+        : "Granted plan — no renewal and no charges.";
+    }
   } else if (isTrial) {
     chipLabel = "Trial";
     chipClass = "v3-chip--pending";
@@ -573,16 +587,24 @@ export function renderPlan() {
       const isCurrent = p.key === plan;
       const isLower = pIdx < currentIdx;
       const available = billingInfo?.options?.[p.key]?.[billingInterval];
-      let cta, accent = false;
+      let cta, accent = false, action = "checkout", disabled = false;
       if (isCurrent) {
         cta = "Current plan";
+        disabled = true;
+      } else if (grantedPlan && p.key === "free") {
+        cta = "Switch to Free now";
+        action = "end-access";
       } else if (isLower) {
-        cta = `Downgrade to ${p.name}`;
+        cta = grantedPlan
+          ? expiryDate ? `Available after ${expiryDate}` : "Switch to Free first"
+          : `Downgrade to ${p.name}`;
+        disabled = true;
       } else {
         cta = billingInfo?.hasSubscription ? "Manage in Polar" : available ? `Get ${p.name}` : "Checkout coming soon";
         accent = p.key === "pro";
+        disabled = !available || !!billingInfo?.hasSubscription;
       }
-      return renderPlanCard(p, isCurrent, cta, { accent: accent && !isCurrent, disabled: isCurrent || isLower || !available || !!billingInfo?.hasSubscription });
+      return renderPlanCard(p, isCurrent, cta, { action, accent: accent && !isCurrent, disabled });
     }).join("");
     if (!grid._wired) {
       grid.addEventListener("click", (e) => {
@@ -590,6 +612,53 @@ export function renderPlan() {
         if (!btn || btn.disabled) return;
         const action = btn.dataset.action || "checkout";
         if (action === "checkout") return checkout(btn.dataset.plan, btn);
+        if (action === "end-access") {
+          if (billingBusy) return;
+          const activePlan = state.ME.plan || "free";
+          const activePlanName = planNames[activePlan] || activePlan;
+          const trial = Boolean(state.ME.isTrial);
+          const activeExpiry = state.ME.planExpiresAt;
+          const activeExpiryMs = activeExpiry ? (Number(activeExpiry) > 0 ? Number(activeExpiry) : Date.parse(activeExpiry)) : NaN;
+          const activeExpiryDate = Number.isFinite(activeExpiryMs) && activeExpiryMs
+            ? new Date(activeExpiryMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+            : null;
+          const details = {
+            title: "Switch to Free now",
+            rows: [
+              ["Current plan", `${activePlanName} · ${trial ? "Trial" : "Access grant"}`],
+              ["New plan", "Free — $0"],
+              ["Takes effect", "Immediately"],
+            ],
+            body: `You lose ${activePlanName} features now${activeExpiryDate ? ` instead of on ${activeExpiryDate}` : ""}. Nothing is deleted — you just can't add more than Free allows. This can't be undone${trial ? ", and the free trial can't be restarted" : ""}.`,
+            confirmText: "Switch to Free",
+            danger: true,
+          };
+          return confirmPlanChange(details).then(async (confirmed) => {
+            if (!confirmed) return;
+            billingBusy = true;
+            const status = $("billingStatus");
+            const label = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Updating…";
+            if (status) status.textContent = "Switching your plan to Free…";
+            try {
+              await fetchDashboardJson("/api/billing/end-access", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json", "x-csrf-token": getCsrf() },
+              });
+              await loadPlanUsage();
+              showToast("You're now on Free.", "success");
+            } catch (error) {
+              const message = error.message || "Couldn't switch to Free. Try again.";
+              if (status) status.textContent = message;
+              showToast(message, "error");
+            } finally {
+              billingBusy = false;
+              if (btn.isConnected) { btn.disabled = false; btn.textContent = label; }
+            }
+          });
+        }
         const cur = currentSubscription();
         if (!cur || action === "none") return;
         if (action === "keep") return requestPlanChange({ action: "keep" }, cur, null, { kind: "keep", timing: "none", label: "Keep current plan" }, btn);
