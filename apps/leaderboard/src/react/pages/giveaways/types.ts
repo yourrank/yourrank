@@ -66,6 +66,7 @@ export type GiveawayDraw = {
   replaced_username?: string | null;
   reason?: string | null;
   drawn_at?: string | null;
+  confirmed_at?: string | null;
 };
 
 export type ChatGiveawayPayload = {

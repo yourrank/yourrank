@@ -100,13 +100,18 @@ describe("kickChatMessageToIngestInput", () => {
 function fakeDb(sessionsByChannel: Record<string, Array<{ id: string; site_id: string; keyword: string; status: string }>>) {
   const entries = new Set<string>();
   const inserts: unknown[][] = [];
+  const updates: { sql: string; params: unknown[] }[] = [];
   const run = async (sql: string, params: unknown[] = []) => {
     if (sql.startsWith("SELECT gs.id")) {
       const [provider, channel] = params as [string, string];
       expect(provider).toBe("kick");
       expect(sql).toContain("AND gs.provider = $1");
+      expect(sql).toContain("gs.status IN ('stopped','completed')");
       return (sessionsByChannel[channel] || []).map((s) => ({
-        ...s, winner_entry_id: null, winner_confirmed_at: null, winner_provider_user_id: null,
+        ...s,
+        winner_entry_id: s.winner_entry_id ?? null,
+        winner_confirmed_at: s.winner_confirmed_at ?? null,
+        winner_provider_user_id: s.winner_provider_user_id ?? null,
       }));
     }
     if (sql.startsWith("INSERT INTO chat_giveaway_entries")) {
@@ -116,6 +121,10 @@ function fakeDb(sessionsByChannel: Record<string, Array<{ id: string; site_id: s
       entries.add(key);
       return [{ id: crypto.randomUUID() }];
     }
+    if (sql.startsWith("UPDATE chat_giveaway_sessions")) {
+      updates.push({ sql, params });
+      return [{ id: "gs-a" }];
+    }
     // giveawayParticipantFacts runs for every matched keyword (linked-account
     // restriction applies even in chat mode).
     if (sql.includes("AS linked_restricted")) {
@@ -123,7 +132,7 @@ function fakeDb(sessionsByChannel: Record<string, Array<{ id: string; site_id: s
     }
     throw new Error(`unexpected sql: ${sql}`);
   };
-  return { run, entries, inserts };
+  return { run, entries, inserts, updates };
 }
 
 const message = (channel: string, user: string, content: string) => ({
@@ -160,6 +169,25 @@ describe("ingestChatGiveawayMessage", () => {
     expect(other).toMatchObject({ entered: true });
     expect(db.entries.size).toBe(2);
     expect(db.inserts.every((params) => params[2] === "u1" || params[2] === "u9")).toBe(true);
+  });
+
+  it("accepts an active winner's keyword reply and still claims the winner", async () => {
+    const db = fakeDb({
+      "chan-a": [{
+        id: "gs-a", site_id: "site-a", keyword: "!win", status: "active",
+        winner_entry_id: "e1", winner_confirmed_at: null, winner_provider_user_id: "u1",
+      }],
+    });
+    const winner = await ingestChatGiveawayMessage(db.run, message("chan-a", "u1", "!win"));
+    expect(winner).toMatchObject({
+      routed: true, matched: true, entered: true, winnerConfirmed: true, sessionId: "gs-a",
+    });
+    expect(db.updates).toHaveLength(1);
+    expect(db.updates[0].sql).toContain("status IN ('active','stopped','completed')");
+
+    const nonWinner = await ingestChatGiveawayMessage(db.run, message("chan-a", "u2", "!win"));
+    expect(nonWinner).toMatchObject({ matched: true, entered: true, winnerConfirmed: false, sessionId: "gs-a" });
+    expect(db.entries.size).toBe(2);
   });
 
   it("never routes channel A's chat into another site's giveaway", async () => {

@@ -166,22 +166,43 @@ globalThis.fetch = async (input, init = {}) => {
     });
     return json(statePayload());
   }
+  if (path === "/api/giveaways/chat/entries/clear") {
+    server.entries = [];
+    for (const draw of server.drawRows) draw.entry_id = null;
+    Object.assign(server.session, {
+      winner_entry_id: null,
+      drawn_at: null,
+      winner_confirmed_at: null,
+      winner_confirmation_message: null,
+      winner_finalized_at: null,
+      winner_finalized_by: null,
+      winner_response_deadline: null,
+      auto_reroll_exhausted_at: null,
+    });
+    return json(statePayload());
+  }
   if (path === "/api/giveaways/chat/draw") {
     // CAS: the draw only lands on the identity the client claimed to see
     // (null/null = "no draw yet").
     const expectedId = body?.expectedWinnerEntryId ?? null;
     const expectedDrawn = body?.expectedDrawnAt ?? null;
-    const mismatch = expectedId === null
-      ? server.session.winner_entry_id !== null
-      : server.session.winner_entry_id !== expectedId
-        || Date.parse(server.session.drawn_at) !== Date.parse(expectedDrawn);
+    const isNext = body?.next === true;
+    if (isNext && !server.session.winner_finalized_at) {
+      return json({ ok: false, error: "Confirm or re-roll the current winner first.", session: server.session, entries: server.entries, winner: winnerEntry() }, 409);
+    }
+    const mismatch = isNext
+      ? expectedId !== server.session.winner_entry_id || Date.parse(server.session.drawn_at) !== Date.parse(expectedDrawn)
+      : expectedId === null
+        ? server.session.winner_entry_id !== null
+        : server.session.winner_entry_id !== expectedId
+          || Date.parse(server.session.drawn_at) !== Date.parse(expectedDrawn);
     if (mismatch) {
       const error = server.session.winner_finalized_at
         ? "This winner is already confirmed and cannot be re-rolled."
         : "The giveaway draw changed. Refresh the current draw before drawing again.";
       return json({ ok: false, error, session: server.session, entries: server.entries, winner: winnerEntry() }, 409);
     }
-    if (expectedId !== null && server.session.winner_finalized_at) {
+    if (expectedId !== null && server.session.winner_finalized_at && !isNext) {
       return json({ ok: false, error: "This winner is already confirmed and cannot be re-rolled.", session: server.session, entries: server.entries, winner: winnerEntry() }, 409);
     }
     // The server picks from eligible entries; the persisted winnerRepeat rule
@@ -207,18 +228,20 @@ globalThis.fetch = async (input, init = {}) => {
     // A manually-added winner has no chat identity to respond with.
     const required = rules.winnerMustRespond === true && winner.provider !== "manual";
     const timeout = required ? (rules.responseTimeout || 60) : null;
-    const replacedId = server.session.winner_entry_id;
+    const replacedId = isNext ? null : server.session.winner_entry_id;
     server.drawRows.push({
       id: `draw-${server.drawRows.length + 1}`,
       entry_id: winner.id,
-      reason: body?.automatic === true ? "auto_reroll" : expectedId !== null ? "reroll" : "draw",
+      reason: body?.automatic === true ? "auto_reroll" : expectedId !== null && !isNext ? "reroll" : "draw",
       drawn_at: new Date(now).toISOString(),
       replaced_entry_id: replacedId,
       username: winner.username,
       replaced_username: server.entries.find((e) => e.id === replacedId)?.username || null,
+      confirmed_at: null,
     });
     Object.assign(server.session, {
-      winner_entry_id: winner.id, drawn_at: new Date(now).toISOString(), status: "completed",
+      winner_entry_id: winner.id, drawn_at: new Date(now).toISOString(),
+      status: server.session.status === "active" ? "active" : "completed",
       winner_confirmed_at: null, winner_confirmation_message: null,
       winner_finalized_at: null, winner_finalized_by: null,
       winner_response_required: required,
@@ -233,8 +256,8 @@ globalThis.fetch = async (input, init = {}) => {
     if (!body?.sessionId) return json({ ok: false, error: "Missing sessionId" }, 400);
     const s = server.session;
     if (!s || s.id !== body.sessionId) return json({ ok: false, error: "Giveaway not found" }, 404);
-    if (s.provider !== "kick" || s.status === "cancelled" || s.winner_finalized_at) {
-      return json({ ok: false, error: "Winner verification can't change after the winner is confirmed or the giveaway ends." }, 409);
+    if (s.provider !== "kick" || s.status === "cancelled") {
+      return json({ ok: false, error: "Winner verification can't change after the giveaway ends." }, 409);
     }
     if (body.autoReroll && !body.winnerMustRespond) return json({ ok: false, error: "Auto re-roll requires winner response verification." }, 400);
     s.rules = { ...(s.rules || {}), winnerMustRespond: !!body.winnerMustRespond, responseTimeout: body.responseTimeout || 60, autoReroll: !!body.autoReroll };
@@ -254,6 +277,8 @@ globalThis.fetch = async (input, init = {}) => {
       return json({ ok: false, error: "The winner must respond in chat before you can confirm.", session: server.session }, 409);
     }
     Object.assign(server.session, { winner_finalized_at: "2026-09-28T00:02:00Z", winner_finalized_by: user.id });
+    const latestDraw = [...server.drawRows].reverse().find((draw) => draw.entry_id === server.session.winner_entry_id);
+    if (latestDraw) latestDraw.confirmed_at = server.session.winner_finalized_at;
     return json(statePayload());
   }
   if (path === "/api/predictions") {
@@ -547,6 +572,102 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-winner-modal")).toBeNull();
     expect($id("gw-claim-box")).toBeNull();
     expect($id("gw-modal-claim-box")).toBeNull();
+  });
+
+  it("keeps an active giveaway live and lets the confirmed winner lead to a next draw", async () => {
+    server.session.status = "active";
+    await boot();
+    await drawWinner();
+
+    expect($id("gw-setup-card").textContent).toContain("LIVE");
+    expect($id("gw-btn-clear").disabled).toBe(true);
+    const firstWinner = server.session.winner_entry_id;
+    await clickAndFlush("gw-btn-confirm");
+    expect(server.drawRows.at(-1).confirmed_at).toBe(server.session.winner_finalized_at);
+    expect($id("gw-winner-stage").textContent).toContain("Winner confirmed");
+    expect($id("gw-btn-roll").hidden).toBe(false);
+    expect($id("gw-btn-roll").textContent.trim()).toBe("Draw next winner");
+
+    await clickAndFlush("gw-btn-roll");
+    await clock.tick(1_000);
+    const rouletteNames = [...document.querySelectorAll(".gw-roulette-item")].map((item) => item.textContent.trim());
+    expect(rouletteNames).not.toContain(`@${server.entries.find((entry) => entry.id === firstWinner).username}`);
+    await tickUntilReveal();
+    const draws = requestsTo("/api/giveaways/chat/draw");
+    expect(draws).toHaveLength(2);
+    expect(draws[1].body).toMatchObject({
+      next: true,
+      expectedWinnerEntryId: firstWinner,
+    });
+    expect(server.session.winner_entry_id).not.toBe(firstWinner);
+    expect(server.drawRows.at(-1)).toMatchObject({ reason: "draw", replaced_entry_id: null });
+    expect($id("gw-draw-history-list").textContent).toContain("Confirmed");
+    expect($id("gw-setup-card").textContent).toContain("LIVE");
+  });
+
+  it("clears participants while preserving confirmed draw history", async () => {
+    server.drawRows.push({
+      id: "draw-kept",
+      entry_id: "e1",
+      username: "prior-winner",
+      reason: "draw",
+      drawn_at: "2026-09-28T00:01:00Z",
+      confirmed_at: "2026-09-28T00:02:00Z",
+    });
+    server.draws.push("e1");
+    const keyword = server.session.keyword;
+    await boot();
+
+    expect($id("gw-btn-clear").disabled).toBe(false);
+    await clickAndFlush("gw-btn-clear");
+    const dialog = document.querySelector('[role="alertdialog"]');
+    expect(dialog.textContent).toContain("Clear all participants?");
+    expect(dialog.textContent).toContain("Everyone will need to type the keyword again. Winners stay in the Winners list.");
+    const clearAction = [...dialog.querySelectorAll("button")].find((button) => button.textContent.trim() === "Clear list");
+    expect(clearAction).toBeTruthy();
+    await clickGiveaways(clearAction);
+    await clock.tick(0);
+
+    const clearRequest = requestsTo("/api/giveaways/chat/entries/clear").at(-1);
+    expect(clearRequest.method).toBe("POST");
+    expect(clearRequest.body).toMatchObject({ sessionId: "gs-1", siteId: "site-1" });
+    expect(server.entries).toHaveLength(0);
+    expect(server.session.keyword).toBe(keyword);
+    expect(server.drawRows).toHaveLength(1);
+    expect(server.drawRows[0]).toMatchObject({ entry_id: null, username: "prior-winner" });
+    expect($id("gw-draw-history-list").textContent).toContain("prior-winner");
+    expect($id("gw-btn-clear").disabled).toBe(true);
+  });
+
+  it("keeps Clear list disabled while the current winner is awaiting confirmation", async () => {
+    await boot();
+    await drawWinner();
+    expect(server.session.winner_finalized_at).toBeNull();
+    expect($id("gw-btn-clear").disabled).toBe(true);
+  });
+
+  it("allows winner response rules to change after a winner is confirmed", async () => {
+    server.session.status = "active";
+    server.session.winner_entry_id = "e1";
+    server.session.drawn_at = "2026-09-28T00:01:00Z";
+    server.session.winner_finalized_at = "2026-09-28T00:02:00Z";
+    server.session.rules = { winnerMustRespond: false, responseTimeout: 60 };
+    server.draws.push("e1");
+    server.drawRows.push({
+      id: "draw-confirmed",
+      entry_id: "e1",
+      username: "alpha",
+      reason: "draw",
+      drawn_at: server.session.drawn_at,
+      confirmed_at: server.session.winner_finalized_at,
+    });
+    await boot();
+
+    click("gw-opt-claim-req");
+    await clock.tick(0);
+    expect(requestsTo("/api/giveaways/chat/response-rules")).toHaveLength(1);
+    expect(server.session.rules.winnerMustRespond).toBe(true);
+    expect($id("gw-response-live-note")).toBeTruthy();
   });
 
   it("confirm never bypasses a pending required response", async () => {
@@ -966,7 +1087,7 @@ describe("Giveaway draw flow", () => {
   it("restores the persisted response rules when the live save fails", async () => {
     server.session.status = "active";
     server.session.rules = { winnerMustRespond: true, responseTimeout: 60, autoReroll: false };
-    server.responseRulesResponse = { status: 409, body: { ok: false, error: "Winner verification can't change after the winner is confirmed or the giveaway ends." } };
+    server.responseRulesResponse = { status: 409, body: { ok: false, error: "Winner verification can't change after the giveaway ends." } };
     await boot();
 
     await selectDuration(90);

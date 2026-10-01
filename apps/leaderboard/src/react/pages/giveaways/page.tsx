@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Search,
   Ticket,
+  Trash2,
   Trophy,
   Users,
   X,
@@ -606,6 +607,7 @@ function ChatGiveaway({
   const [winnerOpen, setWinnerOpen] = useState(false);
   const [winnerJustDrawn, setWinnerJustDrawn] = useState(false);
   const [winnerAction, setWinnerAction] = useState("");
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [customRule, setCustomRule] = useState("");
   const [responseRemaining, setResponseRemaining] = useState(0);
   const [clock, setClock] = useState(Date.now());
@@ -628,7 +630,9 @@ function ChatGiveaway({
   const capabilities = data.capabilities || {};
   const winner = data.winner || null;
   const winnerId = winner?.id || null;
-  const drawCount = data.draws?.length || (winner ? 1 : 0);
+  const finalized = Boolean(session?.winner_finalized_at);
+  const confirmedDrawCount = data.draws?.filter((draw) => Boolean(draw.confirmed_at)).length || 0;
+  const drawCount = confirmedDrawCount + (winner && !finalized ? 1 : 0);
   const active = session?.status === "active";
   const settingsLocked = active || Boolean(session?.winner_entry_id && !session.winner_finalized_at);
   const manualSetup = !connection.connected && !active;
@@ -641,9 +645,8 @@ function ChatGiveaway({
   const winnerClaimed = Boolean(session?.winner_confirmed_at);
   const responseRequired = Boolean(session?.winner_response_required ?? session?.rules?.winnerMustRespond);
   const responseTimeout = Number(session?.winner_response_timeout_seconds || session?.rules?.responseTimeout || 60);
-  const responseRulesEditable = Boolean(session && session.provider === "kick" && session.status !== "cancelled" && !session.winner_finalized_at);
+  const responseRulesEditable = Boolean(session && session.provider === "kick" && session.status !== "cancelled");
   const claimExpired = responseRequired && !winnerClaimed && responseRemaining <= 0 && Boolean(session?.drawn_at);
-  const finalized = Boolean(session?.winner_finalized_at);
   const autoRerollExhausted = Boolean(session?.auto_reroll_exhausted_at) && !finalized && !winnerClaimed;
   const canConfirm = Boolean(winner && !finalized && (!responseRequired || winnerClaimed));
 
@@ -915,6 +918,7 @@ function ChatGiveaway({
         sessionId: session.id,
         expectedWinnerEntryId: session.winner_entry_id ?? null,
         expectedDrawnAt: session.drawn_at ?? null,
+        next: finalized,
         siteId: siteId || undefined,
       });
       if (!result.winner) {
@@ -922,8 +926,12 @@ function ChatGiveaway({
         onAlert(result.message || "Could not draw a winner.");
         return;
       }
+      const drawnUsernames = new Set(
+        (data.draws || []).map((draw) => draw.username?.trim().toLowerCase()).filter(Boolean),
+      );
       const visualPool = eligibleEntries.filter((entry) =>
-        session.rules?.winnerRepeat === "again" || entry.id !== session.winner_entry_id,
+        session.rules?.winnerRepeat === "again"
+          || (!drawnUsernames.has(entry.username.trim().toLowerCase()) && entry.id !== session.winner_entry_id),
       );
       await runRoulette(visualPool, result.winner);
       applyState(result);
@@ -1067,6 +1075,20 @@ function ChatGiveaway({
       onAlert("Verification link copied.");
     } catch {
       onAlert("Could not copy the verification link.");
+    }
+  };
+
+  const clearEntries = async () => {
+    if (!session) return;
+    setConfirmation(null);
+    onClearAlert();
+    try {
+      applyState(await chatApi("/entries/clear", {
+        sessionId: session.id,
+        siteId: siteId || undefined,
+      }));
+    } catch (error) {
+      onAlert(errorMessage(error, "Could not clear participants."));
     }
   };
 
@@ -1229,6 +1251,14 @@ function ChatGiveaway({
                   <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                   <Input aria-label="Search participants" id="gw-search-entrants" className="w-full pl-9" placeholder="Search participant…" value={search} onChange={(event) => setSearch(event.target.value)} />
                 </div>
+                <Button id="gw-btn-clear" type="button" variant="outline" size="icon" aria-label="Clear list" title="Clear list" disabled={!entries.length || !session || isRolling || Boolean(winner && !finalized)} onClick={() => setConfirmation({
+                  title: "Clear all participants?",
+                  description: "Everyone will need to type the keyword again. Winners stay in the Winners list.",
+                  action: "Clear list",
+                  destructive: true,
+                })}>
+                  <Trash2 aria-hidden="true" />
+                </Button>
                 <Button id="gw-btn-export" type="button" variant="outline" size="icon" aria-label="Export CSV" title="Export CSV" disabled={!entries.length} onClick={exportCsv}>
                   <Download aria-hidden="true" />
                 </Button>
@@ -1286,8 +1316,8 @@ function ChatGiveaway({
                   </table>
                 )}
               </div>
-              <Button id="gw-btn-roll" type="button" className="mt-3 w-full" hidden={Boolean(winner && !isRolling)} disabled={!entries.length || !session || isRolling} onClick={() => void drawWinner()}>
-                {isRolling ? "Drawing…" : "Draw winner"}
+              <Button id="gw-btn-roll" type="button" className="mt-3 w-full" hidden={Boolean(winner && !isRolling && !finalized)} disabled={!entries.length || !session || isRolling} onClick={() => void drawWinner()}>
+                {isRolling ? "Drawing…" : finalized ? "Draw next winner" : "Draw winner"}
               </Button>
             </CardContent>
           </Card>
@@ -1508,6 +1538,7 @@ function ChatGiveaway({
           )}
         </DialogContent>
       </Dialog>
+      <ConfirmAction confirmation={confirmation} onCancel={() => setConfirmation(null)} onConfirm={() => void clearEntries()} />
     </div>
   );
 }
@@ -1767,12 +1798,13 @@ function DrawHistory({
         {earlierDraws.map((draw, index) => {
           const name = draw.username || "a previous entrant";
           const replacedBy = newestFirst[index + (currentWinner ? 0 : -1)];
-          const label = replacedBy?.reason === "auto_reroll" ? "Didn't respond" : "Re-rolled";
+          const confirmed = Boolean(draw.confirmed_at);
+          const label = confirmed ? "Confirmed" : replacedBy?.reason === "auto_reroll" ? "Didn't respond" : "Re-rolled";
           return (
             <li key={draw.id || `${draw.drawn_at}-${index}`} className="gw-draw-history-row flex items-center justify-between gap-3">
               <span className="min-w-0 truncate">
                 <span className="font-medium">{name}</span>
-                <span className="ml-2 text-xs text-muted-foreground">{label}</span>
+                <span className={cn("ml-2 text-xs", confirmed ? "text-emerald-700" : "text-muted-foreground")}>{label}</span>
               </span>
               <span className="shrink-0 text-xs text-muted-foreground">{formatEnteredAt(draw.drawn_at)}</span>
             </li>

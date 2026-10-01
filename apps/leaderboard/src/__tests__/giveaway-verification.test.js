@@ -221,6 +221,82 @@ describe("giveaway draw and timeout", () => {
     expect(writes[0].params).toEqual([id, "e1", "site", true, 30]);
     expect(writes[1].sql).toContain("chat_giveaway_draws");
   });
+  it("keeps an active session collecting after a draw", async () => {
+    const writes = [];
+    const run = async (sql, params) => {
+      if (sql.startsWith("SELECT")) return [{ ...eligible, username: "alice" }];
+      writes.push({ sql, params });
+      return sql.includes("UPDATE chat_giveaway_sessions") ? [{ id, status: "active" }] : [];
+    };
+    await drawGiveaway(run, { ...session, status: "active", rules: {}, winner_entry_id: null, drawn_at: null });
+    const update = writes.find(({ sql }) => sql.includes("UPDATE chat_giveaway_sessions"));
+    expect(update.sql).toContain("status = CASE WHEN s.status = 'active' THEN 'active' ELSE 'completed' END");
+    expect(update.sql).toContain("stopped_at = CASE WHEN s.status = 'active' THEN s.stopped_at ELSE COALESCE(s.stopped_at, now()) END");
+  });
+  it("draws the next finalized winner while excluding already-drawn entries", async () => {
+    const writes = [];
+    const drawnAt = "2026-09-28T00:00:00.000Z";
+    const run = async (sql, params) => {
+      if (sql.startsWith("SELECT")) {
+        return [
+          { ...eligible, id: "e1", username: "alice", already_drawn: true },
+          { ...eligible, id: "e2", provider_user_id: "43", username: "bravo", already_drawn: false },
+        ];
+      }
+      writes.push({ sql, params });
+      return sql.includes("UPDATE chat_giveaway_sessions")
+        ? [{ id, status: "active", winner_entry_id: "e2", drawn_at: "2026-09-28T00:00:00.001Z" }]
+        : [];
+    };
+    const result = await drawGiveaway(run, {
+      ...session,
+      status: "active",
+      rules: { winnerRepeat: "once" },
+      winner_entry_id: "e1",
+      drawn_at: drawnAt,
+      winner_finalized_at: "2026-09-28T00:01:00.000Z",
+    }, {
+      next: true,
+      expectedWinnerEntryId: "e1",
+      expectedDrawnAt: drawnAt,
+    });
+    expect(result).toMatchObject({ winnerId: "e2" });
+    const update = writes.find(({ sql }) => sql.includes("UPDATE chat_giveaway_sessions"));
+    expect(update.sql).toContain("winner_finalized_at IS NOT NULL");
+    expect(update.sql).toContain("s.winner_entry_id = $6");
+    expect(update.sql).toContain("date_trunc('milliseconds', s.drawn_at) = date_trunc('milliseconds', $7::timestamptz)");
+    const insert = writes.find(({ sql }) => sql.includes("INSERT INTO chat_giveaway_draws"));
+    expect(insert.params).toEqual([id, "e2", "43", "bravo", "draw", null]);
+  });
+  it("requires confirmation before drawing the next winner", async () => {
+    const result = await drawGiveaway(() => {
+      throw new Error("unfinalized next draw must not query entries");
+    }, {
+      ...session,
+      winner_entry_id: "e1",
+      drawn_at: "2026-09-28T00:00:00.000Z",
+      winner_finalized_at: null,
+    }, {
+      next: true,
+      expectedWinnerEntryId: "e1",
+      expectedDrawnAt: "2026-09-28T00:00:00.000Z",
+    });
+    expect(result).toEqual({ conflict: true, error: "Confirm or re-roll the current winner first." });
+  });
+  it("still rejects a regular re-roll of a finalized winner", async () => {
+    const result = await drawGiveaway(() => {
+      throw new Error("finalized reroll must not query entries");
+    }, {
+      ...session,
+      winner_entry_id: "e1",
+      drawn_at: "2026-09-28T00:00:00.000Z",
+      winner_finalized_at: "2026-09-28T00:01:00.000Z",
+    }, {
+      expectedWinnerEntryId: "e1",
+      expectedDrawnAt: "2026-09-28T00:00:00.000Z",
+    });
+    expect(result).toEqual({ conflict: true, error: "This winner is already confirmed and cannot be re-rolled." });
+  });
   it("does not automatically reroll early, confirmed, disabled, or stale draws", async () => {
     for (const overrides of [{ winner_response_deadline: new Date(Date.now()+60000).toISOString() }, { winner_confirmed_at: new Date().toISOString() }, { rules: {} }]) {
       const current = { ...session, status: "completed", rules: { winnerMustRespond: true, autoReroll: true }, winner_response_deadline: "2020-01-01", ...overrides };
