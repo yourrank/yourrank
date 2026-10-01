@@ -121,7 +121,7 @@ describe("dashboard loading states", () => {
 
   it("does not coerce credits payload fields to zero before resolution", () => {
     const rewardsPage = fs.readFileSync(path.resolve(assets, "../react/pages/rewards/page.tsx"), "utf8");
-    expect(rewardsPage).toContain('value={loading ? "—" : String(summary.periodEarned ?? 0)}');
+    expect(rewardsPage).toContain('value={loading ? "—" : numberLabel(summary.periodEarned)}');
     expect(rewardsPage).toContain('numberOr(usage.shopItems, "—")');
     expect(rewardsPage).not.toMatch(/usage\.[A-Za-z0-9_]+ \|\| 0/);
     expect(rewardsPage).not.toMatch(/limits\.[A-Za-z0-9_]+ \|\| 0/);
