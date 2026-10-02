@@ -1,8 +1,9 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import { BYE, buildBracket } from "../lib/tournament-bracket.js";
-import { Bracket, buildRoundModel, roundLabel } from "../react/pages/tournaments/bracket.tsx";
+import { Bracket, ChampionCard, buildRoundModel, finalResult, roundLabel } from "../react/pages/tournaments/bracket.tsx";
 import {
   actAndFlush,
+  clickReactTarget,
   createElement,
   createRoot,
   document,
@@ -153,7 +154,7 @@ describe("React bracket", () => {
     expect(bracket.querySelectorAll(".tn-crown")).toHaveLength(1);
   });
 
-  it("renders prefilled correction inputs and a disabled Save", async () => {
+  it("opens prefilled correction inputs on request and explains locked results", async () => {
     const correctable = { id: "m-1", round_number: 1, match_index: 0, player1_name: "a", player2_name: "b", player1_score: 2, player2_score: 1, winner_name: "a", status: "completed", correctable: true };
     const locked = { ...correctable, id: "m-2", match_index: 1, correctable: false };
     const bracket = await render({
@@ -161,17 +162,60 @@ describe("React bracket", () => {
       matches: [correctable, locked],
       lifecycle: "live",
     });
-    const card = bracket.querySelector('[data-match-id="m-1"]');
-    expect(card.dataset.correctable).toBe("true");
-    expect(card.dataset.scoreMode).toBe("correct");
-    expect(card.dataset.saved).toBe("2,1");
-    expect(card.querySelector('[data-score-player="1"]').value).toBe("2");
-    expect(card.querySelector('[data-score-player="2"]').value).toBe("1");
-    expect(card.querySelector(".tn-match-save").disabled).toBe(true);
-    expect(card.querySelector(".tn-match-note").hidden).toBe(true);
-    expect(card.textContent).toContain("Changing the winner updates later rounds.");
+    const card = () => bracket.querySelector('[data-match-id="m-1"]');
+    expect(card().dataset.correctable).toBe("true");
+    expect(card().querySelector("input")).toBeNull();
+    await clickReactTarget(card().querySelector("[data-correct-match]"));
+    expect(card().dataset.scoreMode).toBe("correct");
+    expect(card().dataset.saved).toBe("2,1");
+    expect(card().querySelector('[data-score-player="1"]').value).toBe("2");
+    expect(card().querySelector('[data-score-player="2"]').value).toBe("1");
+    expect(card().querySelector(".tn-match-save").disabled).toBe(true);
+    const lockedCard = bracket.querySelector('[data-match-id="m-2"]');
+    expect(lockedCard.querySelector("[data-correct-match]")).toBeNull();
+    expect(lockedCard.querySelector("[data-locked-note]").textContent)
+      .toBe("Locked: a later match has been played. Correct that one first.");
     expect(bracket.querySelector('[data-score-match="m-2"]')).toBeNull();
   });
+
+  it("summarises the champion, final score and runner-up", async () => {
+    const final = completed("m3", 2, 0, "a", "b", 1, 3, "b");
+    const done = tournament({ bracket_size: 4, winner_name: "b", status: "completed" });
+    expect(finalResult(done, [final])).toEqual({ champion: "b", runnerUp: "a", score: "3–1" });
+    expect(finalResult(tournament({ bracket_size: 4 }), [final])).toBeNull();
+    expect(finalResult({ ...done, winner_name: "a" }, [completed("m3", 2, 0, "a", BYE, 0, 0, "a")]))
+      .toEqual({ champion: "a", runnerUp: null, score: null });
+    await actAndFlush(() => root.render(createElement(ChampionCard, { tournament: done, matches: [final], key: `champ-${++renderKey}` })));
+    const card = host.querySelector(".tn-champion-card");
+    expect(card.getAttribute("aria-label")).toBe("Champion");
+    expect(card.querySelector("[data-champion-name]").textContent).toBe("b");
+    expect(card.querySelector("[data-champion-score]").textContent).toBe("3–1");
+    expect(card.querySelector("[data-runner-up]").textContent).toBe("a");
+  });
+
+  it("names the pending semifinal on a half-known final", async () => {
+    const matches = [
+      completed("m1", 1, 0, "a", "b", 2, 0, "a"),
+      pending("m2", 1, 1, "c", "d"),
+      pending("m3", 2, 0, "a", "TBD"),
+    ];
+    const bracket = await render({ tournament: tournament({ bracket_size: 4 }), matches, lifecycle: "live" });
+    const final = bracket.querySelector('[data-match-id="m3"]');
+    expect(final.dataset.state).toBe("waiting");
+    expect(final.textContent).toContain("a");
+    expect(final.textContent).toContain("Waiting for winner of Semifinal 2");
+    const empty = await render({ tournament: tournament({ bracket_size: 4 }), matches: [pending("m1", 1, 0, "a", "b"), pending("m2", 1, 1, "c", "d"), pending("m3", 2, 0)], lifecycle: "live" });
+    expect(empty.querySelector('[data-match-id="m3"]').textContent).toContain("Waiting for semifinalists");
+  });
+
+  it("highlights the live match and names what is up next", async () => {
+    const matches = [pending("m1", 1, 0, "a", "b"), pending("m2", 1, 1, "c", "d"), pending("m3", 2, 0)];
+    const bracket = await render({ tournament: tournament({ bracket_size: 4 }), matches, lifecycle: "live" });
+    expect(bracket.querySelector("[data-now-match]").textContent).toBe("a vs b");
+    expect(bracket.querySelector("[data-next-match]").textContent).toContain("c vs d");
+    expect(bracket.querySelector('[data-match-id="m2"]').dataset.next).toBe("true");
+  });
+
 
   it("marks exactly one live match and only while live", async () => {
     const matches = [pending("m1", 1, 0, "a", "b"), pending("m2", 1, 1, "c", "d")];

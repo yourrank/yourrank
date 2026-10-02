@@ -225,8 +225,10 @@ describe("tournament workspace — completed tournament", () => {
     expect(aside.textContent).not.toContain("Game");
     expect(aside.textContent).toContain("Created");
     expect(aside.textContent).toContain("Sep 20, 2026");
-    expect(aside.textContent).toContain("Champion");
-    expect(aside.textContent).toContain("36_ates");
+    // Header stats own Entries and bracket size; the champion gets its own card.
+    expect(aside.textContent).not.toContain("Entries");
+    expect(aside.textContent).not.toContain("Bracket size");
+    expect(text("tournament-champion-card")).toContain("36_ates");
     expect(aside.textContent).not.toContain("Completed on");
   });
 

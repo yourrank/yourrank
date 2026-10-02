@@ -25,6 +25,7 @@ const site = { id: "site-1", name: "Kick Cup", slug: "kick-cup", published: true
 const server = {
   tournaments: [], entries: [], matches: [], requests: [], failSettings: false, settingsGate: null,
   scoreGate: null,
+  bracketGate: null,
   settingsError: null,
   deleteError: null,
   chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null },
@@ -37,6 +38,7 @@ function reset({ tournaments = [], entries = [], matches = [] } = {}) {
   server.failSettings = false;
   server.settingsGate = null;
   server.scoreGate = null;
+  server.bracketGate = null;
   server.settingsError = null;
   server.deleteError = null;
   server.chatRegistration = { connected: false, chatReady: false, channelName: null, externalChannelId: null };
@@ -114,9 +116,18 @@ globalThis.fetch = async (input, init = {}) => {
     current.status = "active";
     return json({ ok: true, entries: server.entries });
   }
+  if (path.endsWith("/bracket") && server.bracketGate) await server.bracketGate;
   if (path.endsWith("/bracket")) return json({ ok: true, tournament: current, matches: server.matches });
   if (path.endsWith("/score") && ["PATCH", "POST"].includes(init.method)) {
     if (server.scoreGate) await server.scoreGate;
+    const scored = server.matches.find((m) => m.id === body.matchId);
+    if (scored && body.reopen) {
+      Object.assign(scored, { status: "pending", winner_name: null, player1_score: 0, player2_score: 0, correctable: false });
+    } else if (scored) {
+      const s1 = body.winnerSlot ? Number(body.winnerSlot === 1) : body.player1Score;
+      const s2 = body.winnerSlot ? Number(body.winnerSlot === 2) : body.player2Score;
+      Object.assign(scored, { status: "completed", player1_score: s1, player2_score: s2, winner_name: s1 > s2 ? scored.player1_name : scored.player2_name, correctable: true });
+    }
     return json({
       ok: true,
       message: init.method === "PATCH" ? "📝 Score corrected: alpha wins the match." : "Score saved.",
@@ -341,7 +352,9 @@ describe("tournament lifecycle UI", () => {
     expect($id("tc-format")).toBeNull();
     expect($id("tc-title").value).toBe("");
     expect($id("tc-title").placeholder).toBe("e.g. Friday Night Cup");
-    expect($id("tc-keyword")).toBeNull();
+    // Chat signup fields are part of the main create form, not hidden under More options.
+    expect(visible("tc-keyword")).toBe(true);
+    expect(visible("tc-chat-channel")).toBe(true);
     await click("tc-more-trigger");
     expect(text("tc-entry-cap")).toBe("Same as bracket size (8)");
     await click("tc-entry-cap");
@@ -727,7 +740,7 @@ describe("tournament lifecycle UI", () => {
     expect(text("tournament-bracket-size-hint")).toContain("locked");
   });
 
-  it("sends a PATCH correction from a completed match's inline scores", async () => {
+  it("corrects a completed match only after Correct result, then undoes the correction via PATCH", async () => {
     reset({
       tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
       matches: [
@@ -739,28 +752,42 @@ describe("tournament lifecycle UI", () => {
     await mod.boot();
     await click("tournament-tab-bracket");
     const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
-    // The correction UI is always on the card: prefilled inputs, disabled Save.
+    // A completed card is read-only until the streamer asks to correct it.
+    expect(card().dataset.correctable).toBe("true");
+    expect(card().querySelector("input")).toBeNull();
+    const correct = card().querySelector("[data-correct-match]");
+    expect(correct.getAttribute("aria-label")).toBe("Correct result: a vs b");
+    await clickReactTarget(correct);
     expect(card().dataset.scoreMode).toBe("correct");
     expect(card().dataset.saved).toBe("2,1");
     expect(card().querySelector('[data-score-player="1"]').value).toBe("2");
+    expect(card().querySelector('[data-score-player="2"]').value).toBe("1");
     const save = () => card().querySelector(".tn-match-save");
-    const note = () => card().querySelector(".tn-match-note");
     expect(save().disabled).toBe(true);
-    expect(note().hidden).toBe(true);
-    // Editing an input unlocks Save and reveals the downstream note.
-    await setReactInputValue(card().querySelector('[data-score-player="1"]'), "5");
+    await setReactInputValue(card().querySelector('[data-score-player="1"]'), "1");
     await setReactInputValue(card().querySelector('[data-score-player="2"]'), "3");
     expect(save().disabled).toBe(false);
-    expect(note().hidden).toBe(false);
+    expect(card().querySelector("[data-match-pending]").textContent).toBe("b wins 3–1?");
+    expect(card().textContent).toContain("Later rounds update.");
+    expect(requestsTo("/api/tournaments/t-1/score", "PATCH")).toHaveLength(0);
     await clickReactTarget(save());
     const patches = requestsTo("/api/tournaments/t-1/score", "PATCH");
     expect(patches).toHaveLength(1);
-    expect(patches[0].body).toEqual({ matchId: "m1", player1Score: 5, player2Score: 3 });
+    expect(patches[0].body).toEqual({ matchId: "m1", player1Score: 1, player2Score: 3 });
     expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(0);
-    expect(text("tournament-message")).toBe("📝 Score corrected: alpha wins the match.");
+    // The result is reported on the card, not in the page status line.
+    expect(card().querySelector("[data-match-feedback]").textContent).toContain("Corrected: b wins 3–1.");
+    expect(visible("tournament-message")).toBe(false);
+    const undo = card().querySelector("[data-undo-match]");
+    expect(document.activeElement).toBe(undo);
+    await clickReactTarget(undo);
+    expect(requestsTo("/api/tournaments/t-1/score", "PATCH")[1].body).toEqual({ matchId: "m1", player1Score: 2, player2Score: 1 });
+    expect(card().querySelector("[data-match-feedback]").textContent).toContain("Correction undone. The previous result is back.");
+    expect(card().querySelector("[data-undo-match]")).toBeNull();
   });
 
-  it("keeps Save disabled until a corrected score differs from the saved one", async () => {
+
+  it("keeps Confirm disabled until a corrected score differs from the saved one, and Cancel restores the card", async () => {
     reset({
       tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
       matches: [
@@ -772,22 +799,25 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-tab-bracket");
     const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
     const save = () => card().querySelector(".tn-match-save");
-    const note = () => card().querySelector(".tn-match-note");
     const input = async (player, value) => {
       const el = card().querySelector(`[data-score-player="${player}"]`);
       await setReactInputValue(el, value);
     };
+    await clickReactTarget(card().querySelector("[data-correct-match]"));
     expect(save().disabled).toBe(true);
-    // A changed value unlocks Save; returning it to the saved score re-locks.
+    expect(card().textContent).toContain("Change a score or the winner to correct this result.");
+    // A changed value unlocks Confirm; returning it to the saved score re-locks.
     await input(1, "7");
     expect(save().disabled).toBe(false);
-    expect(note().hidden).toBe(false);
     await input(1, "2");
     expect(save().disabled).toBe(true);
-    expect(note().hidden).toBe(true);
     await clickReactTarget(save());
     expect(requestsTo("/api/tournaments/t-1/score", "PATCH")).toHaveLength(0);
+    await clickReactTarget(card().querySelector("[data-cancel-match]"));
+    expect(card().querySelector("input")).toBeNull();
+    expect(document.activeElement).toBe(card().querySelector("[data-correct-match]"));
   });
+
 
   for (const [status, winner_name] of [["completed", "alpha"], ["cancelled", null]]) {
     it(`makes Settings fully read-only when the tournament is ${status}`, async () => {
@@ -1011,9 +1041,11 @@ describe("tournament lifecycle UI", () => {
     expect(matches[1].querySelectorAll("input")).toHaveLength(0);
     // The bracket explains BYEs once, above the scroller.
     expect($id("tournament-bracket").querySelector("[data-bye-note]")).toBeTruthy();
-    // The undecided final is a waiting card, not a TBD line.
+    // A half-known final names the finalist and the semifinal still to be decided.
     expect(matches[2].dataset.state).toBe("waiting");
-    expect(matches[2].textContent).toContain("Waiting for semifinalists");
+    expect(matches[2].textContent).toContain("Alice");
+    expect(matches[2].textContent).toContain("Waiting for winner of Semifinal 2");
+    expect(matches[2].textContent).not.toContain("Waiting for semifinalists");
     expect(matches[2].querySelectorAll("input")).toHaveLength(0);
   });
 
@@ -1031,7 +1063,7 @@ describe("tournament lifecycle UI", () => {
     expect(match.querySelectorAll("input[data-score-player]")).toHaveLength(2);
   });
 
-  it("posts only once when a winner name is double-clicked", async () => {
+  it("saves a picked winner only after Confirm, and only once when Confirm is double-clicked", async () => {
     reset({
       tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
       matches: [
@@ -1039,25 +1071,148 @@ describe("tournament lifecycle UI", () => {
       ],
     });
     await mod.boot();
-    expect(text("tournament-step-label")).toBe("Click the winner's name in the Bracket tab to advance them, or enter scores.");
+    expect(text("tournament-step-label")).toBe("In the Bracket tab, pick each match's winner or enter scores, then confirm.");
     await click("tournament-tab-bracket");
-    const winner = $id("tournament-bracket").querySelector('[data-advance-match="m1"][data-winner-slot="2"]');
-    const otherWinner = $id("tournament-bracket").querySelector('[data-advance-match="m1"][data-winner-slot="1"]');
-    expect(winner.tagName).toBe("BUTTON");
-    expect(winner.getAttribute("aria-label")).toBe("Bob wins");
+    const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
+    expect(card().querySelector("[data-advance-match]")).toBeNull();
+    const pick = card().querySelector('[data-pick-match="m1"][data-winner-slot="2"]');
+    expect(pick.tagName).toBe("BUTTON");
+    expect(pick.getAttribute("aria-label")).toBe("Winner: Bob");
+    expect(pick.getAttribute("aria-pressed")).toBe("false");
+    await clickReactTarget(pick);
+    // Picking a winner is only a pending decision.
+    expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(0);
+    expect(pick.getAttribute("aria-pressed")).toBe("true");
+    expect(card().querySelector("[data-match-pending]").textContent).toBe("Bob wins?");
+    const confirm = card().querySelector(".tn-match-save");
+    expect(confirm.disabled).toBe(false);
+    expect(confirm.getAttribute("aria-label")).toBe("Confirm result: Bob wins");
     let releaseScore;
     server.scoreGate = new Promise((resolve) => { releaseScore = resolve; });
-    await actAndFlush(() => firePointerClick(winner));
-    expect(winner.disabled).toBe(true);
-    expect(otherWinner.disabled).toBe(true);
-    await actAndFlush(() => firePointerClick(winner));
+    await actAndFlush(() => firePointerClick(confirm));
+    expect(confirm.disabled).toBe(true);
+    await actAndFlush(() => firePointerClick(confirm));
     expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(1);
     await actAndFlush(() => releaseScore());
     expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(1);
     expect(requestsTo("/api/tournaments/t-1/score", "POST")[0].body)
       .toEqual({ matchId: "m1", winnerSlot: 2 });
-    expect(text("tournament-message")).toBe("Score saved.");
+    expect(card().querySelector("[data-match-feedback]").textContent).toContain("Saved: Bob wins.");
   });
+
+  it("keeps the bracket mounted while it refreshes after a save, so Saved feedback and Undo survive", async () => {
+    reset({
+      tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "Dave", player2_name: "Eve", status: "pending" },
+        { id: "m2", round_number: 1, match_index: 1, player1_name: "Cara", player2_name: "Dan", status: "pending" },
+        { id: "m3", round_number: 2, match_index: 0, player1_name: "TBD", player2_name: "TBD", status: "pending" },
+      ],
+    });
+    await mod.boot();
+    await click("tournament-tab-bracket");
+    const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
+    await setReactInputValue(card().querySelector('[data-score-player="1"]'), "2");
+    await setReactInputValue(card().querySelector('[data-score-player="2"]'), "1");
+    let releaseBracket;
+    server.bracketGate = new Promise((resolve) => { releaseBracket = resolve; });
+    await clickReactTarget(card().querySelector(".tn-match-save"));
+    // While the post-save refresh is in flight the bracket stays on screen.
+    expect(card()).not.toBeNull();
+    await actAndFlush(() => releaseBracket());
+    server.bracketGate = null;
+    expect(card().dataset.state).toBe("completed");
+    expect(card().querySelector("[data-match-feedback]").textContent).toContain("Saved: Dave wins 2–1.");
+    const undo = card().querySelector("[data-undo-match]");
+    expect(undo).not.toBeNull();
+    expect(document.activeElement).toBe(undo);
+  });
+
+  it("starts with empty score inputs, blocks ties inline, then saves scores and undoes via PATCH reopen", async () => {
+    reset({
+      tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob", status: "pending" },
+        { id: "m2", round_number: 1, match_index: 1, player1_name: "Cara", player2_name: "Dan", status: "pending" },
+        { id: "m3", round_number: 2, match_index: 0, player1_name: "TBD", player2_name: "TBD", status: "pending" },
+      ],
+    });
+    await mod.boot();
+    await click("tournament-tab-bracket");
+    const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
+    const score = (player) => card().querySelector(`[data-score-player="${player}"]`);
+    const save = () => card().querySelector(".tn-match-save");
+    expect(score(1).value).toBe("");
+    expect(score(2).value).toBe("");
+    expect(score(1).placeholder).toBe("–");
+    expect(score(1).getAttribute("aria-label")).toBe("Alice score");
+    expect(save().disabled).toBe(true);
+    expect(card().querySelector(".tn-match-msg").textContent).toBe("Pick the winner or enter scores.");
+    await setReactInputValue(score(1), "2");
+    expect(save().disabled).toBe(true);
+    expect(card().querySelector(".tn-match-msg").textContent).toBe("Enter both scores, or clear them to pick a winner only.");
+    await setReactInputValue(score(2), "2");
+    const error = card().querySelector("[data-match-error]");
+    expect(error.textContent).toBe("Scores are tied. A match needs a winner, so change one score.");
+    expect(score(1).getAttribute("aria-invalid")).toBe("true");
+    expect(score(1).getAttribute("aria-describedby")).toBe(error.closest(".tn-match-msg").id);
+    expect(save().disabled).toBe(true);
+    expect(visible("tournament-message")).toBe(false);
+    await setReactInputValue(score(2), "1");
+    expect(card().querySelector("[data-match-pending]").textContent).toBe("Alice wins 2–1?");
+    expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(0);
+    await clickReactTarget(save());
+    expect(requestsTo("/api/tournaments/t-1/score", "POST")[0].body).toEqual({ matchId: "m1", player1Score: 2, player2Score: 1 });
+    expect(card().dataset.state).toBe("completed");
+    expect(card().querySelector("[data-match-feedback]").textContent).toContain("Saved: Alice wins 2–1.");
+    const undo = card().querySelector("[data-undo-match]");
+    expect(undo.getAttribute("aria-label")).toBe("Undo result: Alice vs Bob");
+    expect(document.activeElement).toBe(undo);
+    await clickReactTarget(undo);
+    expect(requestsTo("/api/tournaments/t-1/score", "PATCH")[0].body).toEqual({ matchId: "m1", reopen: true });
+    expect(card().dataset.state).toBe("scorable");
+    expect(score(1).value).toBe("");
+    expect(card().querySelector("[data-match-feedback]").textContent).toContain("Result undone. Pick the winner again.");
+    expect(document.activeElement).toBe(card().querySelector("[data-pick-match]"));
+  });
+
+  it("shows a champion card with the final score and runner-up on the Bracket tab", async () => {
+    reset({
+      tournaments: [{ ...base, status: "completed", signup_state: "locked", bracket_size: 4, winner_name: "Bob" }],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Cara", player1_score: 2, player2_score: 0, winner_name: "Alice", status: "completed" },
+        { id: "m2", round_number: 1, match_index: 1, player1_name: "Bob", player2_name: "Dan", player1_score: 2, player2_score: 1, winner_name: "Bob", status: "completed" },
+        { id: "m3", round_number: 2, match_index: 0, player1_name: "Alice", player2_name: "Bob", player1_score: 1, player2_score: 3, winner_name: "Bob", status: "completed" },
+      ],
+    });
+    await mod.boot();
+    await click("tournament-tab-bracket");
+    const champion = $id("tournament-champion-card");
+    expect(visible("tournament-champion-card")).toBe(true);
+    expect(champion.querySelector("[data-champion-name]").textContent).toBe("Bob");
+    expect(champion.querySelector("[data-champion-score]").textContent).toBe("3–1");
+    expect(champion.querySelector("[data-runner-up]").textContent).toBe("Alice");
+    expect($id("tournament-bracket").querySelector("[data-correct-match]")).toBeNull();
+  });
+
+  it("orders setup next steps and points the empty bracket at the header Start button", async () => {
+    reset({ tournaments: [{ ...base }] });
+    await mod.boot();
+    const steps = [...$id("tournament-next-steps").querySelectorAll("[data-step]")];
+    expect(steps.map((step) => step.dataset.step)).toEqual(["signups", "players", "start"]);
+    expect(text("tournament-join-command")).toBe("!join");
+    expect(text("tournament-join-hint")).toBe("Viewers type !join in kick.com/creator chat.");
+    expect(steps[0].contains($id("tournament-chat-signup"))).toBe(true);
+    expect(steps[2].contains($id("tournament-seeding-signup"))).toBe(true);
+    await click("tournament-tab-bracket");
+    expect(text("tournament-bracket-empty")).toContain("Press Start tournament at the top of this page");
+    await click("tournament-tab-entries");
+    await clickReactTarget($id("tournament-advanced").querySelector("button"));
+    const reviews = $id("tournament-advanced").querySelector('a[href^="/dashboard/audience/reviews"]');
+    expect(reviews.textContent).toBe("Audience → Reviews");
+    expect(reviews.getAttribute("href")).toBe("/dashboard/audience/reviews?siteId=site-1");
+  });
+
 
   it("confirms deletion with a trimmed exact title and displays inline server errors", async () => {
     reset({ tournaments: [base] });
