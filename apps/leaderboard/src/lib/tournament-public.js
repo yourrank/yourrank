@@ -1,6 +1,7 @@
 // Viewer-safe projection of a tournament bracket. Public surfaces (the
 // /<slug>/tournament page, its stream variant and /api/public/:slug/tournament)
 // read only this shape: display names, rounds, scores, status and champion.
+// Before the bracket exists, `players` lists the active entrants' display names.
 // Row ids, entry ids, flags, owner fields and the internal BYE sentinel never
 // leave this module.
 import { isBye } from "./tournament-bracket.js";
@@ -35,7 +36,7 @@ function publicSlot(match, slot) {
   return { name, bye: isBye(raw), score, winner };
 }
 
-export function publicTournamentView(tournament, matches = [], { entryCount = 0 } = {}) {
+export function publicTournamentView(tournament, matches = [], { entryCount = 0, players = [] } = {}) {
   if (!tournament) return null;
   const rows = [...(matches || [])].sort((a, b) => (a.round_number - b.round_number) || (a.match_index - b.match_index));
   const totalRounds = rows.reduce((max, m) => Math.max(max, Number(m.round_number) || 0), 0);
@@ -84,6 +85,7 @@ export function publicTournamentView(tournament, matches = [], { entryCount = 0 
     champion,
     runnerUp,
     finalScore,
+    players: rounds.length ? [] : (players || []).map(known).filter(Boolean),
     rounds,
   };
 }
