@@ -730,11 +730,21 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
     }
   }
 
+  async function refreshAfterScore(id: string) {
+    const token = loadTokenRef.current;
+    const [list] = await Promise.all([
+      deps.api<TournamentListResponse>("/api/tournaments", {}, siteIdRef.current).catch(() => null),
+      fetchEntries(id, true, token),
+    ]);
+    if (!list || !mountedRef.current || token !== loadTokenRef.current) return;
+    setTournaments(list.tournaments || []);
+  }
+
   const submitScore: ScoreHandler = async (method, body) => {
     if (!tournament) return { ok: false, message: "No tournament selected." };
     try {
       const data = await deps.api<TournamentActionResponse>(`/api/tournaments/${encodeURIComponent(tournament.id)}/score`, request(method, body), siteId);
-      await loadTournament(String(tournament.id));
+      await refreshAfterScore(String(tournament.id));
       return { ok: true, message: data.message || "" };
     } catch (error) {
       return { ok: false, message: getError(error, "Could not save the result.") };

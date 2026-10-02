@@ -25,6 +25,7 @@ const site = { id: "site-1", name: "Kick Cup", slug: "kick-cup", published: true
 const server = {
   tournaments: [], entries: [], matches: [], requests: [], failSettings: false, settingsGate: null,
   scoreGate: null,
+  bracketGate: null,
   settingsError: null,
   deleteError: null,
   chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null },
@@ -37,6 +38,7 @@ function reset({ tournaments = [], entries = [], matches = [] } = {}) {
   server.failSettings = false;
   server.settingsGate = null;
   server.scoreGate = null;
+  server.bracketGate = null;
   server.settingsError = null;
   server.deleteError = null;
   server.chatRegistration = { connected: false, chatReady: false, channelName: null, externalChannelId: null };
@@ -114,6 +116,7 @@ globalThis.fetch = async (input, init = {}) => {
     current.status = "active";
     return json({ ok: true, entries: server.entries });
   }
+  if (path.endsWith("/bracket") && server.bracketGate) await server.bracketGate;
   if (path.endsWith("/bracket")) return json({ ok: true, tournament: current, matches: server.matches });
   if (path.endsWith("/score") && ["PATCH", "POST"].includes(init.method)) {
     if (server.scoreGate) await server.scoreGate;
@@ -1095,6 +1098,34 @@ describe("tournament lifecycle UI", () => {
     expect(requestsTo("/api/tournaments/t-1/score", "POST")[0].body)
       .toEqual({ matchId: "m1", winnerSlot: 2 });
     expect(card().querySelector("[data-match-feedback]").textContent).toContain("Saved: Bob wins.");
+  });
+
+  it("keeps the bracket mounted while it refreshes after a save, so Saved feedback and Undo survive", async () => {
+    reset({
+      tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "Dave", player2_name: "Eve", status: "pending" },
+        { id: "m2", round_number: 1, match_index: 1, player1_name: "Cara", player2_name: "Dan", status: "pending" },
+        { id: "m3", round_number: 2, match_index: 0, player1_name: "TBD", player2_name: "TBD", status: "pending" },
+      ],
+    });
+    await mod.boot();
+    await click("tournament-tab-bracket");
+    const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
+    await setReactInputValue(card().querySelector('[data-score-player="1"]'), "2");
+    await setReactInputValue(card().querySelector('[data-score-player="2"]'), "1");
+    let releaseBracket;
+    server.bracketGate = new Promise((resolve) => { releaseBracket = resolve; });
+    await clickReactTarget(card().querySelector(".tn-match-save"));
+    // While the post-save refresh is in flight the bracket stays on screen.
+    expect(card()).not.toBeNull();
+    await actAndFlush(() => releaseBracket());
+    server.bracketGate = null;
+    expect(card().dataset.state).toBe("completed");
+    expect(card().querySelector("[data-match-feedback]").textContent).toContain("Saved: Dave wins 2–1.");
+    const undo = card().querySelector("[data-undo-match]");
+    expect(undo).not.toBeNull();
+    expect(document.activeElement).toBe(undo);
   });
 
   it("starts with empty score inputs, blocks ties inline, then saves scores and undoes via PATCH reopen", async () => {
