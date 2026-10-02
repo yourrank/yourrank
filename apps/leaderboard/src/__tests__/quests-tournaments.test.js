@@ -788,6 +788,54 @@ describe("Quests & Tournaments Suite", () => {
       expect(mockExec).not.toHaveBeenCalled();
     });
 
+    it("reopens a result: the match goes back to pending and the pending next slot back to TBD", async () => {
+      mockOne.mockResolvedValueOnce({ ...TOURN });
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob" }),
+        { id: "m-2", round_number: 2, match_index: 0, player1_name: "Alice", player2_name: "TBD", status: "pending", winner_name: null },
+        { id: "m-3", round_number: 3, match_index: 0, player1_name: "TBD", player2_name: "TBD", status: "pending", winner_name: null },
+      ]);
+
+      const res = await handleCorrectMatchScore(patchScore({ reopen: true }), mockEnv(), deps);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.reopened).toBe(true);
+      expect(body.winnerName).toBe(null);
+      const writes = mockExec.mock.calls.map((c) => [String(c[0]), c[1]]);
+      const slot = writes.find(([sql]) => sql.includes("SET player1_name='TBD'"));
+      expect(slot).toBeTruthy();
+      expect(slot[1]).toEqual(["m-2", "Alice"]);
+      const reopen = writes.find(([sql]) => sql.includes("SET status='pending', winner_name=NULL") && sql.includes("status='completed'"));
+      expect(reopen[1]).toEqual(["m-1"]);
+      expect(writes.some(([sql]) => sql.includes("UPDATE tournaments"))).toBe(false);
+    });
+
+    it("reopening the final of a finished tournament clears the champion", async () => {
+      mockOne.mockResolvedValueOnce({ ...TOURN, bracket_size: 2, status: "completed", winner_name: "Alice" });
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob" }),
+      ]);
+
+      const res = await handleCorrectMatchScore(patchScore({ reopen: true }), mockEnv(), deps);
+      expect(res.status).toBe(200);
+      expect((await res.json()).isFinals).toBe(true);
+      const tournamentWrite = mockExec.mock.calls.find((c) => String(c[0]).includes("UPDATE tournaments"));
+      expect(String(tournamentWrite[0])).toContain("status='active', winner_name=NULL");
+    });
+
+    it("refuses to reopen when a later match was already played", async () => {
+      mockOne.mockResolvedValueOnce({ ...TOURN });
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob" }),
+        completed({ id: "m-2", round_number: 2, match_index: 0, player1_name: "Alice", player2_name: "Carol", winner_name: "Carol" }),
+      ]);
+
+      const res = await handleCorrectMatchScore(patchScore({ reopen: true }), mockEnv(), deps);
+      expect(res.status).toBe(409);
+      expect(await res.text()).toContain("A later match has already been played.");
+      expect(mockExec).not.toHaveBeenCalled();
+    });
+
     it("returns 409 for a match that is not completed", async () => {
       mockOne.mockResolvedValueOnce({ ...TOURN });
       mockQuery.mockResolvedValueOnce([

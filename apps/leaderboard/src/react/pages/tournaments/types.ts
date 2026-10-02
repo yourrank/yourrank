@@ -142,6 +142,15 @@ export type TournamentActionResponse = {
   message?: string;
 };
 
+export type ScoreRequestBody =
+  | { matchId: string; player1Score: number; player2Score: number }
+  | { matchId: string; winnerSlot: 1 | 2 }
+  | { matchId: string; reopen: true };
+
+export type ScoreOutcome = { ok: boolean; message: string };
+
+export type ScoreHandler = (method: "POST" | "PATCH", body: ScoreRequestBody) => Promise<ScoreOutcome>;
+
 export type TournamentCreateResponse = {
   tournament: Tournament;
 };
