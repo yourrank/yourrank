@@ -85,6 +85,7 @@ export function publicTournamentView(tournament, matches = [], { entryCount = 0,
     champion,
     runnerUp,
     finalScore,
+    featured: tournament.featured !== false,
     players: rounds.length ? [] : (players || []).map(known).filter(Boolean),
     rounds,
   };

@@ -63,6 +63,65 @@
     }, { signal: signal });
   }
   window.YRInitSitePage = initSitePage;
+  function tournamentNode(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+  function liveTournamentMatch(view) {
+    var rounds = Array.isArray(view.rounds) ? view.rounds : [];
+    for (var r = 0; r < rounds.length; r++) {
+      var matches = Array.isArray(rounds[r].matches) ? rounds[r].matches : [];
+      for (var m = 0; m < matches.length; m++) {
+        var players = matches[m].players || [];
+        if (matches[m].live && players[0] && players[0].name && players[1] && players[1].name) return players[0].name + " vs " + players[1].name;
+      }
+    }
+    return "";
+  }
+  // Home's tournament banner: what is happening and one link to the public
+  // bracket. Names arrive from the viewer-safe API and are set as text only.
+  function renderTournamentBanner(slot, view) {
+    if (!view || typeof view !== "object") return;
+    var count = Math.max(0, Number(view.entryCount) || 0);
+    var players = count + (count === 1 ? " player" : " players");
+    var tag, note = [], action;
+    if (view.status === "live") {
+      var match = liveTournamentMatch(view);
+      tag = "Tournament live";
+      note.push(match ? "Now playing: " + match : "The bracket is under way.");
+      action = "Follow the bracket";
+    } else if (view.status === "signups") {
+      tag = "Signups open";
+      if (view.joinCommand) note.push("Type ", tournamentNode("code", "", view.joinCommand), " in chat to enter. " + players + " so far.");
+      else note.push(players + " so far.");
+      action = "See who's in";
+    } else if (view.status === "setup") {
+      tag = "Starting soon";
+      note.push("Signups are closed with " + players + ". The bracket appears once it starts.");
+      action = "See the players";
+    } else if (view.status === "finished" && view.featured !== false && view.champion) {
+      tag = "Champion";
+      note.push(view.champion + (view.runnerUp ? " beat " + view.runnerUp + " in the final" + (view.finalScore ? " " + view.finalScore : "") : " won the tournament") + ".");
+      action = "See the final bracket";
+    } else {
+      return;
+    }
+    var copy = tournamentNode("div", "viewer-tournament-copy");
+    copy.appendChild(tournamentNode("p", "viewer-tournament-tag", tag + (view.game ? " · " + view.game : "")));
+    var title = tournamentNode("h2", "", view.title || "Tournament");
+    title.id = "viewer-tournament-title";
+    copy.appendChild(title);
+    var line = tournamentNode("p", "viewer-tournament-note");
+    note.forEach(function (part) { line.append(part); });
+    copy.appendChild(line);
+    var link = tournamentNode("a", "yr-btn", action);
+    link.href = slot.dataset.tournamentHref;
+    slot.replaceChildren(copy, link);
+    slot.dataset.state = view.status;
+    slot.hidden = false;
+  }
   var pageLifetime = new AbortController();
   var streamState = document.querySelector('[data-kick-channel]');
   if (streamState) {
@@ -74,6 +133,15 @@
         streamState.dataset.live = String(data.isLive);
         streamState.hidden = false;
       }).catch(function () { /* Keep the explicit unavailable state. */ });
+  }
+  var tournamentSlot = document.querySelector("[data-public-tournament]");
+  if (tournamentSlot) {
+    fetch("/api/public/" + encodeURIComponent(tournamentSlot.dataset.publicTournament) + "/tournament", { headers: { accept: "application/json" }, signal: pageLifetime.signal })
+      .then(function (response) { if (!response.ok) throw new Error("Unavailable"); return response.json(); })
+      .then(function (data) {
+        if (pageLifetime.signal.aborted || !data || !data.ok) return;
+        renderTournamentBanner(tournamentSlot, data.tournament);
+      }).catch(function () { /* Home stays as it is without the banner. */ });
   }
   document.addEventListener("yr:viewer-unmount", function () {
     pageLifetime.abort();
