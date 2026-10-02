@@ -243,8 +243,8 @@ describe("Giveaways React migration", () => {
     expect($id("gw-verification-share")).toBeNull();
   });
 
-  it("shows the Verified Entry upsell instead of anti-abuse controls in chat mode", async () => {
-    await mountChat(verificationChat({ status: "stopped", entryMode: "chat" }));
+  it("shows the VPN-capable Verified Entry upsell instead of anti-abuse controls in chat mode", async () => {
+    await mountChat(verificationChat({ status: "stopped", entryMode: "chat", vpnDetection: true }));
     const section = $id("gw-anti-abuse-section");
 
     expect(section.hidden).toBe(false);
@@ -256,6 +256,12 @@ describe("Giveaways React migration", () => {
     expect([...section.querySelectorAll("p")].map((paragraph) => paragraph.textContent.trim()))
       .toContain("Chat entries: one entry per Kick account.");
     expect($id("gw-verified-upsell").textContent.trim()).toBe("Turn on Verified Entry to add IP and VPN checks.");
+  });
+
+  it("does not promise VPN checks in the chat-mode upsell when unavailable", async () => {
+    await mountChat(verificationChat({ status: "stopped", entryMode: "chat", vpnDetection: false }));
+
+    expect($id("gw-verified-upsell").textContent.trim()).toBe("Turn on Verified Entry to add IP checks.");
   });
 
   it("shows enabled IP protection and omits unsupported VPN detection in verified mode", async () => {

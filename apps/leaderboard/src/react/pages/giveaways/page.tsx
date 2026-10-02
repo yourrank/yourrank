@@ -1382,7 +1382,11 @@ function ChatGiveaway({
                     ) : (
                       <>
                         <p className="text-xs text-muted-foreground">Chat entries: one entry per Kick account.</p>
-                        <p id="gw-verified-upsell" className="text-xs text-muted-foreground">Turn on Verified Entry to add IP and VPN checks.</p>
+                        <p id="gw-verified-upsell" className="text-xs text-muted-foreground">
+                          {capabilities.vpnDetection === true
+                            ? "Turn on Verified Entry to add IP and VPN checks."
+                            : "Turn on Verified Entry to add IP checks."}
+                        </p>
                       </>
                     )}
                     <Button
