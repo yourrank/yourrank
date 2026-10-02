@@ -863,7 +863,8 @@ describe("Giveaway draw flow", () => {
     const details = $id("gw-advanced-options");
     expect(details.open).toBe(false);
     expect(details.innerHTML).toContain('id="gw-opt-subscriber"');
-    expect(details.innerHTML).toContain('id="gw-opt-ip"');
+    expect(details.innerHTML).toContain('id="gw-verified-upsell"');
+    expect(details.innerHTML).not.toContain('id="gw-opt-ip"');
   });
 
   it("opening and closing Advanced options is a local preference, not a rule", async () => {
