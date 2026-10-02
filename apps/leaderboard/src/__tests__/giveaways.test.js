@@ -243,26 +243,47 @@ describe("Giveaways React migration", () => {
     expect($id("gw-verification-share")).toBeNull();
   });
 
-  it("shows plain-language VPN detection availability copy", async () => {
-    await mountChat(verificationChat({ vpnDetection: true }));
+  it("shows the VPN-capable Verified Entry upsell instead of anti-abuse controls in chat mode", async () => {
+    await mountChat(verificationChat({ status: "stopped", entryMode: "chat", vpnDetection: true }));
+    const section = $id("gw-anti-abuse-section");
+
+    expect(section.hidden).toBe(false);
+    expect($id("gw-opt-ip")).toBeNull();
+    expect($id("gw-opt-vpn")).toBeNull();
+    expect($id("gw-device-requirement")).toBeNull();
+    expect(section.textContent).not.toContain("Duplicate device detection");
+    expect(section.textContent).not.toContain("Locked —");
+    expect([...section.querySelectorAll("p")].map((paragraph) => paragraph.textContent.trim()))
+      .toContain("Chat entries: one entry per Kick account.");
+    expect($id("gw-verified-upsell").textContent.trim()).toBe("Turn on Verified Entry to add IP and VPN checks.");
+  });
+
+  it("does not promise VPN checks in the chat-mode upsell when unavailable", async () => {
+    await mountChat(verificationChat({ status: "stopped", entryMode: "chat", vpnDetection: false }));
+
+    expect($id("gw-verified-upsell").textContent.trim()).toBe("Turn on Verified Entry to add IP checks.");
+  });
+
+  it("shows enabled IP protection and omits unsupported VPN detection in verified mode", async () => {
+    await mountChat(verificationChat({ status: "stopped", vpnDetection: false }));
+
+    expect($id("gw-opt-ip")).toBeTruthy();
+    expect($id("gw-opt-ip").disabled).toBe(false);
+    expect($id("gw-ip-requirement").textContent.trim()).toBe("Shared connections may exclude people living together.");
+    expect($id("gw-opt-vpn")).toBeNull();
+    expect($id("gw-vpn-requirement")).toBeNull();
+    expect($id("gw-anti-abuse-section").textContent).not.toContain("Unavailable right now.");
+  });
+
+  it("shows enabled IP and VPN detection when supported in verified mode", async () => {
+    await mountChat(verificationChat({ status: "stopped", vpnDetection: true }));
+
+    expect($id("gw-opt-ip")).toBeTruthy();
+    expect($id("gw-opt-ip").disabled).toBe(false);
+    expect($id("gw-ip-requirement").textContent.trim()).toBe("Shared connections may exclude people living together.");
+    expect($id("gw-opt-vpn")).toBeTruthy();
+    expect($id("gw-opt-vpn").disabled).toBe(false);
     expect($id("gw-vpn-requirement").textContent.trim()).toBe("Blocks VPN, proxy, Tor and hosting networks.");
-  });
-
-  it("shows plain-language unavailability copy when VPN detection is unavailable", async () => {
-    await mountChat(verificationChat());
-    expect($id("gw-vpn-requirement").textContent.trim()).toBe("Unavailable right now.");
-  });
-
-  it("explains that chat entries are unique per Kick account", async () => {
-    for (const entryMode of ["chat", "verified"]) {
-      await mountChat(verificationChat({ entryMode }));
-      const section = $id("gw-anti-abuse-section");
-      const copy = [...section.querySelectorAll("p")].find((paragraph) => paragraph.textContent.trim() === "Chat entries: one entry per Kick account.");
-
-      expect(section.hidden).toBe(false);
-      expect(copy).toBeTruthy();
-      expect(copy.className).toBe("text-xs text-muted-foreground");
-    }
   });
 
   it("uses the connected-channel API without the legacy chatroom listener", () => {
