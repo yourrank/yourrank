@@ -1368,24 +1368,23 @@ function ChatGiveaway({
                   </fieldset>
                   <fieldset id="gw-anti-abuse-section" disabled={settingsLocked} hidden={manualUi} className="mx-0 min-w-0 border-0 p-0 space-y-3">
                     <h3 id="gw-abuse-title" className="text-sm font-semibold">Anti-abuse</h3>
-                    <RuleCheckbox id="gw-opt-ip" label="One account per IP" checked={Boolean(rules.onePerIp)} disabled={rules.entryMode !== "verified"} onChange={(value) => setRule("onePerIp", value)} />
-                    <RuleCheckbox id="gw-opt-vpn" label="VPN / Proxy detection" checked={Boolean(rules.vpnDetection)} disabled={rules.entryMode !== "verified" || capabilities.vpnDetection !== true} onChange={(value) => setRule("vpnDetection", value)} />
-                    <label className="flex cursor-not-allowed items-center gap-2 text-sm opacity-50">
-                      <Checkbox checked={false} disabled aria-label="Duplicate device detection" aria-describedby="gw-device-requirement" />
-                      <span>Duplicate device detection</span>
-                    </label>
-                    <p id="gw-ip-requirement" className="text-xs text-muted-foreground">{rules.entryMode === "verified" ? "Shared connections may exclude people living together." : "Locked — Requires Verified Entry"}</p>
-                    <p id="gw-vpn-requirement" className="text-xs text-muted-foreground">
-                      {rules.entryMode !== "verified"
-                        ? "Locked — Requires Verified Entry"
-                        : capabilities.vpnDetection === true
-                          ? "Blocks VPN, proxy, Tor and hosting networks."
-                          : "Unavailable right now."}
-                    </p>
-                    <p id="gw-device-requirement" className="text-xs text-muted-foreground">
-                      {rules.entryMode === "verified" ? "Unavailable — No supported device check" : "Locked — Requires Verified Entry and a supported device check"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Chat entries: one entry per Kick account.</p>
+                    {rules.entryMode === "verified" ? (
+                      <>
+                        <RuleCheckbox id="gw-opt-ip" label="One account per IP" checked={Boolean(rules.onePerIp)} onChange={(value) => setRule("onePerIp", value)} />
+                        <p id="gw-ip-requirement" className="text-xs text-muted-foreground">Shared connections may exclude people living together.</p>
+                        {capabilities.vpnDetection === true && (
+                          <>
+                            <RuleCheckbox id="gw-opt-vpn" label="VPN / Proxy detection" checked={Boolean(rules.vpnDetection)} onChange={(value) => setRule("vpnDetection", value)} />
+                            <p id="gw-vpn-requirement" className="text-xs text-muted-foreground">Blocks VPN, proxy, Tor and hosting networks.</p>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground">Chat entries: one entry per Kick account.</p>
+                        <p id="gw-verified-upsell" className="text-xs text-muted-foreground">Turn on Verified Entry to add IP and VPN checks.</p>
+                      </>
+                    )}
                     <Button
                       id="gw-enable-verified"
                       type="button"
