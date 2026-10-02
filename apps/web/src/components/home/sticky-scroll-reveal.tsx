@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScro
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { DEVIN_EASE } from "./reveal";
+import { ProductShot, type ProductShotKind } from "./workspace-preview";
 
 type ProductKind = "giveaways" | "tournaments" | "credits";
 
@@ -43,142 +44,19 @@ const PRODUCTS: ProductStory[] = [
   },
 ];
 
-function GiveawaysVisual() {
-  const chat = [
-    ["NovaByte", "!join", "Entered"],
-    ["RinLive", "!join", "Entered"],
-    ["NovaByte", "!join", "Already entered"],
-    ["MikaWave", "!join", "Entered"],
-  ];
-  return (
-    <div className="h-full bg-white p-4 sm:p-6">
-      <div className="flex items-center justify-between border-b border-devin-line pb-4">
-        <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-ink-soft">Chat giveaway · keyword !join</p>
-          <p className="mt-1 text-lg font-medium">Friday giveaway</p>
-        </div>
-        <span className="flex items-center gap-2 text-[10px] font-medium text-devin-ink-soft">
-          <span className="h-1.5 w-1.5 rounded-full bg-devin-primary" /> Open
-        </span>
-      </div>
-      <div className="mt-5 divide-y divide-devin-line/70 rounded-[8px] border border-devin-line">
-        {chat.map(([name, message, state], index) => (
-          <div key={`${name}-${index}`} className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 text-xs">
-            <span>
-              <span className="font-medium">{name}</span>
-              <span className="ml-2 font-mono text-devin-ink-soft">{message}</span>
-            </span>
-            <span className={`font-mono text-[9px] uppercase tracking-[0.1em] ${state === "Entered" ? "text-devin-primary" : "text-devin-ink-soft line-through decoration-devin-ink/30"}`}>{state}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 grid grid-cols-[1fr_auto] items-center gap-4 rounded-[8px] bg-[#121111] p-4 text-white">
-        <div>
-          <p className="text-sm">412 entries · one per Kick account</p>
-          <p className="mt-1 text-[11px] text-white/60">Second entries from the same account are ignored.</p>
-        </div>
-        <span className="rounded-[2px] bg-devin-primary px-3 py-2 text-[10px] font-medium">Draw winner</span>
-      </div>
-    </div>
-  );
-}
-
-function TournamentsVisual() {
-  const quarter = [["NovaByte", "RinLive"], ["MikaWave", "OrbitNoir"], ["PixelJo", "Lumen"], ["Kestrel", "Vanta"]];
-  const semi = [["NovaByte", "MikaWave"], ["Lumen", "Kestrel"]];
-  const Match = ({ players, winner }: { players: string[]; winner?: string }) => (
-    <div className="overflow-hidden rounded-[6px] border border-devin-line bg-white">
-      {players.map((name) => (
-        <div key={name} className={`flex items-center justify-between px-2.5 py-1.5 text-[11px] ${name === winner ? "font-medium text-devin-ink" : "text-devin-ink-soft"}`}>
-          {name}
-          {name === winner && <span className="h-1.5 w-1.5 rounded-full bg-devin-primary" />}
-        </div>
-      ))}
-    </div>
-  );
-  return (
-    <div className="h-full bg-white p-4 sm:p-6">
-      <div className="flex items-center justify-between border-b border-devin-line pb-4">
-        <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-ink-soft">32 signed up from chat</p>
-          <p className="mt-1 text-lg font-medium">Friday Cup</p>
-        </div>
-        <span className="rounded-[2px] bg-devin-ink px-3 py-2 text-[10px] font-medium text-white">Round 2</span>
-      </div>
-      <div className="mt-5 grid grid-cols-3 items-center gap-3">
-        <div className="grid gap-2">
-          {quarter.map((players, index) => <Match key={index} players={players} winner={["NovaByte", "MikaWave", "Lumen", "Kestrel"][index]} />)}
-        </div>
-        <div className="grid gap-10">
-          {semi.map((players, index) => <Match key={index} players={players} winner={index === 0 ? "NovaByte" : undefined} />)}
-        </div>
-        <div className="grid gap-2">
-          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-ink-soft">Final</p>
-          <Match players={["NovaByte", "TBD"]} />
-        </div>
-      </div>
-      <div className="mt-4 flex items-center justify-between rounded-[8px] border border-devin-line bg-devin-secondary/40 p-4">
-        <span className="text-xs text-devin-ink-soft">Next match goes live</span>
-        <span className="font-mono text-sm font-medium">20:30</span>
-      </div>
-    </div>
-  );
-}
-
-function CreditsVisual() {
-  const rewards = [
-    ["Stream shoutout", "500 cr", "Active"],
-    ["Community VIP role", "2,500 cr", "12 left"],
-    ["Community coaching call", "5,000 cr", "3 left"],
-  ];
-  return (
-    <div className="h-full bg-white p-4 sm:p-6">
-      <div className="flex items-center justify-between border-b border-devin-line pb-4">
-        <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-ink-soft">Credits & Shop</p>
-          <p className="mt-1 text-lg font-medium">Reward catalog</p>
-        </div>
-        <span className="rounded-[2px] bg-devin-primary px-3 py-2 text-[10px] font-medium text-white">Add reward</span>
-      </div>
-      <div className="mt-5 grid gap-3">
-        {rewards.map(([name, cost, state]) => (
-          <div key={name} className="grid grid-cols-[1fr_auto] gap-4 rounded-[8px] border border-devin-line p-4">
-            <div>
-              <p className="text-sm font-medium">{name}</p>
-              <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.1em] text-devin-ink-soft">{state}</p>
-            </div>
-            <span className="self-center font-mono text-xs">{cost}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 flex items-center justify-between rounded-[8px] border border-devin-line bg-devin-secondary/40 p-4">
-        <span className="text-xs text-devin-ink-soft">Pending fulfilment</span>
-        <span className="font-mono text-lg font-medium">07</span>
-      </div>
-    </div>
-  );
-}
+const PRODUCT_SHOTS: Record<ProductKind, ProductShotKind> = {
+  giveaways: "giveaways",
+  tournaments: "tournaments",
+  credits: "rewards",
+};
 
 function ProductVisual({ kind }: { kind: ProductKind }) {
-  return (
-    <div className="h-full overflow-hidden rounded-[14px] border border-devin-line bg-white">
-      <div className="flex items-center gap-2 border-b border-devin-line px-4 py-3">
-        <span className="h-2 w-2 rounded-full bg-devin-secondary" />
-        <span className="h-2 w-2 rounded-full bg-devin-secondary" />
-        <span className="h-2 w-2 rounded-full bg-devin-secondary" />
-        <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.1em] text-devin-ink-soft">Illustrative product view</span>
-      </div>
-      <div className="h-[calc(100%-41px)]">
-        {kind === "giveaways" && <GiveawaysVisual />}
-        {kind === "tournaments" && <TournamentsVisual />}
-        {kind === "credits" && <CreditsVisual />}
-      </div>
-    </div>
-  );
+  return <ProductShot kind={PRODUCT_SHOTS[kind]} />;
 }
 
 export function StickyProductStory() {
   const sectionRef = useRef<HTMLElement>(null);
+  const articleRefs = useRef<(HTMLElement | null)[]>([]);
   const [activeProduct, setActiveProduct] = useState(0);
   const reduceMotion = useReducedMotion();
   const { scrollYProgress } = useScroll({
@@ -186,8 +64,12 @@ export function StickyProductStory() {
     offset: ["start center", "end center"],
   });
 
-  useMotionValueEvent(scrollYProgress, "change", (latest) => {
-    const next = Math.min(PRODUCTS.length - 1, Math.max(0, Math.round(latest * (PRODUCTS.length - 1))));
+  useMotionValueEvent(scrollYProgress, "change", () => {
+    const middle = window.innerHeight / 2;
+    let next = 0;
+    articleRefs.current.forEach((article, index) => {
+      if (article && article.getBoundingClientRect().top <= middle) next = index;
+    });
     setActiveProduct((current) => (current === next ? current : next));
   });
 
@@ -206,7 +88,7 @@ export function StickyProductStory() {
         <div className="mt-16 grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
           <div>
             {PRODUCTS.map((product, index) => (
-              <article key={product.kind} className="flex min-h-[56vh] items-center border-t border-devin-line py-14 first:border-t-0 lg:min-h-[68vh]">
+              <article key={product.kind} ref={(node) => { articleRefs.current[index] = node; }} className="flex min-h-[56vh] items-center border-t border-devin-line py-14 first:border-t-0 lg:min-h-[68vh]">
                 <div>
                   <h3 className="text-3xl font-medium leading-[1.05] tracking-[-0.025em] text-devin-ink sm:text-4xl">
                     {product.label}. {product.title}
@@ -218,7 +100,7 @@ export function StickyProductStory() {
                       <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </Link>
-                  <div className="mt-8 h-[390px] lg:hidden">
+                  <div className="mt-8 lg:hidden">
                     <ProductVisual kind={product.kind} />
                   </div>
                 </div>
@@ -227,7 +109,7 @@ export function StickyProductStory() {
           </div>
 
           <div className="relative hidden lg:block">
-            <div className="sticky top-28 h-[min(66vh,620px)]">
+            <div className="sticky top-28">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={PRODUCTS[activeProduct].kind}
@@ -235,7 +117,6 @@ export function StickyProductStory() {
                   animate={{ opacity: 1, y: 0, clipPath: "inset(0% 0 0 0 round 14px)" }}
                   exit={reduceMotion ? undefined : { opacity: 0, y: -18 }}
                   transition={{ duration: 0.48, ease: DEVIN_EASE }}
-                  className="h-full"
                 >
                   <ProductVisual kind={PRODUCTS[activeProduct].kind} />
                 </motion.div>

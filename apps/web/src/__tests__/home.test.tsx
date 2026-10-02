@@ -29,13 +29,12 @@ describe("Home & Product components", () => {
     }
   });
 
-  it("renders WorkspacePreview with overview stats and player standings", () => {
+  it("renders WorkspacePreview as a labelled capture of the real dashboard", () => {
     const html = renderToString(<WorkspacePreview />);
-    expect(html).toContain("YourRank");
+    expect(html).toContain('src="/brand/product/home.webp"');
+    expect(html).toContain("yourrank.site/dashboard");
+    expect(html).toContain("Real dashboard · sample data");
     expect(html).toContain("Friday Stream");
-    expect(html).toContain("NovaByte");
-    expect(html).toContain("Giveaway entries");
-    expect(html).toContain("Tournament players");
   });
 
   it("renders ProofMarquee with product capabilities", () => {
