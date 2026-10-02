@@ -32,7 +32,7 @@ export function WorkspaceScrollReveal() {
           className="w-full max-w-[1160px] origin-top will-change-transform"
         >
           <div className="mb-3 flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-devin-ink-soft sm:mb-4">
-            <span>One workspace · three connected products</span>
+            <span>One place for every stream event</span>
             <span className="hidden sm:inline">Scroll to enter</span>
           </div>
           <WorkspacePreview />

@@ -5,10 +5,11 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { DEVIN_EASE } from "./reveal";
 
-type ProductKind = "sites" | "telegram" | "credits";
+type ProductKind = "giveaways" | "tournaments" | "credits";
 
 interface ProductStory {
   kind: ProductKind;
+  label: string;
   title: string;
   description: string;
   href: string;
@@ -17,90 +18,108 @@ interface ProductStory {
 
 const PRODUCTS: ProductStory[] = [
   {
-    kind: "sites",
-    title: "Publish the place viewers return to.",
-    description: "Create a branded community site with live standings, rewards, viewer membership, and an OBS-ready overlay at one memorable address.",
-    href: "/sites",
-    action: "Explore Sites",
+    kind: "giveaways",
+    label: "Giveaways",
+    title: "Run them from chat, keep them fair.",
+    description: "Viewers type your keyword in Kick chat to enter. Each Kick account gets one entry, likely-linked accounts show up for your review, and you draw the winner on stream.",
+    href: "/demo",
+    action: "See the live demo",
   },
   {
-    kind: "telegram",
-    title: "Keep the conversation moving between streams.",
-    description: "Connect Telegram commands, broadcasts, and tracked offers to the same audience journey—without losing the site context.",
-    href: "/telegram",
-    action: "Explore Telegram",
+    kind: "tournaments",
+    label: "Tournaments",
+    title: "Signups in chat, brackets built for you.",
+    description: "Open signups with a chat keyword, close them when you are ready, and run the bracket round by round. Included from Starter.",
+    href: "/pricing",
+    action: "Compare plans",
   },
   {
     kind: "credits",
-    title: "Turn participation into a reason to come back.",
-    description: "Map Kick channel points to credits, publish rewards, and track every redemption through a transparent fulfilment queue.",
+    label: "Rewards",
+    title: "Give channel points somewhere to go.",
+    description: "Map Kick channel points to credits, publish rewards you pick, and fulfil every redemption from one queue.",
     href: "/credits",
     action: "Explore Credits & Shop",
   },
 ];
 
-function SitesVisual() {
-  return (
-    <div className="h-full bg-white p-4 sm:p-6">
-      <div className="flex items-center justify-between border-b border-devin-line pb-4">
-        <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-ink-soft">kick-sub-race.yourrank.site</p>
-          <p className="mt-1 text-lg font-medium">Community standings</p>
-        </div>
-        <span className="rounded-[2px] bg-devin-ink px-3 py-2 text-[10px] font-medium text-white">Published</span>
-      </div>
-      <div className="mt-5 overflow-hidden rounded-[8px] border border-devin-line">
-        {["NovaByte", "RinLive", "MikaWave", "OrbitNoir"].map((name, index) => (
-          <div key={name} className="grid grid-cols-[30px_1fr_auto] items-center border-b border-devin-line/70 px-3 py-3 text-xs last:border-b-0">
-            <span className="font-mono text-devin-ink-soft">{String(index + 1).padStart(2, "0")}</span>
-            <span className="font-medium">{name}</span>
-            <span className="font-mono">{["9,500", "7,200", "5,400", "3,100"][index]} pts</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <div className="rounded-[8px] border border-devin-line p-4">
-          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-ink-soft">Next event</p>
-          <p className="mt-2 text-sm font-medium">Friday · 20:00</p>
-        </div>
-        <div className="rounded-[8px] border border-devin-primary/30 bg-devin-primary/[0.04] p-4">
-          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-primary">Live overlay</p>
-          <p className="mt-2 text-sm font-medium">Ready for OBS</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TelegramVisual() {
-  const messages = [
-    ["Broadcast", "Reward drop goes live in 20 minutes.", "842 queued"],
-    ["/rank", "Viewer rank reply is active.", "Enabled"],
-    ["Tracked offer", "Friday campaign link copied 156 times.", "14 days"],
+function GiveawaysVisual() {
+  const chat = [
+    ["NovaByte", "!join", "Entered"],
+    ["RinLive", "!join", "Entered"],
+    ["NovaByte", "!join", "Already entered"],
+    ["MikaWave", "!join", "Entered"],
   ];
   return (
     <div className="h-full bg-white p-4 sm:p-6">
       <div className="flex items-center justify-between border-b border-devin-line pb-4">
         <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-ink-soft">Telegram operations</p>
-          <p className="mt-1 text-lg font-medium">Community bot</p>
+          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-ink-soft">Chat giveaway · keyword !join</p>
+          <p className="mt-1 text-lg font-medium">Friday giveaway</p>
         </div>
         <span className="flex items-center gap-2 text-[10px] font-medium text-devin-ink-soft">
-          <span className="h-1.5 w-1.5 rounded-full bg-devin-primary" /> Connected
+          <span className="h-1.5 w-1.5 rounded-full bg-devin-primary" /> Open
         </span>
       </div>
       <div className="mt-5 divide-y divide-devin-line/70 rounded-[8px] border border-devin-line">
-        {messages.map(([label, body, state]) => (
-          <div key={label} className="grid gap-3 p-4 sm:grid-cols-[92px_1fr_auto] sm:items-center">
-            <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-devin-primary">{label}</span>
-            <span className="text-xs text-devin-ink">{body}</span>
-            <span className="font-mono text-[9px] text-devin-ink-soft">{state}</span>
+        {chat.map(([name, message, state], index) => (
+          <div key={`${name}-${index}`} className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 text-xs">
+            <span>
+              <span className="font-medium">{name}</span>
+              <span className="ml-2 font-mono text-devin-ink-soft">{message}</span>
+            </span>
+            <span className={`font-mono text-[9px] uppercase tracking-[0.1em] ${state === "Entered" ? "text-devin-primary" : "text-devin-ink-soft line-through decoration-devin-ink/30"}`}>{state}</span>
           </div>
         ))}
       </div>
-      <div className="mt-4 rounded-[8px] bg-[#121111] p-4 text-white">
-        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/50">Next broadcast</p>
-        <p className="mt-2 text-sm">New shop rewards are ready. View the catalog on your community site.</p>
+      <div className="mt-4 grid grid-cols-[1fr_auto] items-center gap-4 rounded-[8px] bg-[#121111] p-4 text-white">
+        <div>
+          <p className="text-sm">412 entries · one per Kick account</p>
+          <p className="mt-1 text-[11px] text-white/60">Second entries from the same account are ignored.</p>
+        </div>
+        <span className="rounded-[2px] bg-devin-primary px-3 py-2 text-[10px] font-medium">Draw winner</span>
+      </div>
+    </div>
+  );
+}
+
+function TournamentsVisual() {
+  const quarter = [["NovaByte", "RinLive"], ["MikaWave", "OrbitNoir"], ["PixelJo", "Lumen"], ["Kestrel", "Vanta"]];
+  const semi = [["NovaByte", "MikaWave"], ["Lumen", "Kestrel"]];
+  const Match = ({ players, winner }: { players: string[]; winner?: string }) => (
+    <div className="overflow-hidden rounded-[6px] border border-devin-line bg-white">
+      {players.map((name) => (
+        <div key={name} className={`flex items-center justify-between px-2.5 py-1.5 text-[11px] ${name === winner ? "font-medium text-devin-ink" : "text-devin-ink-soft"}`}>
+          {name}
+          {name === winner && <span className="h-1.5 w-1.5 rounded-full bg-devin-primary" />}
+        </div>
+      ))}
+    </div>
+  );
+  return (
+    <div className="h-full bg-white p-4 sm:p-6">
+      <div className="flex items-center justify-between border-b border-devin-line pb-4">
+        <div>
+          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-ink-soft">32 signed up from chat</p>
+          <p className="mt-1 text-lg font-medium">Friday Cup</p>
+        </div>
+        <span className="rounded-[2px] bg-devin-ink px-3 py-2 text-[10px] font-medium text-white">Round 2</span>
+      </div>
+      <div className="mt-5 grid grid-cols-3 items-center gap-3">
+        <div className="grid gap-2">
+          {quarter.map((players, index) => <Match key={index} players={players} winner={["NovaByte", "MikaWave", "Lumen", "Kestrel"][index]} />)}
+        </div>
+        <div className="grid gap-10">
+          {semi.map((players, index) => <Match key={index} players={players} winner={index === 0 ? "NovaByte" : undefined} />)}
+        </div>
+        <div className="grid gap-2">
+          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-devin-ink-soft">Final</p>
+          <Match players={["NovaByte", "TBD"]} />
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-between rounded-[8px] border border-devin-line bg-devin-secondary/40 p-4">
+        <span className="text-xs text-devin-ink-soft">Next match goes live</span>
+        <span className="font-mono text-sm font-medium">20:30</span>
       </div>
     </div>
   );
@@ -150,8 +169,8 @@ function ProductVisual({ kind }: { kind: ProductKind }) {
         <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.1em] text-devin-ink-soft">Illustrative product view</span>
       </div>
       <div className="h-[calc(100%-41px)]">
-        {kind === "sites" && <SitesVisual />}
-        {kind === "telegram" && <TelegramVisual />}
+        {kind === "giveaways" && <GiveawaysVisual />}
+        {kind === "tournaments" && <TournamentsVisual />}
         {kind === "credits" && <CreditsVisual />}
       </div>
     </div>
@@ -177,10 +196,10 @@ export function StickyProductStory() {
       <div className="mx-auto max-w-6xl">
         <div className="max-w-3xl">
           <h2 className="text-[clamp(2.5rem,5.2vw,4.8rem)] font-medium leading-[0.98] tracking-[-0.035em] text-devin-ink">
-            One audience journey. Three connected products.
+            Three reasons viewers keep showing up.
           </h2>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-devin-ink-soft">
-            YourRank keeps the public site, Telegram activity, and viewer rewards in one operating context.
+            Giveaways bring them in, tournaments give them something to play for, and rewards give them a reason to come back next stream.
           </p>
         </div>
 
@@ -190,7 +209,7 @@ export function StickyProductStory() {
               <article key={product.kind} className="flex min-h-[56vh] items-center border-t border-devin-line py-14 first:border-t-0 lg:min-h-[68vh]">
                 <div>
                   <h3 className="text-3xl font-medium leading-[1.05] tracking-[-0.025em] text-devin-ink sm:text-4xl">
-                    {product.kind === "sites" ? "Sites" : product.kind === "telegram" ? "Telegram" : "Credits & Shop"}. {product.title}
+                    {product.label}. {product.title}
                   </h3>
                   <p className="mt-5 max-w-lg text-base leading-relaxed text-devin-ink-soft">{product.description}</p>
                   <Link href={product.href} data-magnetic className="mt-7 inline-flex min-h-11 items-center rounded-[2px] border border-devin-line bg-white px-4 text-sm font-medium text-devin-ink transition-colors hover:border-devin-ink/40">

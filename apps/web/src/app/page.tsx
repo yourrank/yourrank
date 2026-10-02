@@ -17,13 +17,13 @@ import { getCurrentUser } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "YourRank — Keep your community loop moving",
+  title: "YourRank — Giveaways, tournaments & rewards for Kick streamers",
   description:
-    "Launch a streamer site, activate viewers on Telegram, and bring them back with Credits & Shop.",
+    "Run giveaways and tournaments from Kick chat, keep entries to one per Kick account, and give viewers rewards worth coming back for.",
   openGraph: {
-    title: "YourRank — Keep your community loop moving",
+    title: "YourRank — Giveaways, tournaments & rewards for Kick streamers",
     description:
-      "Launch a streamer site, activate viewers on Telegram, and bring them back with Credits & Shop.",
+      "Run giveaways and tournaments from Kick chat, keep entries to one per Kick account, and give viewers rewards worth coming back for.",
     url: "https://yourrank.site/",
     type: "website",
     images: ["https://yourrank.site/og.png"],

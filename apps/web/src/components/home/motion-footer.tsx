@@ -14,7 +14,7 @@ const FOOTER_LINKS = [
   ["FAQ", "/faq"],
 ] as const;
 
-const LOOP_WORDS = ["Publish", "Activate", "Reward", "Return"];
+const LOOP_WORDS = ["Giveaways", "Tournaments", "Rewards", "Return"];
 
 export function MotionFooter() {
   const wrapperRef = useRef<HTMLElement>(null);

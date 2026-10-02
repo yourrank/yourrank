@@ -4,10 +4,10 @@ function BrandGlyph() {
   return <span dangerouslySetInnerHTML={{ __html: brandLogoSvg({ className: "h-5 w-[94px]" }) }} />;
 }
 
-function ActivityGlyph({ kind }: { kind: "site" | "telegram" | "credit" }) {
+function ActivityGlyph({ kind }: { kind: "giveaway" | "tournament" | "credit" }) {
   const paths = {
-    site: <path d="M4 5.5h16v13H4zM4 9h16M8 5.5v13" />,
-    telegram: <path d="m3.5 11 16-6-4 14-4.25-4-3 2.2.7-4.7L3.5 11Zm5.45 1.5 6.8-4.1-4.5 6.5" />,
+    giveaway: <path d="M4 10h16v10H4zM3 7h18v3H3zM12 7v13M12 7c-1.5-3-5-3.5-5-1.25C7 7 9.5 7 12 7Zm0 0c1.5-3 5-3.5 5-1.25C17 7 14.5 7 12 7Z" />,
+    tournament: <path d="M4 5h4v4H4zM4 15h4v4H4zM8 7h3v10H8M11 12h4M15 10h5v4h-5z" />,
     credit: <path d="M12 3.5v17M16 7.25c-.8-1-2-1.5-3.8-1.5-2.2 0-3.7 1.1-3.7 2.8 0 4 7.5 1.5 7.5 5.7 0 1.8-1.5 3-4 3-1.8 0-3.3-.55-4.25-1.7" />,
   };
   return (
@@ -18,9 +18,9 @@ function ActivityGlyph({ kind }: { kind: "site" | "telegram" | "credit" }) {
 }
 
 const ACTIVITY = [
-  { kind: "site" as const, title: "Site published", detail: "kick-sub-race.yourrank.site", time: "now" },
-  { kind: "telegram" as const, title: "Broadcast queued", detail: "New reward drop · 842 subscribers", time: "2m" },
-  { kind: "credit" as const, title: "Reward fulfilled", detail: "VIP role · 2,500 credits", time: "8m" },
+  { kind: "giveaway" as const, title: "Giveaway winner drawn", detail: "!join · 412 entries · 1 per Kick account", time: "now" },
+  { kind: "tournament" as const, title: "Tournament signups closed", detail: "Friday Cup · 32 players · bracket ready", time: "6m" },
+  { kind: "credit" as const, title: "Reward fulfilled", detail: "VIP role · 2,500 credits", time: "14m" },
 ];
 
 const PLAYERS = [
@@ -38,7 +38,7 @@ export function WorkspacePreview() {
           YourRank
         </div>
         <div className="hidden items-center gap-2 rounded-[4px] border border-white/15 px-3 py-1.5 text-xs text-white/72 sm:flex">
-          Kick Sub Race
+          Friday Stream
           <svg aria-hidden="true" viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="m3 4.5 3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -53,10 +53,10 @@ export function WorkspacePreview() {
         <aside className="hidden border-r border-white/8 bg-[#121111] p-4 text-white sm:block">
           <div className="rounded-[8px] border border-white/12 bg-white/[0.03] p-3">
             <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/45">Active site</p>
-            <p className="mt-2 text-sm font-medium">Kick Sub Race</p>
+            <p className="mt-2 text-sm font-medium">Friday Stream</p>
           </div>
           <nav className="mt-5 grid gap-1" aria-label="Illustrative workspace navigation">
-            {["Overview", "Sites", "Telegram", "Credits & Shop", "Analytics"].map((item, index) => (
+            {["Overview", "Giveaways", "Tournaments", "Credits & Shop", "Site"].map((item, index) => (
               <div
                 key={item}
                 className={`flex min-h-10 items-center rounded-[4px] px-3 text-xs ${index === 0 ? "bg-white/8 text-white" : "text-white/55"}`}
@@ -74,7 +74,7 @@ export function WorkspacePreview() {
         <div className="bg-[#FCFCFC] p-4 sm:p-6 lg:p-8">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-devin-ink-soft">Community operations</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-devin-ink-soft">Stream night</p>
               <h2 className="mt-1 text-2xl font-medium tracking-[-0.025em]">Overview</h2>
             </div>
             <span className="rounded-full border border-devin-line bg-white px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.1em] text-devin-ink-soft">
@@ -84,8 +84,8 @@ export function WorkspacePreview() {
 
           <div className="mt-6 grid overflow-hidden rounded-[10px] border border-devin-line bg-devin-line sm:grid-cols-3">
             {[
-              ["Page views", "2,847", "14 days"],
-              ["Subscribers", "842", "Telegram"],
+              ["Giveaway entries", "412", "Tonight"],
+              ["Tournament players", "32", "Friday Cup"],
               ["Credits issued", "18.4k", "This cycle"],
             ].map(([label, value, meta]) => (
               <div key={label} className="bg-white p-4 sm:p-5">

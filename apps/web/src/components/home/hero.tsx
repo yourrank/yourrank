@@ -97,7 +97,7 @@ export function Hero() {
           transition={{ duration: 0.7, delay: 0.34, ease: DEVIN_EASE }}
           className="mx-auto mt-6 max-w-2xl text-[17px] leading-relaxed text-devin-ink-soft sm:mt-7 sm:text-lg"
         >
-          Publish a branded site, keep the conversation active on Telegram, and turn viewer participation into rewards—all from one workspace.
+          Run giveaways and tournaments straight from Kick chat, keep it to one entry per Kick account, and let viewers spend channel points on rewards you pick.
         </motion.p>
 
         <motion.div
@@ -115,15 +115,15 @@ export function Hero() {
         </motion.div>
 
         <motion.a
-          href="/sites"
+          href="#products"
           data-magnetic
           initial={reduceMotion ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, delay: 0.58, ease: DEVIN_EASE }}
           className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-devin-line bg-white py-1.5 pl-2 pr-4 text-xs text-devin-ink"
         >
-          <span className="rounded-full bg-devin-primary px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-white">Live</span>
-          See the connected suite
+          <span className="rounded-full bg-devin-primary px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-white">Free</span>
+          Chat giveaways are on every plan
           <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 text-devin-ink-soft" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M4 12 12 4M6 4h6v6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>

@@ -228,7 +228,7 @@ export function PricingPlans() {
             </Link>
           </aside>
           <p className="mt-5 max-w-3xl text-sm leading-relaxed text-devin-ink-soft">
-            Starter and Pro checkout is live — paid access activates only after a verified Polar confirmation, and you can cancel anytime from the customer portal. Team is not currently sold; existing Team accounts remain supported.
+            Paid plans unlock as soon as your payment is confirmed, and you can cancel anytime from the billing portal.
           </p>
         </div>
       </section>
