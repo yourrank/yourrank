@@ -341,7 +341,7 @@ describe("Giveaways React migration", () => {
     expect(giveawaysPageSource).not.toContain("gw-stat-");
     expect(giveawaysPageSource).toContain("mt-4 grid gap-6 md:grid-cols-3");
     expect(giveawaysPageSource).toContain("sticky top-0 z-10");
-    expect(giveawaysPageSource).toContain('className="rounded-lg"');
+    expect(giveawaysPageSource).toContain('className="group rounded-lg"');
     expect(giveawaysPageSource).toContain("text-base font-semibold");
     expect(giveawaysConfig.styles).not.toContain("/assets/giveaways.css");
   });
@@ -381,7 +381,7 @@ describe("Giveaways React migration", () => {
     ]) {
       expect($id(id).className).toContain("mx-0 min-w-0 border-0 p-0");
     }
-    expect($id("gw-advanced-options").className).toBe("rounded-lg");
+    expect($id("gw-advanced-options").className).toBe("group rounded-lg");
     expect($id("gw-advanced-options").querySelector("summary").className).toContain("text-base font-semibold");
     expect(settingsColumn.className).toContain("max-[960px]:order-3");
     expect(participantsColumn.className).toContain("max-[960px]:order-2");
