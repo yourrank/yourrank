@@ -155,6 +155,46 @@ describe("public tournament page", () => {
     expect(html).not.toContain('class="tp-stream"');
   });
 
+  it("swaps in the server-rendered bracket when the public API reports a change", async () => {
+    const html = renderPublicTournamentPage({ view, slug: "kickcup", siteName: "Kick Cup", nonce: "n" });
+    const script = html.slice(html.indexOf('<script nonce="n">') + '<script nonce="n">'.length, html.lastIndexOf("</script>"));
+    // The inline client must be standalone: bundlers rewrite server functions
+    // (e.g. esbuild keepNames adds __name), so none are serialized into it.
+    expect(script).not.toContain("tournamentBodyHtml");
+    expect(script).not.toContain("__name");
+    const root = { innerHTML: "old" };
+    let tick = null;
+    let current = view;
+    const fetched = [];
+    const fetchStub = async (url) => {
+      fetched.push(url);
+      if (url === "/api/public/kickcup/tournament") return { ok: true, json: async () => ({ ok: true, tournament: current }) };
+      return { ok: true, text: async () => "<html><div id=\"tp-root\">fresh</div></html>" };
+    };
+    class DOMParserStub {
+      parseFromString(text) {
+        return { getElementById: () => ({ innerHTML: /<div id="tp-root">(.*?)<\/div>/.exec(text)[1] }) };
+      }
+    }
+    new Function("document", "fetch", "setInterval", "DOMParser", "location", script)(
+      { getElementById: () => root },
+      fetchStub,
+      (fn) => { tick = fn; },
+      DOMParserStub,
+      { pathname: "/kickcup/tournament" },
+    );
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    tick();
+    for (let i = 0; i < 5; i += 1) await settle();
+    expect(fetched).toEqual(["/api/public/kickcup/tournament"]);
+    expect(root.innerHTML).toBe("old");
+    current = { ...view, status: "finished", champion: "Alice" };
+    tick();
+    for (let i = 0; i < 5; i += 1) await settle();
+    expect(fetched.slice(1)).toEqual(["/api/public/kickcup/tournament", "/kickcup/tournament"]);
+    expect(root.innerHTML).toBe("fresh");
+  });
+
   it("renders the stream variant without site navigation on a transparent page", () => {
     const html = renderPublicTournamentPage({ view, slug: "kickcup", siteName: "Kick Cup", nonce: "n", stream: true });
     expect(html).toContain('<body class="tp-stream">');

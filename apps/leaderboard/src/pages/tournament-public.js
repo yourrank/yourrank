@@ -1,8 +1,8 @@
 // Public read-only tournament bracket: /<slug>/tournament, plus the plain
 // stream variant /<slug>/tournament/stream for an OBS browser source.
 // Renders from the viewer-safe shape in lib/tournament-public.js only.
-// `tournamentBodyHtml` is pure and self-contained so the same function renders
-// on the server and is inlined into the page to refresh from the public API.
+// The page polls the public API and, when the bracket changes, swaps in the
+// freshly server-rendered #tp-root so there is a single renderer.
 
 export function tournamentBodyHtml(view, stream) {
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -56,7 +56,7 @@ export function renderPublicTournamentPage({ view, slug, siteName, nonce, stream
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const apiPath = `/api/public/${encodeURIComponent(slug)}/tournament`;
   const title = `${view ? view.title : "Tournament"} · ${siteName || slug}`;
-  const config = JSON.stringify({ api: apiPath, stream: !!stream }).replace(/</g, "\\u003c");
+  const config = JSON.stringify({ api: apiPath, seen: JSON.stringify(view ?? null) }).replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -125,15 +125,24 @@ ${stream ? "" : `<nav class="tp-nav" aria-label="Community"><a href="/${esc(enco
 <script nonce="${nonce}">
 (function(){
 var config=${config};
-var render=${tournamentBodyHtml.toString()};
 var root=document.getElementById("tp-root");
-var last=root.innerHTML;
+var seen=config.seen;
+var busy=false;
 function refresh(){
+  if(busy)return;
+  busy=true;
   fetch(config.api,{headers:{accept:"application/json"},cache:"no-store"}).then(function(r){return r.ok?r.json():null;}).then(function(data){
     if(!data||!data.ok)return;
-    var next=render(data.tournament,config.stream);
-    if(next!==last){root.innerHTML=next;last=next;}
-  }).catch(function(){});
+    var next=JSON.stringify(data.tournament===undefined?null:data.tournament);
+    if(next===seen)return;
+    return fetch(location.pathname,{headers:{accept:"text/html"},cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(html){
+      if(!html)return;
+      var fresh=new DOMParser().parseFromString(html,"text/html").getElementById("tp-root");
+      if(!fresh)return;
+      root.innerHTML=fresh.innerHTML;
+      seen=next;
+    });
+  }).catch(function(){}).then(function(){busy=false;});
 }
 setInterval(refresh,${stream ? 5000 : 15000});
 })();
