@@ -1933,7 +1933,8 @@ export async function getPublicTournamentView(site, deps = {}) {
   const { one = defaultOne, query = defaultQuery } = deps;
   if (!site?.id || !canUseFeature(site.plan, "tournaments")) return null;
   const tourn = await one(
-    `SELECT id, title, game_name, bracket_size, status, signup_state, winner_name, entry_keyword, chat_channel
+    `SELECT id, title, game_name, bracket_size, status, signup_state, winner_name, entry_keyword, chat_channel,
+            (status <> 'completed' OR updated_at > now() - interval '7 days') AS featured
        FROM tournaments
       WHERE site_id=$1
         AND (status IN ('active', 'completed') OR (status='draft' AND signup_state IN ('open', 'locked')))
@@ -1956,7 +1957,18 @@ export async function getPublicTournamentView(site, deps = {}) {
       [tourn.id]
     ),
   ]);
-  return publicTournamentView(tourn, matches || [], { entryCount: counts?.entries });
+  const players = matches?.length ? [] : await query(
+    `SELECT display_name
+       FROM tournament_entries
+      WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')
+      ORDER BY created_at ASC
+      LIMIT 256`,
+    [tourn.id]
+  );
+  return publicTournamentView(tourn, matches || [], {
+    entryCount: counts?.entries,
+    players: (players || []).map((row) => row.display_name),
+  });
 }
 
 // GET /api/public/:slug/tournament

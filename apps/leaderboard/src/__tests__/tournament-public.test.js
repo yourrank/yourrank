@@ -83,6 +83,15 @@ describe("publicTournamentView", () => {
     const view = publicTournamentView(tournament({ status: "draft", signup_state: "open" }), [], { entryCount: 3 });
     expect(view).toMatchObject({ status: "signups", joinCommand: "!join", chatChannel: "kickcup", entryCount: 3, rounds: [] });
   });
+
+  it("lists entrants by display name before the bracket exists, and only then", () => {
+    const signups = publicTournamentView(tournament({ status: "draft", signup_state: "open" }), [], {
+      entryCount: 3, players: ["Nova", " ", BYE, "TBD", "Kai"],
+    });
+    expect(signups.players).toEqual(["Nova", "Kai"]);
+    const live = publicTournamentView(tournament(), fivePlayerMatches(), { entryCount: 5, players: ["Nova"] });
+    expect(live.players).toEqual([]);
+  });
 });
 
 describe("GET /api/public/:slug/tournament", () => {
@@ -106,6 +115,20 @@ describe("GET /api/public/:slug/tournament", () => {
     expect(JSON.stringify(body)).not.toContain("tourn-secret-id");
     expect(one.mock.calls[0][1]).toEqual(["site-1"]);
     expect(String(one.mock.calls[0][0])).not.toContain("entry_fee");
+  });
+
+  it("lists only active entrants while signups are open", async () => {
+    const one = mock(async (sql) => (String(sql).includes("FROM tournaments") ? tournament({ status: "draft", signup_state: "open" }) : { entries: 2 }));
+    const query = mock(async (sql) => (String(sql).includes("FROM tournament_entries")
+      ? [{ display_name: "Nova", id: "entry-secret", alt_flag: "possible_alt", status: "pending" }, { display_name: "Kai" }]
+      : []));
+    const body = await (await call("kickcup", { getPublicSite: async () => site, one, query })).json();
+    expect(body.tournament.players).toEqual(["Nova", "Kai"]);
+    const raw = JSON.stringify(body);
+    for (const secret of ["entry-secret", "possible_alt", "pending"]) expect(raw).not.toContain(secret);
+    const rosterSql = String(query.mock.calls.find(([sql]) => String(sql).includes("FROM tournament_entries"))[0]);
+    expect(rosterSql).toContain("status IN ('pending', 'confirmed', 'selected')");
+    expect(rosterSql).toMatch(/SELECT display_name\s+FROM/);
   });
 
   it("answers null when the site has no public tournament", async () => {
@@ -143,6 +166,18 @@ describe("public tournament page", () => {
     expect(html).toContain("&lt;img src=x&gt;");
     expect(html).not.toContain("<img");
     expect(html).toContain("Live now");
+  });
+
+  it("shows the escaped player list during signups and drops it once the bracket exists", () => {
+    const signups = publicTournamentView(tournament({ status: "draft", signup_state: "open" }), [], {
+      entryCount: 2, players: ["Nova", "<i>Kai</i>"],
+    });
+    const html = tournamentBodyHtml(signups, false);
+    expect(html).toContain("Players (2)");
+    expect(html).toContain('<li class="tp-roster-name">Nova</li>');
+    expect(html).toContain("&lt;i&gt;Kai&lt;/i&gt;");
+    expect(html).not.toContain("<i>");
+    expect(tournamentBodyHtml(view, false)).not.toContain("tp-roster");
   });
 
   it("serves a nonce'd page that refreshes from the public API", () => {

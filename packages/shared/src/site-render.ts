@@ -1001,8 +1001,11 @@ function homeMain(ctx) {
   const rewardCards = items.map(item => `<li class="yr-rwd">${rewardImage(item, slug)}<div class="yr-rwd-main"><h3 class="yr-rwd-n">${esc(item.name)}</h3>${item.description ? `<p class="yr-rwd-p">${esc(item.description)}</p>` : ''}</div><div class="yr-rwd-side"><p class="yr-rwd-c">${viewerIcon('coins')}${formatNumber(item.cost)} credits</p><a class="yr-act" href="${rewardDetailHref(shopHref, String(item.id))}" aria-label="View ${esc(item.name)}">View reward ${viewerIcon('arrow')}</a></div></li>`).join('');
   // Empty shelves keep the product grid's shape so the page reads the same
   // before the creator publishes anything; nothing on them is for sale.
+  // Filled by site-shell.js from the public tournament API, so a cached Home
+  // page still shows the tournament's current state.
+  const tournamentSlot = !isCustomDomain && slug ? `<section class="viewer-tournament" data-public-tournament="${esc(slug)}" data-tournament-href="/${esc(encodeURIComponent(slug))}/tournament" aria-labelledby="viewer-tournament-title" hidden></section>` : '';
   const emptyRewards = `<div class="viewer-home-empty viewer-home-empty--shelf"><div class="viewer-shelf-ghost" aria-hidden="true"><span></span><span></span><span></span><span></span></div><div>${viewerIcon('gift')}<p><strong>No rewards yet.</strong> The creator will publish them here; credits you earn in ${name} stay ready for them.</p></div></div>`;
-  return `<div class="viewer-home-columns">${leaderboardPreview(ctx)}${siteSections.shop !== false ? `<section class="viewer-card viewer-home-rewards"><div class="viewer-card-head"><h2>${viewerIcon('gift')}Community rewards</h2><a href="${shopHref}">View all ${viewerIcon('arrow')}</a></div>${items.length ? `<ul class="yr-rwds" data-count="${Math.min(items.length, 3)}">${rewardCards}</ul>` : emptyRewards}</section>` : ''}</div>`;
+  return `${tournamentSlot}<div class="viewer-home-columns">${leaderboardPreview(ctx)}${siteSections.shop !== false ? `<section class="viewer-card viewer-home-rewards"><div class="viewer-card-head"><h2>${viewerIcon('gift')}Community rewards</h2><a href="${shopHref}">View all ${viewerIcon('arrow')}</a></div>${items.length ? `<ul class="yr-rwds" data-count="${Math.min(items.length, 3)}">${rewardCards}</ul>` : emptyRewards}</section>` : ''}</div>`;
 }
 
 /* ── Leaderboard / Ranks ──────────────────────────────────────────────── */
