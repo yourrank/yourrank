@@ -882,6 +882,16 @@ describe("Giveaway draw flow", () => {
     );
   });
 
+  it("shows a disclosure chevron and summarizes enabled Advanced options", async () => {
+    await boot();
+    const summary = $id("gw-advanced-options").querySelector("summary");
+    expect($id("gw-advanced-summary").textContent.trim()).toBe("");
+    expect(summary.querySelector("svg")).toBeTruthy();
+
+    await actGiveaways(() => { setCheckbox("gw-opt-subscriber", true); });
+    expect($id("gw-advanced-summary").textContent.trim()).toBe("Subscriber only");
+  });
+
   it("advanced settings keep their values while collapsed", async () => {
     await boot();
     await actGiveaways(() => { $id("gw-advanced-options").open = true; });

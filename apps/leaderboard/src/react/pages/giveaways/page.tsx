@@ -2,6 +2,7 @@ import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Check,
+  ChevronDown,
   ChevronRight,
   Copy,
   Crown,
@@ -190,7 +191,7 @@ function formatAdvancedSummary(rules: GiveawayRules) {
     rules.onePerIp && "One per IP",
     rules.vpnDetection && "VPN blocked",
   ].filter(Boolean);
-  return enabled.length ? enabled.join(" · ") : "Off";
+  return enabled.length ? enabled.join(" · ") : "";
 }
 
 function isEligible(entrant: GiveawayEntrant) {
@@ -1337,10 +1338,13 @@ function ChatGiveaway({
         <Card id="gw-advanced-card" className="col-span-full max-[960px]:order-4">
           <CardContent className="pt-6">
             <fieldset id="gw-advanced-settings" disabled={settingsLocked} className="mx-0 min-w-0 border-0 p-0 space-y-4">
-              <details id="gw-advanced-options" open={advancedOpen} onToggle={(event) => updateAdvancedOpen(event.currentTarget.open)} className="rounded-lg">
-                <summary className="flex cursor-pointer items-center justify-between gap-3 text-base font-semibold">
+              <details id="gw-advanced-options" open={advancedOpen} onToggle={(event) => updateAdvancedOpen(event.currentTarget.open)} className="group rounded-lg">
+                <summary className="list-none [&::-webkit-details-marker]:hidden flex cursor-pointer items-center justify-between gap-3 text-base font-semibold">
                   <span>Advanced options</span>
-                  <span id="gw-advanced-summary" className="text-xs font-normal text-muted-foreground">{formatAdvancedSummary(rules)}</span>
+                  <span className="flex items-center gap-2">
+                    <span id="gw-advanced-summary" className="text-xs font-normal text-muted-foreground">{formatAdvancedSummary(rules)}</span>
+                    <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                  </span>
                 </summary>
                 <div className="mt-4 grid gap-6 md:grid-cols-3">
                   <fieldset id="gw-advanced-eligibility-section" disabled={settingsLocked} hidden={manualUi} className="mx-0 min-w-0 border-0 p-0 space-y-3">
