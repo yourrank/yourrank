@@ -18,12 +18,7 @@ import {
   isReversibleKickStatus,
   processKickRewardRedemption,
 } from "@yourrank/shared/kick-credits";
-import {
-  getValidKickAccessToken,
-  isDefinitiveKickAuthorizationFailure,
-  postKickChatMessage,
-} from "@yourrank/shared/kick-oauth";
-import { storeCreatorConnectionTokens } from "@yourrank/shared/provider-connections";
+import { joinConfirmationText, sendTournamentChatMessage } from "../lib/tournament-chat.js";
 
 const KICK_REWARD_EVENT = "channel.reward.redemption.updated";
 const KICK_WEBHOOK_MAX_AGE_MS = 5 * 60 * 1000;
@@ -40,18 +35,61 @@ async function ingestKickChatMessage(payload, env, run = (sql, params) => query(
   return ingestChatGiveawayMessage(run, kickChatMessageToIngestInput(payload));
 }
 
-const replyFailed = (tournamentId, status, reason) =>
-  console.error(JSON.stringify({ event: "tournament_chat_reply_failed", tournamentId, status, reason }));
+const JOIN_ACK_KEY = (tournamentId) => `tournament-join-ack:${tournamentId}`;
+const JOIN_ACK_TTL_SECONDS = 6 * 60 * 60;
+const ACTIVE_ENTRY_STATUSES = "('pending', 'confirmed', 'selected')";
 
-// Answers a full-signup !join in chat. Runs strictly after the ingest
-// transaction commits and never feeds back into the webhook response.
+const kvGetDefault = async (env, key) => (env?.SESSIONS ? env.SESSIONS.get(key) : null);
+const kvPutDefault = async (env, key, value, ttl) => {
+  if (env?.SESSIONS) await env.SESSIONS.put(key, value, { expirationTtl: ttl });
+};
+
+// Builds the join confirmation. Replies share a budget of 3 per 30s per
+// tournament; joins that arrive while that budget is spent are not answered
+// individually, so the next confirmation that does go out names them too.
+// `tournament-join-ack:<id>` holds the DB time of the last confirmation, and
+// every chat entry created after it (other than the sender) rides along.
+async function joinConfirmationContent(tournament, env, { dbOne, dbQuery, kvGet }) {
+  const tournamentId = tournament.tournamentId;
+  const since = await kvGet(env, JOIN_ACK_KEY(tournamentId));
+  const counts = await dbOne(
+    `SELECT now() AS at, count(*) FILTER (WHERE status IN ${ACTIVE_ENTRY_STATUSES})::integer AS players
+       FROM tournament_entries WHERE tournament_id=$1`,
+    [tournamentId]
+  );
+  const others = await dbQuery(
+    `SELECT display_name, count(*) OVER ()::integer AS total
+       FROM tournament_entries
+      WHERE tournament_id=$1 AND source='chat' AND status IN ${ACTIVE_ENTRY_STATUSES}
+        AND created_at > COALESCE($2::timestamptz, now() - interval '30 seconds')
+        AND lower(display_name) <> lower($3)
+      ORDER BY created_at ASC
+      LIMIT 3`,
+    [tournamentId, since || null, String(tournament.senderUsername || "")]
+  );
+  const rows = Array.isArray(others) ? others : [];
+  return {
+    at: counts?.at ? new Date(counts.at).toISOString() : null,
+    content: joinConfirmationText({
+      senderUsername: tournament.senderUsername,
+      title: tournament.tournamentTitle || "",
+      others: rows.map((row) => String(row.display_name)),
+      othersTotal: Number(rows[0]?.total) || 0,
+      playerCount: Number(counts?.players) || 0,
+    }),
+  };
+}
+
+// Answers a !join in chat: a confirmation for a new entry, or the full /
+// waitlist notice. Runs strictly after the ingest transaction commits and
+// never feeds back into the webhook response.
 async function replyTournamentChatOutcome(tournament, env, {
   rateLimit = defaultRateLimit,
-  postChatMessage = postKickChatMessage,
-  getAccessToken = getValidKickAccessToken,
-  storeTokens = storeCreatorConnectionTokens,
   dbOne = one,
-  dbRun = (sql, params) => query(sql, params),
+  dbQuery = (sql, params) => query(sql, params),
+  kvGet = kvGetDefault,
+  kvPut = kvPutDefault,
+  ...sendDeps
 } = {}) {
   const tournamentId = tournament.tournamentId;
   const rl = await rateLimit(env, `tournament-chat-reply:${tournamentId}`, 3, 30);
@@ -59,59 +97,26 @@ async function replyTournamentChatOutcome(tournament, env, {
     console.info(JSON.stringify({ event: "tournament_chat_reply_throttled", tournamentId }));
     return;
   }
-  const connection = await dbOne(
-    `SELECT user_id, external_user_id, access_token_enc, refresh_token_enc, token_expires_at
-       FROM creator_connections
-      WHERE user_id=$1 AND provider='kick' AND status='active'
-      LIMIT 1`,
-    [tournament.ownerUserId]
-  );
-  if (!connection?.access_token_enc) {
-    replyFailed(tournamentId, null, "reconnect_kick_for_chat_write");
-    return;
+  const confirming = tournament.entered && !tournament.waitlisted;
+  let content;
+  let ackAt = null;
+  if (confirming) {
+    const confirmation = await joinConfirmationContent(tournament, env, { dbOne, dbQuery, kvGet });
+    content = confirmation.content;
+    ackAt = confirmation.at;
+  } else {
+    content = tournament.waitlisted
+      ? `@${tournament.senderUsername} Signups are full — you're on the waitlist (#${tournament.waitlistPosition}).`
+      : `@${tournament.senderUsername} Signups are full.`;
   }
-  let tokenSet;
-  try {
-    tokenSet = await getAccessToken(
-      env,
-      connection.access_token_enc,
-      connection.refresh_token_enc || null,
-      connection.token_expires_at
-    );
-  } catch (err) {
-    replyFailed(
-      tournamentId,
-      null,
-      isDefinitiveKickAuthorizationFailure(err)
-        ? "reconnect_kick_for_chat_write"
-        : "token_refresh_failed"
-    );
-    return;
-  }
-  await storeTokens(dbRun, connection.user_id, "kick", {
-    accessTokenEnc: tokenSet.accessEnc,
-    refreshTokenEnc: tokenSet.refreshEnc,
-    tokenExpiresAt: tokenSet.expiresAt,
-  });
-  const content = tournament.waitlisted
-    ? `@${tournament.senderUsername} Signups are full — you're on the waitlist (#${tournament.waitlistPosition}).`
-    : `@${tournament.senderUsername} Signups are full.`;
-  try {
-    await postChatMessage(tokenSet.accessToken, {
-      broadcasterUserId: tournament.broadcasterUserId || connection.external_user_id,
-      content,
-      replyToMessageId: tournament.messageId,
-    });
-  } catch (err) {
-    const status = Number(/\b(\d{3})\b/.exec(String(err?.message || err))?.[1]) || null;
-    replyFailed(
-      tournamentId,
-      status,
-      status === 401 || status === 403
-        ? "reconnect_kick_for_chat_write"
-        : String(err?.message || err).slice(0, 200)
-    );
-  }
+  const sent = await sendTournamentChatMessage(env, {
+    tournamentId,
+    ownerUserId: tournament.ownerUserId,
+    broadcasterUserId: tournament.broadcasterUserId,
+    content,
+    replyToMessageId: tournament.messageId,
+  }, { dbOne, ...sendDeps });
+  if (sent && confirming && ackAt) await kvPut(env, JOIN_ACK_KEY(tournamentId), ackAt, JOIN_ACK_TTL_SECONDS);
 }
 
 export async function handleKickWebhook(
@@ -191,7 +196,7 @@ export async function handleKickWebhook(
       });
       // Chat replies go out only after the entry write committed, and a reply
       // failure must never turn into a webhook failure (Kick would retry).
-      if (outcome.tournament?.full || outcome.tournament?.waitlisted) {
+      if (outcome.tournament?.entered || outcome.tournament?.full || outcome.tournament?.waitlisted) {
         try {
           await replyTournamentChatOutcome(outcome.tournament, env, replyDeps);
         } catch (err) {

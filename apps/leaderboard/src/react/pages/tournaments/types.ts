@@ -161,7 +161,7 @@ export type TournamentDeleteResponse = {
 
 export type BoardShell = {
   activeSiteId?: string | null;
-  board?: { kickChannelName?: string | null } | null;
+  board?: { kickChannelName?: string | null; slug?: string | null; published?: boolean | null } | null;
 };
 
 export type KickChatMessage = {

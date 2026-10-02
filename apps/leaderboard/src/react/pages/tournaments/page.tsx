@@ -282,6 +282,8 @@ function EntryRow({
 export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDependencies } = {}) {
   const [siteId, setSiteId] = useState("");
   const [board, setBoard] = useState<BoardShell["board"]>(null);
+  const publicBracketPath = board?.slug && board.published ? `/${encodeURIComponent(board.slug)}/tournament` : "";
+  const publicBracketUrl = publicBracketPath ? `${window.location.origin}${publicBracketPath}` : "";
   const [tournaments, setTournaments] = useState<TournamentListItem[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [tournament, setTournament] = useState<Tournament | null>(null);
@@ -1317,6 +1319,18 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
               <DialogHeader><DialogTitle id="tournament-bracket-modal-heading">Stream view</DialogTitle><DialogDescription className="tn-sub">Read-only, sized for screen sharing. Enter scores in the Bracket tab.</DialogDescription></DialogHeader>
               <Button type="button" variant="ghost" size="sm" id="tournament-bracket-close" aria-label="Close stream view" onClick={() => setExpandedBracket(false)}>Close</Button>
             </div>
+            {publicBracketPath && (
+              <div className="tn-viewer-links grid gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm" id="tournament-viewer-links">
+                <p className="m-0 font-semibold">Viewer links</p>
+                <p className="tn-sub m-0 text-muted-foreground">
+                  Viewers can follow the bracket at{" "}
+                  <a className="font-medium text-primary underline-offset-2 hover:underline" id="tournament-public-link" href={publicBracketPath} target="_blank" rel="noopener noreferrer">{publicBracketUrl}</a>.
+                </p>
+                <Field label="OBS browser source URL" id="tournament-obs-url">
+                  <Input id="tournament-obs-url" type="text" readOnly className="tn-input h-9 font-mono text-xs" value={`${publicBracketUrl}/stream`} onFocus={(event) => event.currentTarget.select()} />
+                </Field>
+              </div>
+            )}
             <div id="tournament-bracket-full" className="tn-dialog-scroll overflow-auto"><Bracket tournament={tournament} matches={matches} lifecycle={lifecycle} mode="expanded" /></div>
           </div>
         </DialogContent>

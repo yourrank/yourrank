@@ -248,6 +248,19 @@ describe("tournament workspace — completed tournament", () => {
     expect($id("tournament-bracket-modal")).toBeNull();
   });
 
+  it("lists the public bracket and OBS browser source links in the stream view", async () => {
+    await click("tournament-tab-bracket");
+    await click("tournament-bracket-expand");
+    const links = $id("tournament-viewer-links");
+    expect(links).toBeTruthy();
+    const origin = window.location.origin;
+    expect($id("tournament-public-link").getAttribute("href")).toBe("/kick-cup/tournament");
+    expect($id("tournament-public-link").textContent).toBe(`${origin}/kick-cup/tournament`);
+    expect($id("tournament-obs-url").value).toBe(`${origin}/kick-cup/tournament/stream`);
+    expect($id("tournament-obs-url").readOnly).toBe(true);
+    await click("tournament-bracket-close");
+  });
+
   it("shows the read-only settings view instead of the form when finished", async () => {
     await click("tournament-tab-settings");
     expect(visible("tournament-settings-form")).toBe(false);

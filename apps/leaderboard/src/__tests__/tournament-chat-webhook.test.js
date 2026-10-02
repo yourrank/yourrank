@@ -398,7 +398,7 @@ describe("Kick webhook delivery idempotency", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Chat replies: after a full/waitlisted entry commits, the webhook answers in
+// Chat replies: after an entry commits (joined, full or waitlisted), the webhook answers in
 // the streamer's chat through replyDeps. Replies must never fail the webhook.
 // ---------------------------------------------------------------------------
 describe("Kick webhook → tournament chat reply", () => {
@@ -460,10 +460,73 @@ describe("Kick webhook → tournament chat reply", () => {
     );
   });
 
-  it("never sends a reply for a normal entry", async () => {
-    const deps = replyDeps();
-    const res = await send({ routed: true, matched: true, entered: true, tournamentId: "tournament-1" }, deps);
+  const joinedOutcome = (extra = {}) => fullOutcome({ full: false, entered: true, tournamentTitle: "Friday Cup", ...extra });
+  const joinDeps = ({ players = 4, others = [], since = null, ...overrides } = {}) => replyDeps({
+    dbOne: mock(async (sql) => (String(sql).includes("creator_connections")
+      ? CONNECTION
+      : { at: "2026-10-02T17:00:00.000Z", players })),
+    dbQuery: mock(async () => others),
+    kvGet: mock(async () => since),
+    kvPut: mock(async () => {}),
+    ...overrides,
+  });
+
+  it("confirms a successful join in chat while replies are available", async () => {
+    const deps = joinDeps();
+    const res = await send(joinedOutcome(), deps);
     expect(res.status).toBe(200);
+    expect(deps.postChatMessage).toHaveBeenCalledTimes(1);
+    expect(deps.postChatMessage.mock.calls[0][1]).toEqual({
+      broadcasterUserId: "111",
+      content: "@viewer You're in for Friday Cup! 4 players so far.",
+      replyToMessageId: "msg-9",
+    });
+    expect(deps.kvPut).toHaveBeenCalledWith(
+      expect.anything(), "tournament-join-ack:tournament-1", "2026-10-02T17:00:00.000Z", expect.any(Number),
+    );
+  });
+
+  it("names joins that arrived while replies were throttled in the next confirmation", async () => {
+    const since = "2026-10-02T16:59:10.000Z";
+    const deps = joinDeps({
+      players: 9,
+      since,
+      others: [{ display_name: "kai", total: 6 }, { display_name: "lux", total: 6 }, { display_name: "zed", total: 6 }],
+    });
+    await send(joinedOutcome(), deps);
+    expect(deps.postChatMessage.mock.calls[0][1].content).toBe(
+      "@viewer You're in for Friday Cup, along with kai, lux, zed and 3 others. 9 players so far."
+    );
+    const [sql, params] = deps.dbQuery.mock.calls[0];
+    expect(String(sql)).toContain("source='chat'");
+    expect(params).toEqual(["tournament-1", since, "viewer"]);
+  });
+
+  it("does not confirm a throttled join individually or move the confirmation marker", async () => {
+    const deps = joinDeps({ rateLimit: mock(async () => ({ ok: false })) });
+    await send(joinedOutcome(), deps);
+    expect(deps.postChatMessage).not.toHaveBeenCalled();
+    expect(deps.dbQuery).not.toHaveBeenCalled();
+    expect(deps.kvPut).not.toHaveBeenCalled();
+  });
+
+  it("keeps the marker when the confirmation could not be posted, so the names carry over", async () => {
+    const errorSpy = mock(() => {});
+    const realError = console.error;
+    console.error = errorSpy;
+    try {
+      const deps = joinDeps({ postChatMessage: mock(async () => { throw new Error("Kick chat post failed 500: boom"); }) });
+      const res = await send(joinedOutcome(), deps);
+      expect(res.status).toBe(200);
+      expect(deps.kvPut).not.toHaveBeenCalled();
+    } finally {
+      console.error = realError;
+    }
+  });
+
+  it("never replies to a duplicate !join", async () => {
+    const deps = joinDeps();
+    await send(fullOutcome({ full: false, duplicate: true }), deps);
     expect(deps.postChatMessage).not.toHaveBeenCalled();
     expect(deps.dbOne).not.toHaveBeenCalled();
   });
