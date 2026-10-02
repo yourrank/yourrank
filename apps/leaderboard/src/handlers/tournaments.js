@@ -9,7 +9,8 @@ import {
   clientIp as defaultClientIp,
   requireSiteFeature,
 } from "../auth.js";
-import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
+import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById, getPublicSite as defaultGetPublicSite } from "../site.js";
+import { routeContext } from "../middleware/handler.js";
 import { requireSiteOwner } from "../site-authorization.js";
 import { canUseFeature, effectivePlan } from "@yourrank/shared/plans";
 import {
@@ -30,11 +31,28 @@ import {
   tournamentLifecycle,
   tournamentViewState,
 } from "../lib/tournament-state.js";
+import { publicTournamentView } from "../lib/tournament-public.js";
+import { championAnnouncementText, sendTournamentChatMessage } from "../lib/tournament-chat.js";
 
 const TOURNAMENT_READ_RATE_LIMIT = 60;
 const ENTRY_SOURCES = new Set(["chat", "page", "manual", "leaderboard"]);
 const SUPPORTED_BRACKET_SIZES = [4, 8, 16, 32];
 const CREATABLE_FORMATS = ["bracket", "1v1"];
+
+// One champion message per tournament per minute, so an undo-and-resave of the
+// final cannot repeat it back to back.
+export async function announceTournamentChampion(env, announcement, {
+  rateLimit = defaultRateLimit,
+  send = sendTournamentChatMessage,
+} = {}) {
+  const rl = await rateLimit(env, `tournament-champion-announce:${announcement.tournamentId}`, 1, 60);
+  if (!rl.ok) return false;
+  return send(env, {
+    tournamentId: announcement.tournamentId,
+    ownerUserId: announcement.ownerUserId,
+    content: championAnnouncementText(announcement),
+  });
+}
 
 class TournamentConflictError extends Error {
   constructor(message, status = 409) {
@@ -1067,7 +1085,7 @@ export async function ingestTournamentChatMessageTx(tx, payload) {
   // Route through the open-signups lock row: one site can hold at most one,
   // so a message can never pick among several open tournaments.
   const route = await tx.one(
-    `SELECT t.id, t.entry_keyword, l.site_id, s.user_id AS owner_user_id,
+    `SELECT t.id, t.title, t.entry_keyword, l.site_id, s.user_id AS owner_user_id,
             ch.external_channel_id AS broadcaster_user_id
        FROM community_channels ch
        JOIN sites s ON s.id = ch.site_id
@@ -1095,6 +1113,7 @@ export async function ingestTournamentChatMessageTx(tx, payload) {
   outcome.messageId = payload?.message_id ? String(payload.message_id) : null;
   outcome.ownerUserId = route.owner_user_id;
   outcome.broadcasterUserId = route.broadcaster_user_id;
+  if (route.title) outcome.tournamentTitle = String(route.title);
 
   // The entry can carry the sender's YourRank viewer when this site has one
   // linked to that Kick identity.
@@ -1445,6 +1464,7 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
     requireSiteCapabilityImpl = requireSiteOwner,
+    announceChampion = announceTournamentChampion,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -1473,7 +1493,8 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
     result = await withTransaction(async (tx) => {
       const match = await tx.one(
         `SELECT tm.id, tm.round_number, tm.match_index, tm.player1_name, tm.player2_name, tm.status,
-                t.id AS tournament_id, t.status AS tournament_status, t.bracket_size, t.site_id, s.user_id AS site_user_id
+                t.id AS tournament_id, t.status AS tournament_status, t.bracket_size, t.site_id, s.user_id AS site_user_id,
+                t.title AS tournament_title, t.chat_channel
            FROM tournament_matches tm
            JOIN tournaments t ON t.id = tm.tournament_id
            JOIN sites s ON s.id = t.site_id
@@ -1585,7 +1606,17 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
         await tx.unsafe("DELETE FROM tournament_open_signups WHERE tournament_id=$1", [match.tournament_id]);
       }
 
-      return { matchId: match.id, winnerName, isFinals, roundNumber: match.round_number };
+      const announcement = isFinals && match.chat_channel
+        ? {
+            tournamentId: match.tournament_id,
+            ownerUserId: match.site_user_id,
+            title: match.tournament_title || "",
+            champion: winnerName,
+            runnerUp: winnerName === match.player1_name ? match.player2_name : match.player1_name,
+            scores: hasWinnerSlot ? null : [Math.max(rawP1, rawP2), Math.min(rawP1, rawP2)],
+          }
+        : null;
+      return { matchId: match.id, winnerName, isFinals, roundNumber: match.round_number, announcement };
     });
   } catch (err) {
     if (err instanceof TournamentConflictError) return bad(err.message, err.status);
@@ -1601,6 +1632,19 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
     request,
     details: { winnerName: result.winnerName, p1Score: rawP1, p2Score: rawP2, isFinals: result.isFinals },
   });
+
+  if (result.announcement) {
+    // The final is saved; the chat announcement is best-effort and never
+    // delays or fails the score response.
+    const announced = Promise.resolve()
+      .then(() => announceChampion(env, result.announcement))
+      .catch((err) => console.error(JSON.stringify({
+        event: "tournament_champion_announce_failed",
+        tournamentId: result.announcement.tournamentId,
+        reason: String(err?.message || err).slice(0, 200),
+      })));
+    routeContext(request).waitUntil(announced);
+  }
 
   return ok({
     matchId: result.matchId,
@@ -1819,4 +1863,57 @@ export async function handleGetBracket(request, env, deps = {}) {
     tournament: tourn,
     matches: rows.map((m) => ({ ...m, correctable: canCorrectMatch(rows, m).ok })),
   });
+}
+
+// The site's current tournament for viewers. "Current" is the live bracket,
+// else a tournament taking signups (or waiting to start), else the most
+// recently finished one. Drafts nobody can join yet and cancelled tournaments
+// stay private.
+export async function getPublicTournamentView(site, deps = {}) {
+  const { one = defaultOne, query = defaultQuery } = deps;
+  if (!site?.id || !canUseFeature(site.plan, "tournaments")) return null;
+  const tourn = await one(
+    `SELECT id, title, game_name, bracket_size, status, signup_state, winner_name, entry_keyword, chat_channel
+       FROM tournaments
+      WHERE site_id=$1
+        AND (status IN ('active', 'completed') OR (status='draft' AND signup_state IN ('open', 'locked')))
+      ORDER BY CASE WHEN status='active' THEN 0 WHEN status='draft' THEN 1 ELSE 2 END, updated_at DESC
+      LIMIT 1`,
+    [site.id]
+  );
+  if (!tourn) return null;
+  const [matches, counts] = await Promise.all([
+    query(
+      `SELECT round_number, match_index, player1_name, player2_name, player1_score, player2_score, winner_name, status
+         FROM tournament_matches
+        WHERE tournament_id=$1
+        ORDER BY round_number ASC, match_index ASC`,
+      [tourn.id]
+    ),
+    one(
+      `SELECT count(*) FILTER (WHERE status IN ('pending', 'confirmed', 'selected'))::integer AS entries
+         FROM tournament_entries WHERE tournament_id=$1`,
+      [tourn.id]
+    ),
+  ]);
+  return publicTournamentView(tourn, matches || [], { entryCount: counts?.entries });
+}
+
+// GET /api/public/:slug/tournament
+export async function handlePublicTournament(request, env, deps = {}) {
+  const {
+    rateLimit = defaultRateLimit,
+    clientIp = defaultClientIp,
+    getPublicSite = defaultGetPublicSite,
+  } = deps;
+  const rl = await rateLimit(env, `pub-tournament:${clientIp(request)}`, 120, 60);
+  if (!rl.ok) return bad("Rate limit exceeded. Try again shortly.", 429);
+
+  const slug = String(routeContext(request).slug || "").toLowerCase();
+  if (!slug) return bad("Not found.", 404);
+  const site = await getPublicSite(env, slug, request);
+  if (!site || site.suspended) return bad("Not found.", 404);
+  if (site.requiresPassword) return bad("This community is password protected.", 401);
+  const tournament = await getPublicTournamentView(site, deps);
+  return json({ ok: true, tournament }, 200, { "cache-control": "no-store" });
 }

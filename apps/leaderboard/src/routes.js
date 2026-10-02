@@ -118,6 +118,7 @@ import {
   handleUpdateMatchScore,
   handleCorrectMatchScore,
   handleGetBracket,
+  handlePublicTournament,
   handleOpenTournamentSignups,
   handleLockTournamentSignups,
   handleUpdateTournamentSettings,
@@ -466,6 +467,7 @@ export const ROUTES = [
   { path: "/api/public/:slug/stream", method: "GET", handler: withHandler(handlePublicStream) },
   { path: "/api/public/:slug/rank", method: "GET", handler: withHandler(handlePublicRank) },
   { path: "/api/public/:slug/stats", method: "GET", handler: withHandler(handlePublicStats) },
+  { path: "/api/public/:slug/tournament", method: "GET", handler: withHandler(handlePublicTournament) },
   { path: "/api/public/:slug", method: "GET", handler: withHandler(handlePublicData) },
   
   // Referrals

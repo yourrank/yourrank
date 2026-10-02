@@ -17,6 +17,8 @@ import { getPlanLimit, canUseFeature, effectivePlan } from "@yourrank/shared/pla
 import { parseSitePath, renderSiteRoute } from "./site-routes.js";
 import { renderSite } from "@yourrank/shared/site-render";
 import { viewerDashboardPage } from "./pages/viewer-dashboard.js";
+import { renderPublicTournamentPage } from "./pages/tournament-public.js";
+import { getPublicTournamentView } from "./handlers/tournaments.js";
 import { resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
 import { verifyEmailPageHtml, verifyEmailPromptState } from "./pages/verify-email.js";
 import { telegramAccountLinkHeaders, telegramAccountLinkPage } from "./pages/telegram-account-link.js";
@@ -90,7 +92,7 @@ async function withViewerCommunity(env, viewerHelp) {
 
 const LEGAL_PAGES = new Set(["terms", "privacy", "cookies", "refund", "contact"]);
 const MARKETING_PAGES = new Set(["/", "/index.html", "/sites", "/telegram", "/credits", "/pricing", "/overlays", "/switch", "/docs", "/faq", "/about", "/changelog", "/brand", "/status"]);
-const PUBLIC_API_OPERATIONS = new Set(["standings", "players", "stream", "rank", "data", "stats"]);
+const PUBLIC_API_OPERATIONS = new Set(["standings", "players", "stream", "rank", "data", "stats", "tournament"]);
 const SITE_SECTIONS = new Set(["home", "leaderboard", "shop", "activity", "me"]);
 const CUSTOM_VIEWER_AUTH_PATHS = new Set([
   "/api/viewer/auth/kick",
@@ -128,6 +130,7 @@ function telemetryRoute(path) {
   if (parts[0] === "logo") return "/logo/:slug";
   if (parts[0] === "banner") return "/banner/:slug";
   if (parts.length >= 2 && parts[1] === "player") return "/:slug/player/:name";
+  if (parts.length >= 2 && parts[1] === "tournament") return parts[2] === "stream" ? "/:slug/tournament/stream" : "/:slug/tournament";
   if (parts.length >= 2 && SITE_SECTIONS.has(parts[1])) return "/:slug/" + parts[1];
   if (parts.length === 1 && !NON_SITE_PATHS.has(parts[0])) return "/:slug";
   if (parts.length === 1 && NON_SITE_PATHS.has(parts[0])) return "/" + parts[0];
@@ -1358,6 +1361,24 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         // If empty/null or non-https (javascript:, data:, relative paths),
         // redirect to the board page instead of risking a redirect loop.
         return trackedDestination(url.origin, slug, r.cta_url, clickRef);
+      }
+
+      // --- public tournament bracket: /<slug>/tournament and its stream variant ---
+      if (method === "GET" && /^\/[^/]+\/tournament(?:\/stream)?\/?$/.test(path)) {
+        let slug;
+        try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
+        if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        const stream = /\/stream\/?$/.test(path);
+        const r = await getPublicSite(env, slug, request);
+        if (r && r.requiresPassword && !stream) {
+          return new Response(renderPasswordGate(r, { nonce, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
+        }
+        if (!r || r.suspended || r.requiresPassword) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        const view = await getPublicTournamentView(r);
+        return new Response(
+          renderPublicTournamentPage({ view, slug, siteName: r.data?.branding?.name || r.data?.brand?.name || slug, nonce, stream }),
+          { headers: { ...HTML_N, "cache-control": "no-store" } }
+        );
       }
 
       // --- OBS overlay: /<slug>/overlay ---
