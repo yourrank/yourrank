@@ -1956,7 +1956,18 @@ export async function getPublicTournamentView(site, deps = {}) {
       [tourn.id]
     ),
   ]);
-  return publicTournamentView(tourn, matches || [], { entryCount: counts?.entries });
+  const players = matches?.length ? [] : await query(
+    `SELECT display_name
+       FROM tournament_entries
+      WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')
+      ORDER BY created_at ASC
+      LIMIT 256`,
+    [tourn.id]
+  );
+  return publicTournamentView(tourn, matches || [], {
+    entryCount: counts?.entries,
+    players: (players || []).map((row) => row.display_name),
+  });
 }
 
 // GET /api/public/:slug/tournament

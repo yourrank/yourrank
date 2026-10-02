@@ -26,6 +26,11 @@ export function tournamentBodyHtml(view, stream) {
       + (view.chatChannel ? esc(view.chatChannel) + "'s" : "the") + " Kick chat to join.</p>";
   }
   if (!view.rounds || view.rounds.length === 0) {
+    if (view.players && view.players.length) {
+      html += '<section class="tp-roster" aria-labelledby="tp-roster-title"><h2 class="tp-round-title" id="tp-roster-title">Players ('
+        + esc(view.entryCount || view.players.length) + ')</h2><ol class="tp-roster-list">'
+        + view.players.map((name) => '<li class="tp-roster-name">' + esc(name) + "</li>").join("") + "</ol></section>";
+    }
     if (view.status !== "signups") html += '<p class="tp-muted tp-wait">The bracket appears here once the tournament starts.</p>';
     return html;
   }
@@ -85,6 +90,9 @@ a:focus-visible{outline:2px solid var(--tp-action);outline-offset:2px;border-rad
 .tp-join{margin:0 0 20px;padding:12px 16px;border-radius:10px;background:var(--tp-inset);font-size:16px}
 .tp-cmd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--tp-surface);border:1px solid var(--tp-line);border-radius:6px;padding:1px 6px}
 .tp-wait{margin-top:12px}
+.tp-roster{margin-bottom:12px}
+.tp-roster-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.tp-roster-name{background:var(--tp-surface);border:1px solid var(--tp-line);border-radius:8px;padding:8px 12px;font-size:15px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tp-bracket{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(220px,1fr);gap:16px;overflow-x:auto;padding-bottom:8px}
 .tp-round{display:flex;flex-direction:column;min-width:0}
 .tp-round-title{margin:0 0 8px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tp-soft)}
@@ -109,7 +117,7 @@ body.tp-stream{background:transparent;color:#fff}
 body.tp-stream main{max-width:none;padding:16px}
 body.tp-stream .tp-title{font-size:32px;text-shadow:0 1px 3px rgba(0,0,0,.6)}
 body.tp-stream .tp-muted,body.tp-stream .tp-round-title{color:#e5e9f3;text-shadow:0 1px 2px rgba(0,0,0,.6)}
-body.tp-stream .tp-match,body.tp-stream .tp-champion,body.tp-stream .tp-join{background:rgba(14,18,33,.86);border-color:rgba(255,255,255,.18);color:#fff}
+body.tp-stream .tp-match,body.tp-stream .tp-champion,body.tp-stream .tp-join,body.tp-stream .tp-roster-name{background:rgba(14,18,33,.86);border-color:rgba(255,255,255,.18);color:#fff}
 body.tp-stream .tp-player+.tp-player{border-top-color:rgba(255,255,255,.14)}
 body.tp-stream .tp-player--bye .tp-name,body.tp-stream .tp-tbd{color:#c3cbe0}
 body.tp-stream .tp-cmd{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2)}
