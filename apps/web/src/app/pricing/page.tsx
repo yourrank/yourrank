@@ -23,8 +23,8 @@ const BILLING_FAQ = [
     a: `You get a 14-day grace period. Viewers keep access, memberships, credits, orders, and participation. If usage remains over ${FREE_VIEWERS} after grace, only new creator-side expansion is paused until usage falls or the plan is upgraded.`,
   },
   {
-    q: "Can I pay for Starter or Pro today?",
-    a: "Yes. Card checkout with Polar is live for monthly and annual billing; paid access activates only after a verified Polar confirmation, and you can cancel anytime from the customer portal. Team is not currently sold; existing Team accounts remain supported.",
+    q: "How do I pay for Starter or Pro?",
+    a: "By card, monthly or annually. Your plan unlocks as soon as the payment is confirmed, and you can cancel anytime from the billing portal.",
   },
   {
     q: "Do viewers pay?",

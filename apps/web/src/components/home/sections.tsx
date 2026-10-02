@@ -3,14 +3,14 @@ import Link from "next/link";
 import { PLAN_META, PLAN_PRICING, PUBLIC_PLAN_TIERS } from "@yourrank/shared/plans";
 
 const PROOF_ITEMS = [
-  "Branded community sites",
-  "Telegram commands",
-  "Tracked broadcasts",
-  "Kick point mapping",
-  "Viewer credits",
-  "Reward fulfilment",
+  "Giveaways from Kick chat",
+  "One entry per Kick account",
+  "Tournament brackets",
+  "Kick channel points",
+  "Reward shop",
+  "Branded community site",
   "OBS-ready overlays",
-  "Custom domains",
+  "Telegram bot",
 ];
 
 function ArrowIcon() {
@@ -58,18 +58,18 @@ export function ProofMarquee() {
 const STEPS = [
   {
     number: "01",
-    title: "Publish",
-    body: "Launch a branded site where viewers can see standings, activities, offers, and rewards.",
+    title: "Connect Kick",
+    body: "Link your Kick channel and publish your community page with your name, branding, and leaderboard.",
   },
   {
     number: "02",
-    title: "Activate",
-    body: "Keep the audience moving through Telegram commands, broadcasts, and tracked links.",
+    title: "Run it from chat",
+    body: "Start a giveaway or open tournament signups. Viewers type the keyword in chat to join, one entry per Kick account.",
   },
   {
     number: "03",
-    title: "Reward",
-    body: "Connect Kick participation to credits and fulfil community rewards from the same workspace.",
+    title: "Reward regulars",
+    body: "Channel points turn into credits viewers spend on rewards you choose, and you fulfil every order from one queue.",
   },
 ];
 
@@ -85,10 +85,10 @@ export function HowItWorks() {
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
           <div>
             <h2 id="loop-heading" className="max-w-[12ch] text-[clamp(2.5rem,5vw,4.5rem)] font-medium leading-[0.98] tracking-[-0.035em] text-devin-ink">
-              A loop your audience can feel.
+              Live on stream in three steps.
             </h2>
             <p className="mt-6 max-w-md text-lg leading-relaxed text-devin-ink-soft">
-              Each product does one clear job, and every action leads naturally into the next.
+              No spreadsheets, no copying names out of chat, no separate bot for every event.
             </p>
           </div>
 
@@ -108,17 +108,17 @@ export function HowItWorks() {
 }
 
 const YOURRANK_ADVANTAGES = [
-  "Sites, Telegram, and Credits & Shop under one account",
-  "Shared audience context across the community journey",
-  "Tracked offers and reward fulfilment in the same workflow",
-  "One published destination for viewers to return to",
+  "Giveaways and tournament signups straight from Kick chat",
+  "One entry per Kick account, with linked-account review",
+  "Channel points become credits for your reward shop",
+  "One community page viewers come back to",
 ];
 
 const MANUAL_STACK = [
-  "Separate tools and account contexts",
-  "Audience activity split across disconnected views",
-  "Manual reward reconciliation and follow-up",
-  "Multiple links competing for viewer attention",
+  "A chat bot for giveaways, a spreadsheet for brackets",
+  "The same viewer entering on a second account",
+  "Rewards tracked by hand in DMs",
+  "Links scattered across Discord and socials",
 ];
 
 export function ComparisonSection() {
@@ -127,10 +127,10 @@ export function ComparisonSection() {
       <div className="mx-auto max-w-6xl">
         <div className="max-w-3xl">
           <h2 className="text-[clamp(2.5rem,5vw,4.6rem)] font-medium leading-[0.98] tracking-[-0.035em]">
-            Connected by design, not stitched together later.
+            Everything your stream events need, in one place.
           </h2>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-white/58">
-            YourRank is built around the audience loop instead of forcing creators to reconcile separate tools by hand.
+            Most streamers run events with a mix of bots, spreadsheets, and DMs. YourRank keeps the entries, winners, and rewards together.
           </p>
         </div>
 
@@ -138,7 +138,7 @@ export function ComparisonSection() {
           <div className="bg-white p-7 text-devin-ink sm:p-9">
             <div className="flex items-center justify-between gap-4 border-b border-devin-line pb-5">
               <h3 className="text-2xl font-medium tracking-[-0.025em]">YourRank</h3>
-              <span className="rounded-full bg-devin-primary px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white">One suite</span>
+              <span className="rounded-full bg-devin-primary px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white">One place</span>
             </div>
             <ul className="divide-y divide-devin-line/70">
               {YOURRANK_ADVANTAGES.map((item) => (
@@ -166,7 +166,7 @@ export function ComparisonSection() {
               ))}
             </ul>
             <a href="/demo" className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-[2px] border border-white/18 px-5 text-sm font-medium text-white/72 transition-colors hover:border-white/45 hover:text-white">
-              See the connected workflow <ArrowIcon />
+              See the live demo <ArrowIcon />
             </a>
           </div>
         </div>
@@ -187,7 +187,7 @@ export function PricingSnapshot() {
               Start with the community you have.
             </h2>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-devin-ink-soft">
-              Choose the operating room you need now. Upgrade when the audience or workflow grows.
+              Start free with chat giveaways and a reward shop. Add tournaments on Starter, and automation on Pro.
             </p>
           </div>
           <Link href="/pricing" className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-medium text-devin-ink underline decoration-devin-line underline-offset-4 hover:decoration-devin-primary sm:self-auto">
@@ -225,8 +225,8 @@ export function PricingSnapshot() {
             );
           })}
         </div>
-        <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.1em] text-devin-ink-soft">
-          Starter and Pro checkout is live, with access activated after verified payment. Team is not currently sold; existing Team accounts remain supported.
+        <p className="mt-5 text-sm leading-relaxed text-devin-ink-soft">
+          Free has no time limit. Paid plans unlock as soon as your payment is confirmed, and you can cancel anytime.
         </p>
       </div>
     </section>

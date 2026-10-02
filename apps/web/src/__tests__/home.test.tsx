@@ -29,20 +29,19 @@ describe("Home & Product components", () => {
     }
   });
 
-  it("renders WorkspacePreview with overview stats and player standings", () => {
+  it("renders WorkspacePreview as a labelled capture of the real dashboard", () => {
     const html = renderToString(<WorkspacePreview />);
-    expect(html).toContain("YourRank");
-    expect(html).toContain("Kick Sub Race");
-    expect(html).toContain("NovaByte");
-    expect(html).toContain("Page views");
-    expect(html).toContain("Subscribers");
+    expect(html).toContain('src="/brand/product/home.webp"');
+    expect(html).toContain("yourrank.site/dashboard");
+    expect(html).toContain("Real dashboard · sample data");
+    expect(html).toContain("Friday Stream");
   });
 
   it("renders ProofMarquee with product capabilities", () => {
     const html = renderToString(<ProofMarquee />);
-    expect(html).toContain("Branded community sites");
-    expect(html).toContain("Telegram commands");
-    expect(html).toContain("Viewer credits");
+    expect(html).toContain("Giveaways from Kick chat");
+    expect(html).toContain("One entry per Kick account");
+    expect(html).toContain("Tournament brackets");
   });
 
   it("renders HowItWorks as a meaningful keyboard fragment destination", () => {
@@ -51,16 +50,16 @@ describe("Home & Product components", () => {
     expect(html).toContain('tabindex="-1"');
     expect(html).toContain('aria-labelledby="loop-heading"');
     expect(html).toContain('<h2 id="loop-heading"');
-    expect(html).toContain("Publish");
-    expect(html).toContain("Activate");
-    expect(html).toContain("Reward");
+    expect(html).toContain("Connect Kick");
+    expect(html).toContain("Run it from chat");
+    expect(html).toContain("Reward regulars");
   });
 
   it("renders ComparisonSection with YourRank vs Manual Stack", () => {
     const html = renderToString(<ComparisonSection />);
     expect(html).toContain("YourRank");
     expect(html).toContain("A manual stack");
-    expect(html).toContain("Connected by design");
+    expect(html).toContain("Everything your stream events need");
   });
 
   it("renders PricingSnapshot with plan tiers", () => {
@@ -104,7 +103,7 @@ describe("Home & Product components", () => {
     expect(html).toContain("Start your community");
     expect(html).toContain("Grow and automate your community");
     expect(html).toContain("Need more scale?");
-    expect(html).toContain("Team is not currently sold");
+    expect(html).not.toContain("Team is not currently sold");
     expect(html).toMatch(/href="\/help\/support"[^>]*>Talk to us</);
     expect(html).not.toContain("10,000 active viewers");
     expect(html).not.toContain("100 active viewers");
