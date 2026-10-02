@@ -328,9 +328,12 @@ describe("React tournament workspace rendering", () => {
 
     await click("tournament-tab-bracket");
     const summary = $id("tournament-summary").textContent;
-    for (const label of ["Entries", "Bracket size", "Matches played", "Status", "Game", "Created"]) {
+    for (const label of ["Matches played", "Status", "Game", "Created"]) {
       expect(summary.split(label).length - 1).toBe(1);
     }
+    // Entries and bracket size live in the header stats only.
+    expect(summary).not.toContain("Entries");
+    expect(summary).not.toContain("Bracket size");
     expect(summary).not.toContain("Tournament ID");
     expect(summary).toContain("Fortnite");
     expect(summary).toContain("Sep 20, 2026, 10:30");

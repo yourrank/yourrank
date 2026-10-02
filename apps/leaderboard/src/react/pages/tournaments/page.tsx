@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   CalendarDays,
+  Check,
   ChevronDown,
   Crown,
   Gamepad2,
@@ -35,7 +36,7 @@ import { Separator } from "../../components/ui/separator";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Switch } from "../../components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-import { Bracket } from "./bracket";
+import { Bracket, ChampionCard } from "./bracket";
 import type {
   BoardShell,
   ChatConnectionHandle,
@@ -44,6 +45,7 @@ import type {
   ChatroomLookupResponse,
   EntryCounts,
   SettingsFix,
+  ScoreHandler,
   SettingsRequestBody,
   Tournament,
   TournamentActionResponse,
@@ -174,6 +176,16 @@ function StatusPill({ lifecycle, label, tone }: { lifecycle: string; label: stri
           ? "border-red-600/20 bg-red-600/5 text-red-700"
           : "border-border bg-muted text-muted-foreground";
   return <Badge className={cn("tn-pill rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider", `tn-pill--${color}`, colorClass)}>{label}</Badge>;
+}
+
+function StepHead({ number, title, done }: { number: number; title: string; done: boolean }) {
+  return (
+    <h3 className="flex items-center gap-2 text-[13px] font-semibold">
+      <span className={cn("grid size-6 shrink-0 place-items-center rounded-full border text-xs font-bold", done ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted text-foreground")} aria-hidden="true">{done ? <Check className="size-3.5" /> : number}</span>
+      {title}
+      {done && <span className="sr-only"> (done)</span>}
+    </h3>
+  );
 }
 
 function Stat({ icon: Icon, label, value, id }: { icon: React.ElementType; label: string; value: string; id?: string }) {
@@ -313,8 +325,6 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
   const [settingsFix, setSettingsFix] = useState<SettingsFix | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [settingsAdvancedOpen, setSettingsAdvancedOpen] = useState(false);
-  const [advancePending, setAdvancePending] = useState<string[]>([]);
-  const [scorePending, setScorePending] = useState<string[]>([]);
 
   const siteIdRef = useRef("");
   const tournamentRef = useRef<Tournament | null>(null);
@@ -329,7 +339,6 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
   const refreshQueuedRef = useRef(false);
   const duplicatePendingRef = useRef<boolean | null>(null);
   const duplicateInFlightRef = useRef(false);
-  const advancePendingRef = useRef(new Set<string>());
   const savedBodyRef = useRef<SettingsRequestBody | null>(null);
   const actionRefs = useRef<PageActions>({
     loadTournament: async () => {},
@@ -723,42 +732,26 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
     }
   }
 
-  async function submitScore(matchId: string, player1Score: number, player2Score: number, correcting: boolean) {
-    if (!tournament || scorePending.includes(matchId)) return;
-    if (player1Score === player2Score) {
-      toast("A match cannot end in a tie. Enter different scores.", true);
-      return;
-    }
-    setScorePending((current) => current.includes(matchId) ? current : [...current, matchId]);
-    try {
-      const data = await deps.api<TournamentActionResponse>(`/api/tournaments/${encodeURIComponent(tournament.id)}/score`, request(correcting ? "PATCH" : "POST", { matchId, player1Score, player2Score }), siteId);
-      if (correcting) await loadTournament(String(tournament.id));
-      else await loadTournament(String(tournament.id));
-      toast(data.message || "");
-    } catch (error) {
-      toast(getError(error, "Could not save the score."), true);
-    } finally {
-      setScorePending((current) => current.filter((id) => id !== matchId));
-    }
+  async function refreshAfterScore(id: string) {
+    const token = loadTokenRef.current;
+    const [list] = await Promise.all([
+      deps.api<TournamentListResponse>("/api/tournaments", {}, siteIdRef.current).catch(() => null),
+      fetchEntries(id, true, token),
+    ]);
+    if (!list || !mountedRef.current || token !== loadTokenRef.current) return;
+    setTournaments(list.tournaments || []);
   }
 
-  async function advanceMatch(match: TournamentMatch, player: 1 | 2) {
-    if (!tournament) return;
-    const matchId = String(match.id);
-    if (advancePendingRef.current.has(matchId)) return;
-    advancePendingRef.current.add(matchId);
-    setAdvancePending([...advancePendingRef.current]);
+  const submitScore: ScoreHandler = async (method, body) => {
+    if (!tournament) return { ok: false, message: "No tournament selected." };
     try {
-      const data = await deps.api<TournamentActionResponse>(`/api/tournaments/${encodeURIComponent(tournament.id)}/score`, request("POST", { matchId, winnerSlot: player }), siteId);
-      await loadTournament(String(tournament.id));
-      toast(data.message);
+      const data = await deps.api<TournamentActionResponse>(`/api/tournaments/${encodeURIComponent(tournament.id)}/score`, request(method, body), siteId);
+      await refreshAfterScore(String(tournament.id));
+      return { ok: true, message: data.message || "" };
     } catch (error) {
-      toast(getError(error, "Could not advance the winner."), true);
-    } finally {
-      advancePendingRef.current.delete(matchId);
-      setAdvancePending([...advancePendingRef.current]);
+      return { ok: false, message: getError(error, "Could not save the result.") };
     }
-  }
+  };
 
   function updateSettings(field: keyof SettingsDraft, value: string | boolean) {
     setSettingsDraft((current) => ({ ...current, [field]: value }));
@@ -979,7 +972,7 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
   const step = lifecycle === "setup"
     ? tournamentState?.chat_signup_text || "Add players below, or turn on chat signup to collect entries from Kick chat."
     : lifecycle === "live"
-      ? "Click the winner's name in the Bracket tab to advance them, or enter scores."
+      ? "In the Bracket tab, pick each match's winner or enter scores, then confirm."
       : lifecycle === "finished"
         ? <><Crown className="tn-crown mr-1 size-3.5 text-amber-700" aria-hidden="true" /><span>Champion: {tournament.winner_name || "—"}</span></>
         : statusLabel;
@@ -1001,44 +994,6 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
             </div>
             <p className="tn-meta mt-0.5 text-[13px] text-muted-foreground" id="tournament-meta">{meta}</p>
             <p className="tn-step mt-1.5 flex items-center gap-1.5 text-[13px] text-muted-foreground" id="tournament-step-label">{step}</p>
-            {lifecycle === "setup" && (
-              <div className="tn-setup-controls mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
-                <RadioGroup value={seeding} onValueChange={setSeeding} className="tn-seeding flex flex-wrap items-center gap-2" aria-label="Seeding">
-                  <span className="tn-seeding-label font-semibold text-foreground">Seeding:</span>
-                  <Label className="tn-seeding-opt flex cursor-pointer items-center gap-1.5 text-xs font-normal"><RadioGroupItem id="tournament-seeding-signup" value="signup" />Signup order (default)</Label>
-                  <Label className="tn-seeding-opt flex cursor-pointer items-center gap-1.5 text-xs font-normal"><RadioGroupItem id="tournament-seeding-shuffle" value="shuffle" />Shuffle</Label>
-                </RadioGroup>
-                <div className="tn-chat-signup flex flex-wrap items-center gap-2">
-                  <Label className="tn-switch-line flex items-center gap-2">
-                    <Switch
-                      id="tournament-chat-signup"
-                      checked={Boolean(signupOpen)}
-                      disabled={!channel}
-                      aria-label="Chat signup"
-                      onCheckedChange={(checked) => toggleChatSignup(checked)}
-                    />
-                    <span>Chat signup ({keyword})</span>
-                  </Label>
-                  <span className="tn-chat-signup-state" id="tournament-chat-signup-state">
-                    {channel ? tournamentState?.chat_signup_text : <>
-                      <b>Kick channel required.</b> {siteChannel ? "Use your connected Kick channel to open signups." : "Add your Kick channel before opening signups."}{" "}
-                      <Button type="button" size="sm" variant="ghost" id="tournament-use-channel" data-channel={siteChannel || undefined} className="h-7 px-2" onClick={async () => {
-                        if (!siteChannel) {
-                          setActiveTab("settings");
-                          window.setTimeout(() => document.getElementById("tournament-chat-channel")?.focus(), 0);
-                          return;
-                        }
-                        try {
-                          await deps.api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, request("POST", { chatChannel: siteChannel }), siteId);
-                          toast();
-                          await loadTournament(String(tournament.id));
-                        } catch (error) { toast(getError(error, "Could not update the Kick channel."), true); }
-                      }}>{siteChannel ? `Use ${siteChannel}` : "Add Kick channel"}</Button>
-                    </>}
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
           <div className="tn-head-actions flex shrink-0 items-center gap-2">
             {lifecycle === "setup" && (
@@ -1058,12 +1013,69 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
         </dl>
       </header>
 
+      {lifecycle === "setup" && (
+        <section className="tn-next-steps rounded-xl border border-border bg-card" id="tournament-next-steps" aria-labelledby="tournament-next-steps-heading">
+          <h2 className="border-b border-border px-4 py-3 text-sm font-semibold sm:px-5" id="tournament-next-steps-heading">Next steps</h2>
+          <ol className="m-0 grid list-none divide-y divide-border p-0 md:grid-cols-3 md:divide-x md:divide-y-0">
+            <li className="tn-next-step grid content-start gap-2 p-4 sm:px-5" data-step="signups" data-done={signupOpen ? "true" : undefined}>
+              <StepHead number={1} title="Open chat signups" done={Boolean(signupOpen)} />
+              <p className="text-[13px] text-muted-foreground" id="tournament-join-hint">
+                Viewers type <code className="tn-command rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[13px] font-bold text-foreground" id="tournament-join-command">{keyword}</code>{channel ? <> in kick.com/{channel} chat.</> : " in your Kick chat."}
+              </p>
+              <div className="tn-chat-signup grid gap-1.5 text-xs">
+                <Label className="tn-switch-line flex items-center gap-2">
+                  <Switch
+                    id="tournament-chat-signup"
+                    checked={Boolean(signupOpen)}
+                    disabled={!channel}
+                    aria-label="Chat signup"
+                    onCheckedChange={(checked) => toggleChatSignup(checked)}
+                  />
+                  <span className="text-[13px] font-medium text-foreground">Chat signup</span>
+                </Label>
+                <span className="tn-chat-signup-state text-xs text-muted-foreground" id="tournament-chat-signup-state">
+                  {channel ? tournamentState?.chat_signup_text : <>
+                    <b>Kick channel required.</b> {siteChannel ? "Use your connected Kick channel to open signups." : "Add your Kick channel before opening signups."}{" "}
+                    <Button type="button" size="sm" variant="ghost" id="tournament-use-channel" data-channel={siteChannel || undefined} className="h-7 px-2" onClick={async () => {
+                      if (!siteChannel) {
+                        setActiveTab("settings");
+                        window.setTimeout(() => document.getElementById("tournament-chat-channel")?.focus(), 0);
+                        return;
+                      }
+                      try {
+                        await deps.api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, request("POST", { chatChannel: siteChannel }), siteId);
+                        toast();
+                        await loadTournament(String(tournament.id));
+                      } catch (error) { toast(getError(error, "Could not update the Kick channel."), true); }
+                    }}>{siteChannel ? `Use ${siteChannel}` : "Add Kick channel"}</Button>
+                  </>}
+                </span>
+              </div>
+            </li>
+            <li className="tn-next-step grid content-start gap-2 p-4 sm:px-5" data-step="players" data-done={activeCount >= 2 ? "true" : undefined}>
+              <StepHead number={2} title="Collect players" done={activeCount >= 2} />
+              <p className="text-[13px] text-muted-foreground">Chat signups appear in the Entries list below. You can also add players by name there.</p>
+            </li>
+            <li className="tn-next-step grid content-start gap-2 p-4 sm:px-5" data-step="start" data-done={undefined}>
+              <StepHead number={3} title="Start tournament" done={false} />
+              <p className="text-[13px] text-muted-foreground">When everyone is in, press <b className="text-foreground">Start tournament</b> at the top of this page. It needs at least 2 players.</p>
+              <RadioGroup value={seeding} onValueChange={setSeeding} className="tn-seeding flex flex-wrap items-center gap-2 text-xs" aria-label="Seeding">
+                <span className="tn-seeding-label font-semibold text-foreground">Seeding:</span>
+                <Label className="tn-seeding-opt flex cursor-pointer items-center gap-1.5 text-xs font-normal"><RadioGroupItem id="tournament-seeding-signup" value="signup" />Signup order (default)</Label>
+                <Label className="tn-seeding-opt flex cursor-pointer items-center gap-1.5 text-xs font-normal"><RadioGroupItem id="tournament-seeding-shuffle" value="shuffle" />Shuffle</Label>
+              </RadioGroup>
+            </li>
+          </ol>
+        </section>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="tn-workspace-tabs">
         <TabsList className="tn-tabs mb-3 h-auto justify-start gap-1 rounded-none border-b border-border bg-transparent p-0 text-muted-foreground">
           <TabsTrigger className="tn-tab rounded-none border-b-2 border-transparent px-3 py-2 text-[13px] data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none" id="tournament-tab-entries" data-tournament-tab="entries" value="entries">Entries ({activeCount}){entryCounts.waitlist > 0 ? ` · Waitlist ${entryCounts.waitlist}` : ""}</TabsTrigger>
           <TabsTrigger className="tn-tab rounded-none border-b-2 border-transparent px-3 py-2 text-[13px] data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none" id="tournament-tab-bracket" data-tournament-tab="bracket" value="bracket">Bracket</TabsTrigger>
           <TabsTrigger className="tn-tab rounded-none border-b-2 border-transparent px-3 py-2 text-[13px] data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none" id="tournament-tab-settings" data-tournament-tab="settings" value="settings">Settings</TabsTrigger>
         </TabsList>
+        <p className={cn("tn-message mb-3 rounded-md border border-border bg-card px-3.5 py-2.5 text-[13px]", message.error && "is-error border-red-600/30 bg-red-600/5 text-red-700")} id="tournament-message" role="status" aria-live="polite" hidden={!message.text}>{message.text}</p>
 
         <TabsContent className="tn-panel mt-0" id="tournament-panel-entries" value="entries" role="tabpanel" aria-labelledby="tournament-tab-entries" forceMount hidden={activeTab !== "entries"}>
           <Card className="tn-panel border-border bg-card shadow-none">
@@ -1076,7 +1088,7 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
                 <CollapsibleTrigger className="flex items-center gap-1 text-xs font-bold text-primary">Advanced<ChevronDown className={cn("size-3 transition-transform", advancedOpen && "rotate-180")} /></CollapsibleTrigger>
                 <CollapsibleContent className="tn-dup-protection mt-3 max-w-md rounded-md border border-border bg-muted/40 p-3">
                   <Label className="tn-switch-line flex items-center gap-2 text-[13px]"><Switch id="tournament-dup-protection" checked={duplicatePending ?? tournament.anti_alt_enabled === true} disabled={duplicatePending !== null} aria-label="Duplicate protection" onCheckedChange={toggleDuplicateProtection} />Duplicate protection</Label>
-                  <p className="mt-2 text-xs text-muted-foreground">Flags lookalike accounts; flagged entries in free tournaments stay out of the bracket until allowed in People → Reviews.</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Flags lookalike accounts; flagged entries in free tournaments stay out of the bracket until allowed in <a className="font-semibold text-primary underline-offset-2 hover:underline" href={`/dashboard/audience/reviews${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`}>Audience → Reviews</a>.</p>
                 </CollapsibleContent>
               </Collapsible>
             </CardHeader>
@@ -1121,7 +1133,7 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
         </TabsContent>
 
         <TabsContent className="tn-panel mt-0" id="tournament-panel-bracket" value="bracket" role="tabpanel" aria-labelledby="tournament-tab-bracket" forceMount hidden={activeTab !== "bracket"}>
-          <div className="tn-layout grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="tn-layout grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_280px]">
             <Card className="tn-panel tn-bracket-main min-w-0 border-border bg-card shadow-none">
               <CardHeader className="tn-panel-head tn-panel-head--row flex flex-row items-center justify-between gap-3 p-4 sm:px-5">
                 <div>
@@ -1131,10 +1143,11 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
                 <Button className="shrink-0" variant="ghost" size="sm" id="tournament-bracket-expand" type="button" onClick={() => setExpandedBracket(true)}>Open stream view</Button>
               </CardHeader>
               <CardContent className="p-4 pt-0 sm:px-5">
+                {hasMatches && finished && <div className="mb-4"><ChampionCard tournament={tournament} matches={matches} id="tournament-champion-card" /></div>}
                 <div id="tournament-bracket" className="tn-bracket-host min-w-0" hidden={!hasMatches}>
-                  {hasMatches && <Bracket tournament={tournament} matches={matches} lifecycle={lifecycle} onScore={submitScore} onAdvance={advanceMatch} advancePending={advancePending} />}
+                  {hasMatches && <Bracket tournament={tournament} matches={matches} lifecycle={lifecycle} onScore={submitScore} />}
                 </div>
-                {!hasMatches && <div className="tn-empty grid gap-1 rounded-md border border-dashed border-border bg-muted/30 p-5 text-sm" id="tournament-bracket-empty"><b>Bracket not created yet.</b><span className="text-muted-foreground">Start the tournament from the Entries tab to generate the bracket.</span></div>}
+                {!hasMatches && <div className="tn-empty grid gap-1 rounded-md border border-dashed border-border bg-muted/30 p-5 text-sm" id="tournament-bracket-empty"><b>Bracket not created yet.</b><span className="text-muted-foreground">Press Start tournament at the top of this page to generate the bracket.</span></div>}
               </CardContent>
             </Card>
             <aside className="tn-aside" id="tournament-summary">
@@ -1142,11 +1155,8 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
                 <CardHeader className="p-4 pb-2"><CardTitle className="text-sm">Tournament summary</CardTitle></CardHeader>
                 <CardContent className="p-4 pt-0">
                   <dl className="tn-kv-list grid gap-3 text-xs">
-                    <div className="tn-kv flex justify-between gap-3"><dt className="flex items-center gap-1.5 text-muted-foreground"><Users className="tn-kv-ic size-3.5" />Entries</dt><dd>{activeCount}</dd></div>
-                    <div className="tn-kv flex justify-between gap-3"><dt className="flex items-center gap-1.5 text-muted-foreground"><Trophy className="tn-kv-ic size-3.5" />Bracket size</dt><dd>{tournament.bracket_size}</dd></div>
                     <div className="tn-kv flex justify-between gap-3"><dt className="flex items-center gap-1.5 text-muted-foreground"><Gamepad2 className="tn-kv-ic size-3.5" />Matches played</dt><dd>{playedMatches}</dd></div>
                     <div className="tn-kv flex justify-between gap-3"><dt className="flex items-center gap-1.5 text-muted-foreground">Status</dt><dd><StatusPill lifecycle={lifecycle} label={statusLabel} /></dd></div>
-                    {tournament.winner_name && <div className="tn-champ mt-2 flex items-center justify-between gap-3 rounded-md border border-amber-600/30 bg-amber-600/10 px-3 py-2"><span className="text-xs text-muted-foreground">Champion</span><strong className="flex items-center gap-1.5 text-xs text-amber-800"><Crown className="tn-crown size-3.5" />{tournament.winner_name}</strong></div>}
                     <Separator />
                     {tournament.game_name?.trim() && <div className="tn-kv flex justify-between gap-3"><dt className="flex items-center gap-1.5 text-muted-foreground"><Gamepad2 className="tn-kv-ic size-3.5" />Game</dt><dd>{tournament.game_name.trim()}</dd></div>}
                     <div className="tn-kv flex justify-between gap-3"><dt className="flex items-center gap-1.5 text-muted-foreground"><CalendarDays className="tn-kv-ic size-3.5" />Created</dt><dd>{formatCreated(tournament.created_at)}</dd></div>
@@ -1247,8 +1257,6 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
                 <CardHeader className="p-4 pb-1"><CardTitle className="text-sm">Details</CardTitle></CardHeader>
                 <CardContent className="p-4 pt-2"><dl className="tn-kv-list grid gap-3 text-xs">
                   <div className="tn-kv flex justify-between gap-3"><dt className="flex items-center gap-1.5 text-muted-foreground"><CalendarDays className="tn-kv-ic size-3.5" />Created</dt><dd>{formatCreated(tournament.created_at)}</dd></div>
-                  <div className="tn-kv flex justify-between gap-3"><dt className="flex items-center gap-1.5 text-muted-foreground"><Users className="tn-kv-ic size-3.5" />Entries</dt><dd>{activeCount}</dd></div>
-                  <div className="tn-kv flex justify-between gap-3"><dt className="flex items-center gap-1.5 text-muted-foreground"><Gamepad2 className="tn-kv-ic size-3.5" />Matches played</dt><dd>{playedMatches}</dd></div>
                 </dl></CardContent>
               </Card>
               <Card className="tn-card tn-card--danger border-red-700/20 bg-card shadow-none">
@@ -1259,8 +1267,6 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
           </div>
         </TabsContent>
       </Tabs>
-
-      <p className={cn("tn-message rounded-md border border-border bg-card px-3.5 py-2.5 text-[13px]", message.error && "is-error border-red-600/30 bg-red-600/5 text-red-700")} id="tournament-message" role="status" aria-live="polite" hidden={!message.text}>{message.text}</p>
 
       <Dialog open={selectOpen} onOpenChange={setSelectOpen}>
         <DialogContent id="tournament-select-modal" className="tn-dialog max-h-[90vh] max-w-[560px] overflow-y-auto p-0">
@@ -1325,7 +1331,7 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
                 </Field>
               </div>
             )}
-            <div id="tournament-bracket-full" className="tn-dialog-scroll overflow-auto"><Bracket tournament={tournament} matches={matches} lifecycle={lifecycle} mode="expanded" onScore={submitScore} advancePending={advancePending} /></div>
+            <div id="tournament-bracket-full" className="tn-dialog-scroll overflow-auto"><Bracket tournament={tournament} matches={matches} lifecycle={lifecycle} mode="expanded" /></div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1367,6 +1373,17 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
                 </Select>
               </Field>
             </div>
+            <fieldset className="tn-form-grid tn-form-grid--two grid gap-4 border-t border-border pt-3 sm:grid-cols-2" id="tc-chat-signups">
+              <legend className="float-left mb-1 w-full text-[13px] font-semibold sm:col-span-2">Chat signups<span className="mt-0.5 block text-xs font-normal text-muted-foreground">Viewers join by typing the command in your Kick chat once you open signups.</span></legend>
+              <Field label="Kick channel" id="tc-chat-channel">
+                <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:border-primary focus-within:ring-2 focus-within:ring-ring">
+                  <span className="flex items-center border-r border-input bg-muted px-3 py-2 text-xs text-muted-foreground">kick.com/</span>
+                  <Input id="tc-chat-channel" name="chatChannel" value={createDraft.chatChannel} placeholder="channelname" autoComplete="off" readOnly={Boolean(chatRegistration?.connected)} className="tn-input h-10 border-0 shadow-none focus-visible:ring-0" onChange={(event) => { const chatChannel = event.currentTarget.value; setCreateDraft((current) => ({ ...current, chatChannel })); }} />
+                </div>
+                <span className="text-xs text-muted-foreground">{chatRegistration?.connected ? "Your connected Kick channel. Signups are collected here." : "Connect Kick in Settings → Connections before opening signups."}</span>
+              </Field>
+              <Field label="Chat command" id="tc-keyword"><Input id="tc-keyword" name="entryKeyword" value={createDraft.keyword} maxLength={40} className="tn-input h-10" onChange={(event) => { const keyword = event.currentTarget.value; setCreateDraft((current) => ({ ...current, keyword })); }} /></Field>
+            </fieldset>
             <Collapsible open={createMore} onOpenChange={setCreateMore} className="tn-more border-t border-border pt-3">
               <CollapsibleTrigger id="tc-more-trigger" className="flex items-center gap-1 text-xs font-bold text-primary">More options<ChevronDown className={cn("size-3 transition-transform", createMore && "rotate-180")} /></CollapsibleTrigger>
               <CollapsibleContent className="tn-form-grid tn-form-grid--two mt-3 grid gap-4 sm:grid-cols-2">
@@ -1383,14 +1400,6 @@ export function TournamentsPage({ deps = DEFAULT_DEPENDENCIES }: { deps?: PageDe
                   {createDraft.capMode === "custom" && <Input id="tc-entry-cap-custom" name="entryCap" type="number" min="1" placeholder="e.g. 40" inputMode="numeric" aria-label="Custom signup limit" className="tn-input mt-2 h-10" value={createDraft.customCap} onChange={(event) => { const customCap = event.currentTarget.value; setCreateDraft((current) => ({ ...current, customCap })); }} />}
                   <span className="text-xs text-muted-foreground">Defaults to the bracket size.</span>
                 </Field>
-                <Field label="Kick channel" id="tc-chat-channel">
-                  <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:border-primary focus-within:ring-2 focus-within:ring-ring">
-                    <span className="flex items-center border-r border-input bg-muted px-3 py-2 text-xs text-muted-foreground">kick.com/</span>
-                    <Input id="tc-chat-channel" name="chatChannel" value={createDraft.chatChannel} placeholder="channelname" autoComplete="off" readOnly={Boolean(chatRegistration?.connected)} className="tn-input h-10 border-0 shadow-none focus-visible:ring-0" onChange={(event) => { const chatChannel = event.currentTarget.value; setCreateDraft((current) => ({ ...current, chatChannel })); }} />
-                  </div>
-                  <span className="text-xs text-muted-foreground">{chatRegistration?.connected ? "Your connected Kick channel. Signups are collected here." : "Connect Kick in Settings → Connections before opening signups."}</span>
-                </Field>
-                <Field label="Chat command" id="tc-keyword"><Input id="tc-keyword" name="entryKeyword" value={createDraft.keyword} maxLength={40} className="tn-input h-10" onChange={(event) => { const keyword = event.currentTarget.value; setCreateDraft((current) => ({ ...current, keyword })); }} /></Field>
               </CollapsibleContent>
             </Collapsible>
             <p className="tn-message is-error rounded-md border border-red-600/30 bg-red-600/5 p-2.5 text-sm text-red-700" id="tournament-create-error" role="alert" hidden={!createError}>{createError}</p>

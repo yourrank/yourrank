@@ -1664,6 +1664,8 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
  * unplayed: pending next matches get their slot rewritten, BYE-resolved
  * matches are reset and re-resolved, and a genuinely played downstream
  * match blocks the correction (correct it first, walking backwards).
+ * `{ matchId, reopen: true }` undoes a result under the same rule: the match
+ * returns to pending and its winner's unplayed downstream slots to TBD.
  */
 export async function handleCorrectMatchScore(request, env, deps = {}) {
   const {
@@ -1680,12 +1682,17 @@ export async function handleCorrectMatchScore(request, env, deps = {}) {
   const matchId = String(body?.matchId || "").trim();
   if (!matchId) return bad("matchId is required.");
 
-  const rawP1 = Number(body?.player1Score);
-  const rawP2 = Number(body?.player2Score);
-  if (!Number.isInteger(rawP1) || !Number.isInteger(rawP2) || rawP1 < 0 || rawP2 < 0) {
-    return bad("Scores must be non-negative integers.");
+  // `reopen` undoes a result: the match goes back to pending and the
+  // winner's unplayed downstream slots go back to TBD.
+  const reopen = body?.reopen === true;
+  const rawP1 = reopen ? 0 : Number(body?.player1Score);
+  const rawP2 = reopen ? 0 : Number(body?.player2Score);
+  if (!reopen) {
+    if (!Number.isInteger(rawP1) || !Number.isInteger(rawP2) || rawP1 < 0 || rawP2 < 0) {
+      return bad("Scores must be non-negative integers.");
+    }
+    if (rawP1 === rawP2) return bad("Scores cannot be tied. A winner must be decided.");
   }
-  if (rawP1 === rawP2) return bad("Scores cannot be tied. A winner must be decided.");
 
   const tournamentId = tournamentIdFromRequest(request);
   if (!tournamentId) return bad("tournamentId is required.");
@@ -1750,6 +1757,40 @@ export async function handleCorrectMatchScore(request, env, deps = {}) {
       }
 
       const previous = { p1: match.player1_score, p2: match.player2_score, winner: match.winner_name };
+      if (reopen) {
+        for (const step of correctable.path) {
+          const setClause = step.byeResolved
+            ? `${step.slotColumn}='TBD', status='pending', winner_name=NULL, player1_score=0, player2_score=0`
+            : `${step.slotColumn}='TBD'`;
+          const stepUpdate = await tx.unsafe(
+            `UPDATE tournament_matches
+                SET ${setClause}
+              WHERE id=$1 AND ${step.slotColumn}=$2
+              RETURNING id`,
+            [step.id, match.winner_name]
+          );
+          if (!stepUpdate || stepUpdate.length === 0) {
+            throw new TournamentConflictError("A downstream match changed while undoing. Try again.", 409);
+          }
+        }
+        const reopened = await tx.unsafe(
+          `UPDATE tournament_matches
+              SET status='pending', winner_name=NULL, player1_score=0, player2_score=0
+            WHERE id=$1 AND status='completed'
+            RETURNING id`,
+          [match.id]
+        );
+        if (!reopened || reopened.length === 0) {
+          return { error: "Match could not be reopened. It may no longer be completed.", status: 409 };
+        }
+        if (tourn.status === "completed") {
+          await tx.unsafe(
+            `UPDATE tournaments SET status='active', winner_name=NULL, updated_at=now() WHERE id=$1 AND status='completed'`,
+            [tournamentId]
+          );
+        }
+        return { matchId: match.id, reopened: true, winnerName: null, winnerChanged: true, isFinals, previous, next: null };
+      }
       const winnerName = rawP1 > rawP2 ? match.player1_name : match.player2_name;
       const winnerChanged = winnerName !== match.winner_name;
 
@@ -1809,6 +1850,25 @@ export async function handleCorrectMatchScore(request, env, deps = {}) {
     throw err;
   }
   if (result.error) return bad(result.error, result.status);
+
+  if (result.reopened) {
+    await logAudit({
+      actorId: user.id,
+      action: "tournament_match_score_reopen",
+      entityType: "tournament_match",
+      entityId: result.matchId,
+      request,
+      details: { previous: result.previous, isFinals: result.isFinals },
+    });
+    return ok({
+      matchId: result.matchId,
+      reopened: true,
+      winnerName: null,
+      winnerChanged: true,
+      isFinals: result.isFinals,
+      message: "Result undone. The match is open again.",
+    });
+  }
 
   await logAudit({
     actorId: user.id,
