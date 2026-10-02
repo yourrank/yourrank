@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { brandMarkSvg } from "@yourrank/shared/brand-assets";
 
 export type ProductShotKind = "home" | "giveaways" | "tournaments" | "rewards";
 
@@ -37,6 +38,7 @@ export function ProductShot({ kind, priority = false, className = "" }: { kind: 
         <span className="h-2 w-2 rounded-full bg-devin-secondary" />
         <span className="h-2 w-2 rounded-full bg-devin-secondary" />
         <span className="h-2 w-2 rounded-full bg-devin-secondary" />
+        <span className="ml-1 text-devin-primary" dangerouslySetInnerHTML={{ __html: brandMarkSvg({ className: "h-4 w-4" }) }} />
         <span className="ml-2 hidden min-w-0 truncate font-mono text-[10px] text-devin-ink-soft sm:inline">{`yourrank.site${shot.path}`}</span>
         <figcaption className="ml-auto shrink-0 font-mono text-[9px] uppercase tracking-[0.1em] text-devin-ink-soft">
           Real dashboard · sample data
