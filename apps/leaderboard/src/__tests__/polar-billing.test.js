@@ -154,11 +154,50 @@ describe("Polar boundary", () => {
     let creations = 0;
     const response = await handlePolarCheckout(req(), env, {
       requireUser: auth,
-      transaction: fn => fn({ one: async sql => sql.includes("polar_accounts") ? { checkout_attempt_id: userId } : user }),
+      transaction: fn => fn({ one: async sql => sql.includes("polar_accounts") ? { checkout_attempt_id: userId, checkout_plan: "pro", checkout_interval: "monthly" } : user }),
       request: async (_env, path) => { if (path.includes("checkouts")) creations++; return null; },
     });
     expect(response.status).toBe(409);
     expect(creations).toBe(0);
+  });
+  test("an abandoned checkout for another plan is replaced by a new checkout", async () => {
+    const starterEnv = { ...env, POLAR_PRODUCT_STARTER_MONTHLY: starterMonthlyId };
+    const writes = [];
+    let created;
+    const response = await handlePolarCheckout(req(), starterEnv, {
+      requireUser: auth,
+      transaction: fn => fn({
+        one: async sql => sql.includes("polar_accounts") ? { checkout_url: "https://sandbox.polar.sh/checkout/starter", checkout_plan: "starter", checkout_interval: "monthly" } : user,
+        unsafe: async (...args) => { writes.push(args); },
+      }),
+      request: async (_env, path, options) => {
+        if (path.includes("/state")) return customer;
+        if (path.includes("/products/")) return product;
+        if (path === "/checkouts/" && !options?.body) return { items: [{ product_id: starterMonthlyId, url: "https://sandbox.polar.sh/checkout/starter", expires_at: "2099-01-01T00:00:00Z" }] };
+        created = options.body;
+        return { url: "https://sandbox.polar.sh/checkout/pro", expires_at: "2099-01-01T00:00:00Z" };
+      },
+    });
+    expect(response.status).toBe(200);
+    expect((await response.json()).url).toContain("/checkout/pro");
+    expect(created.products).toEqual([productId]);
+    expect(writes.some(([sql, params]) => sql.includes("checkout_attempt_id=$2") && params.includes("pro"))).toBe(true);
+  });
+  test("a checkout still being prepared for another plan does not block a new choice", async () => {
+    let creations = 0;
+    const response = await handlePolarCheckout(req(), env, {
+      requireUser: auth,
+      transaction: fn => fn({ one: async sql => sql.includes("polar_accounts") ? { checkout_attempt_id: userId, checkout_plan: "starter", checkout_interval: "monthly" } : user, unsafe: async () => {} }),
+      request: async (_env, path, options) => {
+        if (path.includes("/state")) return customer;
+        if (path.includes("/products/")) return product;
+        if (path === "/checkouts/" && !options?.body) return { items: [] };
+        creations++;
+        return { url: "https://sandbox.polar.sh/checkout/pro", expires_at: "2099-01-01T00:00:00Z" };
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(creations).toBe(1);
   });
   test("provider errors are bounded, not retried, and do not leak provider data", async () => {
     let calls = 0;

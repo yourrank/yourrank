@@ -56,11 +56,11 @@ export async function handlePolarCheckout(request, env, deps = {}) {
       if (customer && (customer.external_id !== user.id || customer.organization_id !== env.POLAR_ORGANIZATION_ID)) throw new Error("Billing account mismatch.");
       if (customer?.active_subscriptions?.length) return { conflict: "You already have a subscription. Use Manage subscription to change it." };
       const pending = await tx.one("SELECT * FROM app_private.polar_accounts WHERE user_id=$1 AND checkout_expires_at > now()", [user.id]);
-      if (pending?.checkout_url) {
-        if (pending.checkout_plan !== body.plan || pending.checkout_interval !== body.interval) return { conflict: "A checkout is already open for another plan. Finish it or wait for it to expire before choosing a different plan." };
-        return { url: polarRedirect(pending.checkout_url, env) };
-      }
-      if (pending?.checkout_attempt_id) return { conflict: "A checkout is being prepared. Refresh Billing shortly. Contact support if it remains unavailable." };
+      // An abandoned checkout for another plan never blocks a new choice; the
+      // new checkout replaces it and the old one expires at Polar unpaid.
+      const samePlan = pending && pending.checkout_plan === body.plan && pending.checkout_interval === body.interval;
+      if (samePlan && pending.checkout_url) return { url: polarRedirect(pending.checkout_url, env) };
+      if (samePlan && pending.checkout_attempt_id) return { conflict: "A checkout is being prepared. Refresh Billing shortly. Contact support if it remains unavailable." };
       const product = await d.request(env, `/products/${mapping.id}`);
       validatePolarProduct(product, mapping, env);
       billingReturnUrl(env);
@@ -77,7 +77,6 @@ export async function handlePolarCheckout(request, env, deps = {}) {
           checkout_interval=$4,checkout_expires_at=$5,checkout_attempt_id=NULL,updated_at=now()`, [user.id,url,body.plan,body.interval,usable.expires_at]);
         return { url };
       }
-      if (openItems.some(live)) return { conflict: "A checkout is already open for another plan. Finish it or wait for it to expire before choosing a different plan." };
       // Commit a durable reservation BEFORE a non-idempotent provider request.
       // An uncertain response or DB failure must never silently create another checkout.
       await tx.unsafe(`INSERT INTO app_private.polar_accounts(user_id,checkout_attempt_id,checkout_plan,checkout_interval,checkout_expires_at)
