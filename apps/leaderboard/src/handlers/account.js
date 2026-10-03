@@ -1,6 +1,10 @@
 // Account-level API: postback keys, conversion log, profile data.
 import { json, bad, denied, requireUser, rateLimit } from "../auth.js";
-import { loadCreatorConnection } from "@yourrank/shared/provider-connections";
+import {
+  ROUTABLE_CHANNEL_AUTHORIZATION_JOINS_SQL,
+  ROUTABLE_CHANNEL_CONDITION_SQL,
+  loadCreatorConnection,
+} from "@yourrank/shared/provider-connections";
 import { one, query } from "@yourrank/shared/db";
 import { logAudit } from "@yourrank/shared/audit";
 import { effectivePlan } from "@yourrank/shared/plans";
@@ -235,13 +239,18 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
   const sites = await deps.query(
     `SELECT s.id, s.name, s.slug, s.credits_enabled,
             ch.external_channel_id AS kick_channel_external_id, ch.external_channel_name AS kick_channel_name,
+            COALESCE(${ROUTABLE_CHANNEL_CONDITION_SQL}, false) AS kick_channel_routable,
+            sc.id AS kick_site_connection_id, sc.username AS kick_site_username,
+            sc.access_token_enc IS NOT NULL AS kick_site_has_access_token,
+            sc.refresh_token_enc IS NOT NULL AS kick_site_has_refresh_token,
+            sc.token_expires_at AS kick_site_token_expires_at,
             ch.reward_events_subscribed_at, ch.chat_events_subscribed_at, ch.event_subscriptions_checked_at,
             EXISTS (SELECT 1 FROM chat_giveaway_sessions g WHERE g.site_id = s.id) AS uses_chat_giveaways,
             s.discord_webhook_url_enc, s.telegram_chat_id, s.telegram_notify,
             (SELECT count(*)::integer FROM credit_reward_mappings m WHERE m.site_id=s.id AND m.active=true) AS active_reward_mappings
        FROM sites s
-       LEFT JOIN community_channels ch ON ch.site_id = s.id AND ch.provider = 'kick' AND ch.status = 'active'
-      WHERE user_id = $1
+       LEFT JOIN community_channels ch ON ch.site_id = s.id AND ch.provider = 'kick' AND ch.status = 'active'${ROUTABLE_CHANNEL_AUTHORIZATION_JOINS_SQL}
+      WHERE s.user_id = $1
       ORDER BY board_order ASC, id ASC`,
     [user.id]
   );
@@ -302,9 +311,22 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
   for (const site of orderedSites || []) {
     const scope = site.name || site.slug || "Site";
     const selectedSite = site.id === selectedSiteId;
-    const kick = deriveKickConnectionHealth({
-      channelLinked: Boolean(site.kick_channel_external_id),
-      ...kickHealthInputs,
+    // Same facts tournament signups and event routing use: a saved channel
+    // only counts once its verifying authorization (this site's own, or the
+    // owner's account-level one) is still active.
+    const kickChannelSaved = Boolean(site.kick_channel_external_id);
+    const kickConnected = kickChannelSaved && Boolean(site.kick_channel_routable);
+    const siteKickInputs = site.kick_site_connection_id
+      ? {
+        accountLinked: true,
+        hasAccessToken: Boolean(site.kick_site_has_access_token),
+        hasRefreshToken: Boolean(site.kick_site_has_refresh_token),
+        tokenExpiresAt: site.kick_site_token_expires_at || null,
+      }
+      : kickHealthInputs;
+    const kickHealth = deriveKickConnectionHealth({
+      channelLinked: kickConnected,
+      ...siteKickInputs,
       activeRewardMappings: Number(site.active_reward_mappings) || 0,
       operationEnabled: Boolean(site.credits_enabled),
       usesChatGiveaways: Boolean(site.uses_chat_giveaways),
@@ -314,7 +336,10 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
         checkedAt: site.event_subscriptions_checked_at || null,
       },
     });
-    const kickConnected = Boolean(site.kick_channel_external_id);
+    const kickNeedsReconnect = kickChannelSaved && !kickConnected;
+    const kick = kickNeedsReconnect
+      ? { ...kickHealth, status: "needs_attention", needsAttention: true }
+      : kickHealth;
     const discordConfigured = Boolean(site.discord_webhook_url_enc);
     const telegramConfigured = Boolean(site.telegram_chat_id);
     const telegramEnabled = telegramConfigured && site.telegram_notify !== false;
@@ -338,10 +363,12 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
       selectedSite,
       connected: kickConnected,
       status: kick.status,
-      statusLabel: kickConnected ? "Connected" : "Not connected",
-      detail: kickConnected && site.kick_channel_name ? `@${site.kick_channel_name} on Kick` : "",
+      statusLabel: kickConnected ? "Connected" : kickNeedsReconnect ? "Needs reconnect" : "Not connected",
+      detail: kickConnected && site.kick_channel_name
+        ? `@${site.kick_channel_name} on Kick`
+        : kickNeedsReconnect ? "Kick sign-in for this channel was lost. Reconnect Kick to use it again." : "",
       action: {
-        label: kickConnected ? "Manage" : "Connect",
+        label: kickConnected ? "Manage" : kickNeedsReconnect ? "Reconnect" : "Connect",
         href: buildDashboardPath("siteConnections.channel", { siteId: site.id }),
       },
     });

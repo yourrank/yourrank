@@ -589,10 +589,11 @@ export async function upsertCreditRewardMapping(
 }
 
 /**
- * Kick-specific channel binding inside the caller's transaction: the site
- * owner's active Kick creator connection must be the channel's broadcaster
- * (`kickCreatorOwnsChannel`); the generic binding then records that connection
- * as the verifier. Locks the site row.
+ * Kick-specific channel binding inside the caller's transaction: the channel's
+ * broadcaster (`kickCreatorOwnsChannel`) must be the site's own Kick
+ * authorization or the site owner's active Kick creator connection; the
+ * generic binding then records that authorization as the verifier. Locks the
+ * site row.
  */
 export async function bindSiteKickChannel(
   tx: Tx,
@@ -601,15 +602,21 @@ export async function bindSiteKickChannel(
   kickChannelName: string
 ): Promise<void> {
   const run = (sql: string, params?: unknown[]) => tx.unsafe(sql, params);
-  const owner = await tx.one<{ creator_connection_id: string; external_user_id: string }>(
-    `SELECT cc.id AS creator_connection_id, cc.external_user_id
+  await tx.unsafe("SELECT id FROM sites WHERE id = $1 FOR UPDATE", [siteId]);
+  const candidates = (await tx.unsafe(
+    `SELECT NULL::uuid AS creator_connection_id, sc.id AS site_creator_connection_id, sc.external_user_id
+       FROM sites s
+       JOIN site_creator_connections sc ON sc.site_id = s.id AND sc.user_id = s.user_id AND sc.provider = 'kick'
+      WHERE s.id = $1 AND sc.status = 'active' AND sc.linked_at IS NOT NULL AND sc.verified_channel_id = $2
+     UNION ALL
+     SELECT cc.id, NULL::uuid, cc.external_user_id
        FROM sites s
        JOIN creator_connections cc ON cc.user_id = s.user_id AND cc.provider = 'kick'
-      WHERE s.id = $1 AND cc.status = 'active' AND cc.linked_at IS NOT NULL
-      FOR UPDATE OF s`,
-    [siteId]
-  );
-  if (!owner || !kickCreatorOwnsChannel(owner.external_user_id, kickChannelExternalId)) {
+      WHERE s.id = $1 AND cc.status = 'active' AND cc.linked_at IS NOT NULL`,
+    [siteId, kickChannelExternalId]
+  )) as Array<{ creator_connection_id: string | null; site_creator_connection_id: string | null; external_user_id: string }>;
+  const owner = candidates.find((row) => kickCreatorOwnsChannel(row.external_user_id, kickChannelExternalId));
+  if (!owner) {
     throw new Error("Kick identity changed before binding");
   }
   await linkCommunityChannel(run, {
@@ -618,6 +625,7 @@ export async function bindSiteKickChannel(
     externalChannelId: kickChannelExternalId,
     externalChannelName: kickChannelName,
     creatorConnectionId: owner.creator_connection_id,
+    siteCreatorConnectionId: owner.site_creator_connection_id,
     verified: true,
   });
 }

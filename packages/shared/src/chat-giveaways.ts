@@ -2,6 +2,7 @@
 // fed by official Kick `chat.message.sent` webhooks routed through the verified
 // community channel binding. No browser listener is involved.
 import { giveawayRules, evaluateGiveawayEligibility, giveawayParticipantFacts } from "./giveaway-eligibility.js";
+import { ROUTABLE_CHANNEL_AUTHORIZATION_JOINS_SQL, ROUTABLE_CHANNEL_CONDITION_SQL } from "./provider-connections.js";
 import type { ProviderId } from "./providers/types.js";
 import type { SqlRunner } from "./viewer-identity.js";
 
@@ -81,18 +82,15 @@ export function chatMessageMatchesKeyword(message: unknown, keyword: string): bo
   return tokens.includes(target);
 }
 
-// Routable binding: active + verified channel whose verifying creator
-// connection is still active and still belongs to the site owner. Mirrors the
-// rule in provider-connections.ts; nothing here trusts payload site ids.
+// Routable binding: the rule from provider-connections.ts (active + verified
+// channel whose verifying account-level or site authorization is still active
+// and owned by the site owner); nothing here trusts payload site ids.
 const ROUTABLE_CHANNEL_SQL = `
        FROM community_channels ch
-       JOIN sites s ON s.id = ch.site_id
-       JOIN creator_connections cc ON cc.id = ch.creator_connection_id
+       JOIN sites s ON s.id = ch.site_id${ROUTABLE_CHANNEL_AUTHORIZATION_JOINS_SQL}
       WHERE ch.provider = $1
         AND ch.external_channel_id = $2
-        AND ch.status = 'active' AND ch.verified_at IS NOT NULL
-        AND cc.provider = ch.provider AND cc.user_id = s.user_id
-        AND cc.status = 'active' AND cc.linked_at IS NOT NULL`;
+        AND ${ROUTABLE_CHANNEL_CONDITION_SQL}`;
 
 interface RoutedSessionRow {
   id: string;
@@ -273,12 +271,9 @@ export async function loadChatGiveawayConnection(
 ): Promise<ChatGiveawayConnection> {
   const rows = (await run(
     `SELECT ch.external_channel_id, ch.external_channel_name, ch.chat_events_subscribed_at,
-            (cc.id IS NOT NULL) AS routable
+            (cc.id IS NOT NULL OR sc.id IS NOT NULL) AS routable
        FROM community_channels ch
-       JOIN sites s ON s.id = ch.site_id
-       LEFT JOIN creator_connections cc
-         ON cc.id = ch.creator_connection_id AND cc.provider = ch.provider
-        AND cc.user_id = s.user_id AND cc.status = 'active' AND cc.linked_at IS NOT NULL
+       JOIN sites s ON s.id = ch.site_id${ROUTABLE_CHANNEL_AUTHORIZATION_JOINS_SQL}
       WHERE ch.site_id = $1 AND ch.provider = $2 AND ch.status = 'active' AND ch.verified_at IS NOT NULL
       LIMIT 1`,
     [siteId, provider],

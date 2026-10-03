@@ -661,19 +661,59 @@ describe("Kick OAuth state integration seams", () => {
     expect(subscribed).toEqual([["access", "channel.reward.redemption.updated"], ["access", "chat.message.sent"]]);
     // Generic rows are written first, legacy users/sites mirrors afterwards, then
     // chat-giveaway readiness on the verified channel, all in one transaction.
+    // When no other site depends on it, the account connection is used and any
+    // earlier site-only authorization for this site is retired.
     expect(writes.map(({ sql }) => sql.match(/INSERT INTO (\w+)|UPDATE (\w+)/).slice(1).find(Boolean))).toEqual([
-      "creator_connections", "users", "community_channels", "sites", "community_channels",
+      "creator_connections", "users", "site_creator_connections", "community_channels", "sites", "community_channels",
     ]);
-    expect(writes[4].sql).toContain("reward_events_subscribed_at = CASE WHEN $3 THEN now() END");
-    expect(writes[4].sql).toContain("chat_events_subscribed_at = CASE WHEN $4 THEN now() END");
-    expect(writes[4].sql).toContain("event_subscriptions_checked_at = now()");
-    expect(writes[4].params).toEqual([site.id, "kick", true, true]);
+    expect(writes[5].sql).toContain("reward_events_subscribed_at = CASE WHEN $3 THEN now() END");
+    expect(writes[5].sql).toContain("chat_events_subscribed_at = CASE WHEN $4 THEN now() END");
+    expect(writes[5].sql).toContain("event_subscriptions_checked_at = now()");
+    expect(writes[5].params).toEqual([site.id, "kick", true, true]);
     expect(writes[0].params.slice(0, 3)).toEqual([user.id, "kick", "123"]);
     expect(writes[1].sql).toContain("kick_linked_at = now()");
+    expect(writes[2].sql).toContain("status = 'revoked'");
+    expect(writes[2].params).toEqual([site.id, "kick"]);
     // The verified binding records the creator connection that proved ownership.
-    expect(writes[2].params).toEqual([site.id, "kick", "123", "owner", true, "cc-1"]);
-    expect(writes[3].sql).toContain("kick_channel_verified_at = CASE WHEN $3 THEN now() END");
-    expect(writes[3].params).toEqual(["123", "owner", true, site.id]);
+    expect(writes[3].params).toEqual([site.id, "kick", "123", "owner", true, "cc-1", null]);
+    expect(writes[4].sql).toContain("kick_channel_verified_at = CASE WHEN $3 THEN now() END");
+    expect(writes[4].params).toEqual(["123", "owner", true, site.id]);
+  });
+
+  test("connecting a second site with a different Kick account keeps it per site and leaves the other site's account link alone", async () => {
+    const writes = [];
+    const response = await handleKickAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
+      currentUser: async () => user,
+      consumeOAuthState: async () => ({ userId: user.id, siteId: site.id, codeVerifier: "verifier" }),
+      one: async () => site,
+      requireSiteCapability: ownerCapability,
+      exchangeKickCode: async () => ({ access_token: "access", refresh_token: "refresh", expires_in: 3600 }),
+      fetchKickCurrentUser: async () => ({ user_id: 123, name: "owner" }),
+      fetchKickCurrentChannel: async () => ({ broadcaster_user_id: 123, slug: "owner" }),
+      listKickWebhookSubscriptions: async () => [],
+      subscribeKickWebhookEvent: async () => ({}),
+      encryptKickToken: async (token) => `encrypted:${token}`,
+      withTransaction: async (fn) => fn({ unsafe: async (sql, params) => {
+        // The account connection is another Kick account that still verifies site-2.
+        if (/FROM creator_connections\s+WHERE user_id = \$1 AND provider = \$2\s+FOR UPDATE/.test(sql)) {
+          return [{ external_user_id: "999", status: "active" }];
+        }
+        if (sql.includes("ch.site_id <> $3")) return [{ id: "site-2" }];
+        if (/^\s*SELECT/.test(sql)) return [{ id: "sc-1" }];
+        writes.push({ sql, params });
+        return [{ id: "sc-1" }];
+      } }),
+    });
+
+    expect(response.headers.get("location")).toBe("/dashboard/site/connections?kick_connected=1&siteId=site-1");
+    const tables = writes.map(({ sql }) => sql.match(/INSERT INTO (\w+)|UPDATE (\w+)/).slice(1).find(Boolean));
+    expect(tables).toEqual(["site_creator_connections", "community_channels", "sites", "community_channels"]);
+    // Neither the account connection nor its legacy users mirror is re-pointed.
+    expect(tables).not.toContain("creator_connections");
+    expect(tables).not.toContain("users");
+    expect(writes[0].params.slice(0, 6)).toEqual([site.id, user.id, "kick", "123", "owner", "123"]);
+    expect(writes[0].params.slice(6, 8)).toEqual(["encrypted:access", "encrypted:refresh"]);
+    expect(writes[1].params).toEqual([site.id, "kick", "123", "owner", true, null, "sc-1"]);
   });
 
   test("streamer callback reuses existing Kick subscriptions and never marks chat ready when chat subscription fails", async () => {
@@ -821,6 +861,9 @@ describe("Kick OAuth state integration seams", () => {
     expect(queries[6].sql).toContain("chat_events_subscribed_at = NULL");
     expect(queries[7].sql).toContain("kick_channel_external_id = null");
     expect(queries[7].params).toEqual(["site-2"]);
+    expect(queries[8].sql).toContain("UPDATE site_creator_connections");
+    expect(queries[8].sql).toContain("status = 'revoked'");
+    expect(queries[8].params).toEqual(["site-2", "kick"]);
   });
 
   test("preserves the account link when another owned site remains connected", async () => {
@@ -842,23 +885,48 @@ describe("Kick OAuth state integration seams", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(queries.some((query) => query.sql.includes("creator_connections") && query.sql.includes("revoked"))).toBe(false);
+    expect(queries.some((query) => /UPDATE creator_connections/.test(query.sql))).toBe(false);
     expect(queries.some((query) => query.sql.includes("kick_user_id = null"))).toBe(false);
-    expect(queries.at(-2).sql).toContain("UPDATE community_channels");
-    expect(queries.at(-1).sql).toContain("kick_channel_external_id = null");
+    expect(queries.at(-3).sql).toContain("UPDATE community_channels");
+    expect(queries.at(-2).sql).toContain("kick_channel_external_id = null");
+    // Only this site's own authorization (if any) is revoked.
+    expect(queries.at(-1).sql).toContain("UPDATE site_creator_connections");
+    expect(queries.at(-1).params).toEqual(["site-2", "kick"]);
   });
 });
 
 describe("Kick delivery repair", () => {
+  const tokenExpiresAt = new Date(Date.now() + 3_600_000).toISOString();
+  // Row shape of loadChannelAuthorization: the site's binding plus whichever
+  // authorization (account-level cc_* or site-level sc_*) proves it.
   const connection = {
     user_id: "owner-1",
-    access_token_enc: "enc-access",
-    refresh_token_enc: "enc-refresh",
-    token_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+    external_channel_id: "123",
+    external_channel_name: "owner",
+    cc_id: "cc-1",
+    cc_external_user_id: "123",
+    cc_username: "owner",
+    cc_linked_at: "2026-09-01T00:00:00.000Z",
+    cc_access: "enc-access",
+    cc_refresh: "enc-refresh",
+    cc_expires: tokenExpiresAt,
+    sc_id: null,
   };
-  const freshTokens = { accessToken: "access", accessEnc: "enc-access", refreshEnc: "enc-refresh", expiresAt: connection.token_expires_at };
+  const siteConnection = {
+    ...connection,
+    cc_id: null, cc_external_user_id: null, cc_username: null, cc_linked_at: null,
+    cc_access: null, cc_refresh: null, cc_expires: null,
+    sc_id: "sc-1",
+    sc_external_user_id: "123",
+    sc_username: "owner",
+    sc_linked_at: "2026-09-01T00:00:00.000Z",
+    sc_access: "enc-access",
+    sc_refresh: "enc-refresh",
+    sc_expires: tokenExpiresAt,
+  };
+  const freshTokens = { accessToken: "access", accessEnc: "enc-access", refreshEnc: "enc-refresh", expiresAt: tokenExpiresAt };
 
-  function repairDeps(overrides = {}) {
+  function repairDeps(overrides = {}, channelRow = connection) {
     const writes = [];
     const deps = {
       requireUser: async () => ({ user, res: null }),
@@ -870,7 +938,8 @@ describe("Kick delivery repair", () => {
           // The channel lookup is site-bound and only returns the owner's active connection.
           expect(sql).toContain("cc.user_id = s.user_id");
           expect(sql).toContain("ch.status = 'active' AND ch.verified_at IS NOT NULL");
-          return params[0] === site.id ? connection : null;
+          expect(sql).toContain("sc.site_id = ch.site_id AND sc.user_id = s.user_id");
+          return params[0] === site.id ? channelRow : null;
         }
         throw new Error(`unexpected query: ${sql}`);
       },
@@ -935,6 +1004,25 @@ describe("Kick delivery repair", () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ ok: false, code: "kick_reconnect_required" });
     expect(writes.some(({ sql }) => /access_token_enc\s*=\s*NULL/i.test(sql))).toBe(true);
+  });
+
+  test("a site-scoped authorization refreshes and clears only that site's credentials", async () => {
+    const renewed = { accessToken: "new", accessEnc: "enc-new", refreshEnc: "enc-refresh-2", expiresAt: "2030-01-01T00:00:00.000Z" };
+    const stored = repairDeps({ getValidKickAccessToken: async () => renewed }, siteConnection);
+    expect((await handleKickAuthRepair(repairRequest(), {}, stored.deps)).status).toBe(200);
+    const tokenWrites = stored.writes.filter(({ sql }) => sql.includes("access_token_enc"));
+    expect(tokenWrites).toHaveLength(1);
+    expect(tokenWrites[0].sql).toContain("UPDATE site_creator_connections");
+    expect(tokenWrites[0].params).toEqual(["sc-1", "enc-new", "enc-refresh-2", "2030-01-01T00:00:00.000Z"]);
+
+    const revoked = repairDeps({
+      getValidKickAccessToken: async () => { throw new Error("Kick token refresh failed 401: invalid_grant"); },
+    }, siteConnection);
+    expect((await handleKickAuthRepair(repairRequest(), {}, revoked.deps)).status).toBe(409);
+    expect(revoked.writes).toHaveLength(1);
+    expect(revoked.writes[0].sql).toContain("UPDATE site_creator_connections");
+    expect(revoked.writes[0].params).toEqual(["sc-1"]);
+    expect(revoked.writes.some(({ sql }) => /UPDATE (creator_connections|users)\b/.test(sql))).toBe(false);
   });
 
   test("transient refresh failure does not revoke the connection", async () => {

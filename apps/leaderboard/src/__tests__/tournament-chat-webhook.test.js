@@ -59,7 +59,7 @@ describe("ingestTournamentChatMessage", () => {
       routed: true, matched: true, entered: true,
       duplicate: false, rejected: null, tournamentId: "tournament-1",
       senderUsername: "viewer",
-      ownerUserId: undefined, broadcasterUserId: undefined,
+      siteId: undefined, broadcasterUserId: undefined,
     });
     expect(typeof messageId).toBe("string");
     expect(inserted(calls)).toBe(true);
@@ -402,16 +402,27 @@ describe("Kick webhook delivery idempotency", () => {
 // the streamer's chat through replyDeps. Replies must never fail the webhook.
 // ---------------------------------------------------------------------------
 describe("Kick webhook → tournament chat reply", () => {
-  const CONNECTION = {
-    user_id: "owner-1",
-    external_user_id: "111",
-    access_token_enc: "enc-access",
-    refresh_token_enc: "enc-refresh",
-    token_expires_at: null,
+  // The authorization proving the tournament site's channel, as loaded by
+  // loadChannelAuthorization (site-scoped here: another site's Kick account
+  // must never be used to reply).
+  const AUTHORIZATION = {
+    scope: "site",
+    connectionId: "sc-1",
+    siteId: "site-1",
+    userId: "owner-1",
+    provider: "kick",
+    externalUserId: "111",
+    username: "owner",
+    externalChannelId: "111",
+    externalChannelName: "owner",
+    linkedAt: "2026-10-01T00:00:00.000Z",
+    accessTokenEnc: "enc-access",
+    refreshTokenEnc: "enc-refresh",
+    tokenExpiresAt: null,
   };
   const replyDeps = (overrides = {}) => ({
     rateLimit: mock(async () => ({ ok: true })),
-    dbOne: mock(async () => CONNECTION),
+    loadAuthorization: mock(async () => AUTHORIZATION),
     dbRun: mock(async () => []),
     getAccessToken: mock(async () => ({
       accessToken: "kick-token", accessEnc: "enc-access", refreshEnc: "enc-refresh", expiresAt: null,
@@ -423,7 +434,7 @@ describe("Kick webhook → tournament chat reply", () => {
   const fullOutcome = (extra = {}) => ({
     routed: true, matched: true, entered: false, duplicate: false, rejected: null,
     tournamentId: "tournament-1", full: true,
-    senderUsername: "viewer", messageId: "msg-9", ownerUserId: "owner-1", broadcasterUserId: "111",
+    senderUsername: "viewer", messageId: "msg-9", siteId: "site-1", broadcasterUserId: "111",
     ...extra,
   });
   const send = async (outcome, deps) => handleKickWebhook(
@@ -451,6 +462,24 @@ describe("Kick webhook → tournament chat reply", () => {
     });
   });
 
+  it("replies with the tournament site's own Kick authorization and stores refreshed tokens on it", async () => {
+    const deps = replyDeps({
+      getAccessToken: mock(async () => ({
+        accessToken: "kick-token", accessEnc: "enc-new", refreshEnc: "enc-refresh-new", expiresAt: "2026-10-03T00:00:00.000Z",
+      })),
+    });
+    await send(fullOutcome(), deps);
+    expect(deps.loadAuthorization).toHaveBeenCalledTimes(1);
+    expect(deps.loadAuthorization.mock.calls[0].slice(1)).toEqual(["site-1", "kick"]);
+    expect(deps.getAccessToken.mock.calls[0].slice(1)).toEqual(["enc-access", "enc-refresh", null]);
+    expect(deps.storeTokens).toHaveBeenCalledTimes(1);
+    const [, authorization, tokens] = deps.storeTokens.mock.calls[0];
+    expect(authorization).toMatchObject({ scope: "site", connectionId: "sc-1" });
+    expect(tokens).toEqual({
+      accessTokenEnc: "enc-new", refreshTokenEnc: "enc-refresh-new", tokenExpiresAt: "2026-10-03T00:00:00.000Z",
+    });
+  });
+
   it("replies with the waitlist position for a waitlisted entry", async () => {
     const deps = replyDeps();
     const res = await send(fullOutcome({ full: false, waitlisted: true, waitlistPosition: 3 }), deps);
@@ -462,9 +491,7 @@ describe("Kick webhook → tournament chat reply", () => {
 
   const joinedOutcome = (extra = {}) => fullOutcome({ full: false, entered: true, tournamentTitle: "Friday Cup", ...extra });
   const joinDeps = ({ players = 4, others = [], since = null, ...overrides } = {}) => replyDeps({
-    dbOne: mock(async (sql) => (String(sql).includes("creator_connections")
-      ? CONNECTION
-      : { at: "2026-10-02T17:00:00.000Z", players })),
+    dbOne: mock(async () => ({ at: "2026-10-02T17:00:00.000Z", players })),
     dbQuery: mock(async () => others),
     kvGet: mock(async () => since),
     kvPut: mock(async () => {}),
@@ -585,7 +612,7 @@ describe("Kick webhook → tournament chat reply", () => {
     const realError = console.error;
     console.error = errorSpy;
     try {
-      const deps = replyDeps({ dbOne: mock(async () => null) });
+      const deps = replyDeps({ loadAuthorization: mock(async () => null) });
       const res = await send(fullOutcome(), deps);
       expect(res.status).toBe(200);
       expect(deps.postChatMessage).not.toHaveBeenCalled();

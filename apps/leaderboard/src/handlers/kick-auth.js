@@ -1,13 +1,14 @@
 // Kick OAuth 2.1 flow for streamers linking their Kick channel.
 import { currentUser, requireUser, ok, bad, json, readJson, rateLimit } from "../auth.js";
 import {
-  clearCreatorConnectionTokens,
-  linkCommunityChannel,
-  linkCreatorConnection,
+  clearChannelAuthorizationTokens,
+  linkSiteProviderAuthorization,
+  loadChannelAuthorization,
   otherVerifiedChannelForCreator,
   revokeCommunityChannel,
   revokeCreatorConnection,
-  storeCreatorConnectionTokens,
+  revokeSiteCreatorConnection,
+  storeChannelAuthorizationTokens,
 } from "@yourrank/shared/provider-connections";
 import { one, withTransaction } from "@yourrank/shared/db";
 import { kickCreatorOwnsChannel } from "@yourrank/shared/providers/kick-ownership";
@@ -216,7 +217,10 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
 
     await withTransactionImpl(async (tx) => {
       const run = (sql, params) => tx.unsafe(sql, params);
-      const creatorConnectionId = await linkCreatorConnection(run, {
+      // Kept per site when another of the owner's sites is connected with a
+      // different Kick account, so one site's connect never unbinds another.
+      await linkSiteProviderAuthorization(run, {
+        siteId: stateData.siteId,
         userId: user.id,
         provider: "kick",
         externalUserId: kickUserId,
@@ -224,14 +228,8 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
         accessTokenEnc: accessEnc,
         refreshTokenEnc: refreshEnc,
         tokenExpiresAt: expiresAt,
-      });
-      await linkCommunityChannel(run, {
-        siteId: stateData.siteId,
-        provider: "kick",
         externalChannelId: kickChannelId,
         externalChannelName: kickChannel.slug || "",
-        creatorConnectionId,
-        verified: true,
       });
       await markChannelEventSubscriptions(run, stateData.siteId, "kick", delivery);
     });
@@ -265,35 +263,30 @@ export async function reconcileKickWebhookDelivery(env, siteId, deps = {}) {
   } = deps;
 
   // The channel must be verified for this site and routed to an active
-  // connection of the site owner — the same rule loadChatGiveawayConnection
+  // authorization of the site owner — the same rule loadChatGiveawayConnection
   // applies — so a member with manage rights repairs with the owner's grant
   // and can never reach another site's channel or another creator's tokens.
-  const connection = await oneImpl(
-    `SELECT cc.user_id, cc.access_token_enc, cc.refresh_token_enc, cc.token_expires_at
-       FROM community_channels ch
-       JOIN sites s ON s.id = ch.site_id
-       JOIN creator_connections cc
-         ON cc.id = ch.creator_connection_id
-        AND cc.provider = ch.provider
-        AND cc.user_id = s.user_id
-        AND cc.status = 'active'
-        AND cc.linked_at IS NOT NULL
-      WHERE ch.site_id = $1 AND ch.provider = 'kick' AND ch.status = 'active' AND ch.verified_at IS NOT NULL`,
-    [siteId],
+  const connection = await loadChannelAuthorization(
+    async (sql, params) => {
+      const row = await oneImpl(sql, params);
+      return row ? [row] : [];
+    },
+    siteId,
+    "kick",
   );
   if (!connection) return { status: "not_connected" };
-  if (!connection.access_token_enc) return { status: "reconnect_required" };
+  if (!connection.accessTokenEnc) return { status: "reconnect_required" };
 
   let tokens;
   try {
     tokens = await getValidKickAccessTokenImpl(
-      env, connection.access_token_enc, connection.refresh_token_enc, connection.token_expires_at,
+      env, connection.accessTokenEnc, connection.refreshTokenEnc, connection.tokenExpiresAt,
     );
   } catch (err) {
     if (isDefinitiveKickAuthorizationFailure(err)) {
       console.warn("[kick-auth] repair: Kick rejected the saved authorization for site", siteId);
       await withTransactionImpl(async (tx) => {
-        await clearCreatorConnectionTokens((sql, params) => tx.unsafe(sql, params), connection.user_id, "kick");
+        await clearChannelAuthorizationTokens((sql, params) => tx.unsafe(sql, params), connection);
       });
       return { status: "reconnect_required" };
     }
@@ -312,8 +305,8 @@ export async function reconcileKickWebhookDelivery(env, siteId, deps = {}) {
 
   await withTransactionImpl(async (tx) => {
     const run = (sql, params) => tx.unsafe(sql, params);
-    if (tokens.accessEnc !== connection.access_token_enc) {
-      await storeCreatorConnectionTokens(run, connection.user_id, "kick", {
+    if (tokens.accessEnc !== connection.accessTokenEnc) {
+      await storeChannelAuthorizationTokens(run, connection, {
         accessTokenEnc: tokens.accessEnc,
         refreshTokenEnc: tokens.refreshEnc,
         tokenExpiresAt: tokens.expiresAt,
@@ -408,6 +401,7 @@ export async function handleKickAuthDisconnect(request, env, deps = {}) {
     if (!otherSite) await revokeCreatorConnection(run, user.id, "kick");
     await stopActiveChatGiveaways(run, site.id);
     await revokeCommunityChannel(run, site.id, "kick");
+    await revokeSiteCreatorConnection(run, site.id, "kick");
     return { accountDisconnected: !otherSite };
   });
   void notifyLiveBoard(env, site.id);

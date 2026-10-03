@@ -24,6 +24,10 @@ import {
   loadChatGiveawayConnection as defaultLoadChatGiveawayConnection,
 } from "@yourrank/shared/chat-giveaways";
 import { reconcileKickWebhookDelivery as defaultReconcileKickWebhookDelivery } from "./kick-auth.js";
+import {
+  ROUTABLE_CHANNEL_AUTHORIZATION_JOINS_SQL,
+  ROUTABLE_CHANNEL_CONDITION_SQL,
+} from "@yourrank/shared/provider-connections";
 import { buildBracket, canCorrectMatch, resolveByes, isBye, BYE, MIN_BRACKET_PARTICIPANTS } from "../lib/tournament-bracket.js";
 import {
   entryViews,
@@ -49,7 +53,7 @@ export async function announceTournamentChampion(env, announcement, {
   if (!rl.ok) return false;
   return send(env, {
     tournamentId: announcement.tournamentId,
-    ownerUserId: announcement.ownerUserId,
+    siteId: announcement.siteId,
     content: championAnnouncementText(announcement),
   });
 }
@@ -1085,17 +1089,14 @@ export async function ingestTournamentChatMessageTx(tx, payload) {
   // Route through the open-signups lock row: one site can hold at most one,
   // so a message can never pick among several open tournaments.
   const route = await tx.one(
-    `SELECT t.id, t.title, t.entry_keyword, l.site_id, s.user_id AS owner_user_id,
+    `SELECT t.id, t.title, t.entry_keyword, l.site_id,
             ch.external_channel_id AS broadcaster_user_id
        FROM community_channels ch
-       JOIN sites s ON s.id = ch.site_id
-       JOIN creator_connections cc ON cc.id = ch.creator_connection_id
+       JOIN sites s ON s.id = ch.site_id${ROUTABLE_CHANNEL_AUTHORIZATION_JOINS_SQL}
        JOIN tournament_open_signups l ON l.site_id = ch.site_id
        JOIN tournaments t ON t.id = l.tournament_id
       WHERE ch.provider = 'kick' AND ch.external_channel_id = $1
-        AND ch.status = 'active' AND ch.verified_at IS NOT NULL
-        AND cc.provider = ch.provider AND cc.user_id = s.user_id
-        AND cc.status = 'active' AND cc.linked_at IS NOT NULL
+        AND ${ROUTABLE_CHANNEL_CONDITION_SQL}
         AND t.signup_state = 'open' AND t.status NOT IN ('completed','cancelled')
         AND lower(t.chat_channel) IN (lower(ch.external_channel_name), lower($2))`,
     [input.externalChannelId, String(payload.broadcaster?.channel_slug || "")]
@@ -1111,7 +1112,7 @@ export async function ingestTournamentChatMessageTx(tx, payload) {
 
   outcome.senderUsername = input.senderUsername;
   outcome.messageId = payload?.message_id ? String(payload.message_id) : null;
-  outcome.ownerUserId = route.owner_user_id;
+  outcome.siteId = route.site_id;
   outcome.broadcasterUserId = route.broadcaster_user_id;
   if (route.title) outcome.tournamentTitle = String(route.title);
 
@@ -1609,7 +1610,7 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
       const announcement = isFinals && match.chat_channel
         ? {
             tournamentId: match.tournament_id,
-            ownerUserId: match.site_user_id,
+            siteId: match.site_id,
             title: match.tournament_title || "",
             champion: winnerName,
             runnerUp: winnerName === match.player1_name ? match.player2_name : match.player1_name,

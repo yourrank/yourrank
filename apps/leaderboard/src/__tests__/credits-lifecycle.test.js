@@ -154,7 +154,8 @@ function earnEvent(overrides = {}) {
 function mockCommonPrefix({ existingSiteViewer = { id: "sv-1" } } = {}) {
   db.unsafeResponses.push([{ event_id: "msg-1" }]); // kick_reward_events insert
   db.unsafeResponses.push([{ id: 7 }]); // integration_events insert
-  db.unsafeResponses.push([{ site_id: "site-1", user_id: "user-1" }]); // community_channels routing
+  db.unsafeResponses.push([{ site_id: "site-1", user_id: "user-1", cc_id: "cc-1", sc_id: null }]); // community_channels routing
+  db.unsafeResponses.push([{ id: "cc-1" }]); // verifying authorization still active (FOR SHARE)
   db.oneResponses.push({ plan: "pro", plan_expires_at: null, status: "active", email_verified: true }); // owner
   db.unsafeResponses.push([{ viewer_id: "viewer-1", username: "alice" }]); // viewer_identities lookup
   db.unsafeResponses.push([{ external_user_id: "kick-1", status: "active" }]); // prior identity row: same active account, no link event
@@ -222,8 +223,12 @@ describe("processKickRewardRedemption earn path", () => {
     const lookup = db.calls.find((call) => call.method === "unsafe" && call.sql.includes("FROM community_channels ch"));
     expect(lookup.sql).toContain("ch.status = 'active' AND ch.verified_at IS NOT NULL");
     expect(lookup.sql).toContain("cc.status = 'active' AND cc.linked_at IS NOT NULL");
-    expect(lookup.sql).toContain("JOIN creator_connections cc ON cc.id = ch.creator_connection_id");
-    expect(lookup.sql).toContain("cc.provider = ch.provider AND cc.user_id = s.user_id");
+    expect(lookup.sql).toContain("LEFT JOIN creator_connections cc\n         ON cc.id = ch.creator_connection_id");
+    expect(lookup.sql).toContain("cc.user_id = s.user_id");
+    expect(lookup.sql).toContain("LEFT JOIN site_creator_connections sc");
+    expect(lookup.sql).toContain("sc.site_id = ch.site_id AND sc.user_id = s.user_id AND sc.status = 'active'");
+    expect(lookup.sql).toContain("sc.verified_channel_id = ch.external_channel_id");
+    expect(lookup.sql).toContain("(cc.id IS NOT NULL OR sc.id IS NOT NULL)");
     expect(lookup.sql).not.toContain("cc.external_user_id = ch.external_channel_id");
     expect(db.calls.some((call) => /INSERT INTO site_viewers/.test(call.sql))).toBe(false);
     expect(db.calls.some((call) => /INSERT INTO credit_ledger/.test(call.sql))).toBe(false);

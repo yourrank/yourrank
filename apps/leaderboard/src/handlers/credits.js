@@ -9,6 +9,13 @@ import { claimNotificationSpec, insertViewerNotificationTx } from "./viewer-noti
 import { hashToken } from "@yourrank/shared/crypto";
 import { bindSiteKickChannel, setSiteKickChannel } from "@yourrank/shared/kick-credits";
 import { kickCreatorOwnsChannel } from "@yourrank/shared/providers/kick-ownership";
+import {
+  ROUTABLE_CHANNEL_AUTHORIZATION_JOINS_SQL,
+  ROUTABLE_CHANNEL_CONDITION_SQL,
+  clearChannelAuthorizationTokens,
+  loadSiteProviderAuthorization,
+  storeChannelAuthorizationTokens,
+} from "@yourrank/shared/provider-connections";
 import { notifyLiveBoard } from "../live-board-config.js";
 import {
   getValidKickAccessToken,
@@ -33,6 +40,9 @@ import { hasCreatorContactMethod } from "@yourrank/shared/creator-contact";
 import { fromJsonb } from "@yourrank/shared/jsonb";
 
 // Injectable seams for tests (see handlers/auth.js defaultDependencies).
+const loadSiteKickAuthorization = (siteId) =>
+  loadSiteProviderAuthorization((sql, params) => query(sql, params), siteId, "kick");
+
 const creditsCreateRewardDefaults = {
   requireUser,
   getByUser,
@@ -47,6 +57,7 @@ const creditsCreateRewardDefaults = {
   fetchKickCurrentChannel,
   creatorExpansionRestriction,
   bindSiteKickChannel,
+  loadKickAuthorization: loadSiteKickAuthorization,
 };
 
 const creditsConnectDefaults = {
@@ -58,6 +69,7 @@ const creditsConnectDefaults = {
   one,
   setSiteKickChannel,
   notifyLiveBoard,
+  loadKickAuthorization: loadSiteKickAuthorization,
 };
 
 const creditsGrowthDefaults = {
@@ -211,19 +223,13 @@ const kickReconnectRequired = () => json({
   code: "kick_reconnect_required",
 }, 409);
 
-async function clearInvalidKickAuthorization(deps, userId, reason) {
+// Clears only the authorization the failing operation used, so a revoked grant
+// on one site never disconnects another site's Kick account.
+async function clearInvalidKickAuthorization(deps, authorization, reason) {
   try {
-    await deps.exec(
-      `UPDATE users
-          SET kick_access_token_enc = NULL,
-              kick_refresh_token_enc = NULL,
-              kick_token_expires_at = NULL,
-              updated_at = now()
-        WHERE id = $1`,
-      [userId],
-    );
+    await clearChannelAuthorizationTokens((sql, params) => deps.exec(sql, params), authorization);
   } catch {
-    console.warn(JSON.stringify({ event: "kick_authorization_clear_failed", reason, userId }));
+    console.warn(JSON.stringify({ event: "kick_authorization_clear_failed", reason, siteId: authorization.siteId }));
   }
 }
 
@@ -289,18 +295,17 @@ export async function handleCreditsStatus(request, env) {
   const [channel, mappings, items, viewers, recentClaims, usage] = await Promise.all([
     one(
       `SELECT s.kick_channel_external_id, s.kick_channel_name, s.kick_channel_linked_at,
-              s.kick_channel_verified_at IS NOT NULL
-                AND u.kick_user_id = s.kick_channel_external_id
-                AND u.kick_linked_at IS NOT NULL AS channel_verified,
-              u.kick_user_id IS NOT NULL AND u.kick_linked_at IS NOT NULL AS account_linked,
-              u.kick_access_token_enc IS NOT NULL AS has_access_token,
-              u.kick_refresh_token_enc IS NOT NULL AS has_refresh_token,
-              u.kick_token_expires_at,
+              COALESCE(${ROUTABLE_CHANNEL_CONDITION_SQL}, false) AS channel_verified,
+              COALESCE(sc.linked_at, oc.linked_at) IS NOT NULL AS account_linked,
+              CASE WHEN sc.id IS NOT NULL THEN sc.access_token_enc ELSE oc.access_token_enc END IS NOT NULL AS has_access_token,
+              CASE WHEN sc.id IS NOT NULL THEN sc.refresh_token_enc ELSE oc.refresh_token_enc END IS NOT NULL AS has_refresh_token,
+              CASE WHEN sc.id IS NOT NULL THEN sc.token_expires_at ELSE oc.token_expires_at END AS kick_token_expires_at,
               ch.reward_events_subscribed_at, ch.chat_events_subscribed_at, ch.event_subscriptions_checked_at,
               EXISTS (SELECT 1 FROM chat_giveaway_sessions g WHERE g.site_id = s.id) AS uses_chat_giveaways
          FROM sites s
-         JOIN users u ON u.id = s.user_id
-         LEFT JOIN community_channels ch ON ch.site_id = s.id AND ch.provider = 'kick' AND ch.status = 'active'
+         LEFT JOIN community_channels ch ON ch.site_id = s.id AND ch.provider = 'kick' AND ch.status = 'active'${ROUTABLE_CHANNEL_AUTHORIZATION_JOINS_SQL}
+         LEFT JOIN creator_connections oc
+           ON oc.user_id = s.user_id AND oc.provider = 'kick' AND oc.status = 'active' AND oc.linked_at IS NOT NULL
         WHERE s.id=$1`,
       [site.id]
     ),
@@ -439,18 +444,13 @@ export async function handleCreditsConnect(request, env, deps = creditsConnectDe
   const externalId = String(body?.externalId || "").trim();
   if (!externalId) return bad("Kick channel ID is required");
 
-  const providerIdentity = await deps.one(
-    `SELECT kick_user_id, kick_username, kick_linked_at
-       FROM users
-      WHERE id = $1`,
-    [site.user_id]
-  );
-  const verifiedExternalId = String(providerIdentity?.kick_user_id || "");
-  if (!providerIdentity?.kick_linked_at || !kickCreatorOwnsChannel(verifiedExternalId, externalId)) {
+  const providerIdentity = await deps.loadKickAuthorization(site.id);
+  const verifiedExternalId = String(providerIdentity?.externalUserId || "");
+  if (!providerIdentity?.linkedAt || !kickCreatorOwnsChannel(verifiedExternalId, externalId)) {
     return bad("Kick channel must match the Site owner's verified Kick account. Reconnect Kick to continue.", 403);
   }
 
-  const verifiedName = String(providerIdentity.kick_username || "").trim();
+  const verifiedName = String(providerIdentity.username || "").trim();
   await deps.setSiteKickChannel(site.id, verifiedExternalId, verifiedName);
   void deps.notifyLiveBoard?.(env, site.id);
   const row = await deps.one(
@@ -578,14 +578,9 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
     return denied(limitDenial(plan, "reward_mappings", preCount?.count || 0), { actorId: user.id, request });
   }
 
-  // Load and refresh the streamer's Kick tokens.
-  const tokenRow = await deps.one(
-    `SELECT kick_user_id, kick_linked_at,
-            kick_access_token_enc, kick_refresh_token_enc, kick_token_expires_at
-       FROM users WHERE id=$1`,
-    [user.id]
-  );
-  if (!tokenRow?.kick_access_token_enc) {
+  // Load and refresh this site's Kick authorization.
+  const kickAuthorization = await deps.loadKickAuthorization(site.id);
+  if (!kickAuthorization?.accessTokenEnc) {
     return bad("Connect your Kick account first in the channel section", 403);
   }
 
@@ -593,18 +588,18 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
   try {
     tokenSet = await deps.getValidKickAccessToken(
       env,
-      tokenRow.kick_access_token_enc,
-      tokenRow.kick_refresh_token_enc || null,
-      tokenRow.kick_token_expires_at
+      kickAuthorization.accessTokenEnc,
+      kickAuthorization.refreshTokenEnc || null,
+      kickAuthorization.tokenExpiresAt
     );
   } catch (err) {
     // Persist only a proven invalid grant. Transient provider failures keep the
     // refresh credential so the next operation can retry safely.
     if (isDefinitiveKickAuthorizationFailure(err)) {
-      await clearInvalidKickAuthorization(deps, user.id, "refresh_rejected");
+      await clearInvalidKickAuthorization(deps, kickAuthorization, "refresh_rejected");
       return kickReconnectRequired();
     }
-    console.warn(JSON.stringify({ event: "kick_token_refresh_unavailable", userId: user.id }));
+    console.warn(JSON.stringify({ event: "kick_token_refresh_unavailable", siteId: site.id }));
     return bad("Kick authorization could not be refreshed. Try again in a moment.", 502);
   }
 
@@ -621,7 +616,7 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
     // A 401 here means the access token was revoked despite a fresh-looking
     // expiry; anything else is a Kick-API problem the streamer cannot fix.
     if (isDefinitiveKickAuthorizationFailure(err)) {
-      await clearInvalidKickAuthorization(deps, user.id, "provider_rejected_access");
+      await clearInvalidKickAuthorization(deps, kickAuthorization, "provider_rejected_access");
       return kickReconnectRequired();
     }
     console.warn("[credits] Kick reward creation failed:", err?.message || err);
@@ -635,10 +630,10 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
     kickChannel = await deps.fetchKickCurrentChannel(tokenSet.accessToken);
   } catch (err) {
     if (isDefinitiveKickAuthorizationFailure(err)) {
-      await clearInvalidKickAuthorization(deps, user.id, "provider_rejected_channel_lookup");
+      await clearInvalidKickAuthorization(deps, kickAuthorization, "provider_rejected_channel_lookup");
       return kickReconnectRequired();
     }
-    console.warn(JSON.stringify({ event: "kick_channel_lookup_unavailable", userId: user.id }));
+    console.warn(JSON.stringify({ event: "kick_channel_lookup_unavailable", siteId: site.id }));
     return bad("Kick channel details could not be loaded. Try again in a moment.", 502);
   }
   if (!kickChannel) {
@@ -649,20 +644,16 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
   if (!kickChannelId) {
     return bad("Kick channel ID missing from current channel response", 500);
   }
-  if (!tokenRow.kick_linked_at || !kickCreatorOwnsChannel(tokenRow.kick_user_id, kickChannelId)) {
+  if (!kickAuthorization.linkedAt || !kickCreatorOwnsChannel(kickAuthorization.externalUserId, kickChannelId)) {
     return bad("Kick channel does not match the connected provider identity. Reconnect Kick to continue.", 409);
   }
 
-  // Persist refreshed tokens if they changed.
-  await deps.exec(
-    `UPDATE users
-        SET kick_access_token_enc = $1,
-            kick_refresh_token_enc = $2,
-            kick_token_expires_at = $3,
-            updated_at = now()
-      WHERE id = $4`,
-    [tokenSet.accessEnc, tokenSet.refreshEnc, tokenSet.expiresAt, user.id]
-  );
+  // Persist refreshed tokens on the authorization they came from.
+  await storeChannelAuthorizationTokens((sql, params) => deps.exec(sql, params), kickAuthorization, {
+    accessTokenEnc: tokenSet.accessEnc,
+    refreshTokenEnc: tokenSet.refreshEnc,
+    tokenExpiresAt: tokenSet.expiresAt,
+  });
 
   // Atomic insert under a site lock so two concurrent auto-creates cannot overrun the plan limit.
   const txResult = await deps.withTransaction(async (tx) => {

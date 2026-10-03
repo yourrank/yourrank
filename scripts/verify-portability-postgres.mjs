@@ -31,6 +31,9 @@ export const PORTABILITY_SUITES = Object.freeze([
   "apps/leaderboard/src/__tests__/provider-portability-postgres.test.js",
   // Kick auth callback -> generic binding; unverified binding never routes.
   "apps/leaderboard/src/__tests__/provider-binding-postgres.test.js",
+  // One creator, two sites, two Kick accounts: per-site authorization keeps
+  // both routable through connect, refresh, clear and disconnect.
+  "apps/leaderboard/src/__tests__/site-creator-connections-postgres.test.js",
   // Viewer session authority (global vs custom domain) across providers.
   "apps/leaderboard/src/__tests__/viewer-authority-postgres.test.js",
   // Chat giveaways: verified channel -> site routing, one active session per

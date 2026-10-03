@@ -111,11 +111,11 @@ async function replyTournamentChatOutcome(tournament, env, {
   }
   const sent = await sendTournamentChatMessage(env, {
     tournamentId,
-    ownerUserId: tournament.ownerUserId,
+    siteId: tournament.siteId,
     broadcasterUserId: tournament.broadcasterUserId,
     content,
     replyToMessageId: tournament.messageId,
-  }, { dbOne, ...sendDeps });
+  }, sendDeps);
   if (sent && confirming && ackAt) await kvPut(env, JOIN_ACK_KEY(tournamentId), ackAt, JOIN_ACK_TTL_SECONDS);
 }
 

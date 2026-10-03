@@ -1,38 +1,35 @@
-// Posts a tournament message into the streamer's Kick chat with the creator's
-// connection. Callers own throttling and wording; this owns token refresh and
+// Posts a tournament message into the streamer's Kick chat with the Kick
+// authorization that proves the tournament site's channel. Callers own throttling and wording; this owns token refresh and
 // failure logging, and never throws for Kick-side failures.
-import { query, one } from "@yourrank/shared/db";
+import { query } from "@yourrank/shared/db";
 import {
   getValidKickAccessToken,
   isDefinitiveKickAuthorizationFailure,
   postKickChatMessage,
 } from "@yourrank/shared/kick-oauth";
-import { storeCreatorConnectionTokens } from "@yourrank/shared/provider-connections";
+import {
+  loadChannelAuthorization,
+  storeChannelAuthorizationTokens,
+} from "@yourrank/shared/provider-connections";
 
 const replyFailed = (tournamentId, status, reason) =>
   console.error(JSON.stringify({ event: "tournament_chat_reply_failed", tournamentId, status, reason }));
 
 export async function sendTournamentChatMessage(env, {
   tournamentId,
-  ownerUserId,
+  siteId,
   broadcasterUserId = null,
   content,
   replyToMessageId = null,
 }, {
   postChatMessage = postKickChatMessage,
   getAccessToken = getValidKickAccessToken,
-  storeTokens = storeCreatorConnectionTokens,
-  dbOne = one,
+  loadAuthorization = loadChannelAuthorization,
+  storeTokens = storeChannelAuthorizationTokens,
   dbRun = (sql, params) => query(sql, params),
 } = {}) {
-  const connection = await dbOne(
-    `SELECT user_id, external_user_id, access_token_enc, refresh_token_enc, token_expires_at
-       FROM creator_connections
-      WHERE user_id=$1 AND provider='kick' AND status='active'
-      LIMIT 1`,
-    [ownerUserId]
-  );
-  if (!connection?.access_token_enc) {
+  const connection = await loadAuthorization(dbRun, siteId, "kick");
+  if (!connection?.accessTokenEnc) {
     replyFailed(tournamentId, null, "reconnect_kick_for_chat_write");
     return false;
   }
@@ -40,9 +37,9 @@ export async function sendTournamentChatMessage(env, {
   try {
     tokenSet = await getAccessToken(
       env,
-      connection.access_token_enc,
-      connection.refresh_token_enc || null,
-      connection.token_expires_at
+      connection.accessTokenEnc,
+      connection.refreshTokenEnc || null,
+      connection.tokenExpiresAt
     );
   } catch (err) {
     replyFailed(
@@ -54,14 +51,14 @@ export async function sendTournamentChatMessage(env, {
     );
     return false;
   }
-  await storeTokens(dbRun, connection.user_id, "kick", {
+  await storeTokens(dbRun, connection, {
     accessTokenEnc: tokenSet.accessEnc,
     refreshTokenEnc: tokenSet.refreshEnc,
     tokenExpiresAt: tokenSet.expiresAt,
   });
   try {
     await postChatMessage(tokenSet.accessToken, {
-      broadcasterUserId: broadcasterUserId || connection.external_user_id,
+      broadcasterUserId: broadcasterUserId || connection.externalChannelId,
       content,
       ...(replyToMessageId ? { replyToMessageId } : {}),
     });

@@ -298,7 +298,7 @@ describe("champion announcement", () => {
     expect(res.status).toBe(200);
     expect(announceChampion).toHaveBeenCalledTimes(1);
     expect(announceChampion.mock.calls[0][1]).toEqual({
-      tournamentId: "tourn-1", ownerUserId: "owner-1", title: "Friday Cup",
+      tournamentId: "tourn-1", siteId: "site-1", title: "Friday Cup",
       champion: "Zed", runnerUp: "Nova", scores: [3, 1],
     });
   });
@@ -327,10 +327,10 @@ describe("champion announcement", () => {
 
   it("sends once per minute per tournament", async () => {
     const send = mock(async () => true);
-    const announcement = { tournamentId: "tourn-1", ownerUserId: "owner-1", title: "Cup", champion: "Nova", runnerUp: "Zed", scores: [2, 0] };
+    const announcement = { tournamentId: "tourn-1", siteId: "site-1", title: "Cup", champion: "Nova", runnerUp: "Zed", scores: [2, 0] };
     expect(await announceTournamentChampion({}, announcement, { rateLimit: async () => ({ ok: true }), send })).toBe(true);
     expect(send.mock.calls[0][1]).toEqual({
-      tournamentId: "tourn-1", ownerUserId: "owner-1",
+      tournamentId: "tourn-1", siteId: "site-1",
       content: "🏆 Nova is the champion of Cup! Final: Nova 2–0 Zed. GG everyone.",
     });
     expect(await announceTournamentChampion({}, announcement, { rateLimit: async () => ({ ok: false }), send })).toBe(false);

@@ -96,7 +96,10 @@ describe("Wave H Rewards capability split", () => {
         getBoardById: async () => site,
         requireSiteCapability: async () => ({ role: "owner", res: null }),
         rateLimit: async () => ({ ok: true }),
-        one: async () => ({ kick_user_id: "owner-channel", kick_username: "owner", kick_linked_at: "2026-09-15T00:00:00.000Z" }),
+        loadKickAuthorization: async (siteId) => {
+          expect(siteId).toBe(site.id);
+          return { externalUserId: "owner-channel", username: "owner", linkedAt: "2026-09-15T00:00:00.000Z" };
+        },
         setSiteKickChannel: async () => { persisted = true; },
       },
     );
@@ -118,12 +121,10 @@ describe("Wave H Rewards capability split", () => {
         getBoardById: async () => site,
         requireSiteCapability: async () => ({ role: "owner", res: null }),
         rateLimit: async () => ({ ok: true }),
-        one: async (sql) => {
-          if (sql.includes("FROM users")) {
-            return { kick_user_id: "owner-channel", kick_username: "provider-name", kick_linked_at: "2026-09-15T00:00:00.000Z" };
-          }
-          return { kick_channel_linked_at: "2026-09-15T00:00:00.000Z" };
-        },
+        loadKickAuthorization: async () => ({
+          externalUserId: "owner-channel", username: "provider-name", linkedAt: "2026-09-15T00:00:00.000Z",
+        }),
+        one: async () => ({ kick_channel_linked_at: "2026-09-15T00:00:00.000Z" }),
         setSiteKickChannel: async (...args) => writes.push(args),
       },
     );

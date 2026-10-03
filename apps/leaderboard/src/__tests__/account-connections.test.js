@@ -17,7 +17,9 @@ function dependencies({ identity = {}, sites = [], telegramUserId = 998877 } = {
       res: null,
     }),
     rateLimit: async () => ({ ok: true }),
-    query: async () => sites,
+    // Routable unless a test says otherwise: a saved channel whose verifying
+    // authorization is still active.
+    query: async () => sites.map((site) => ({ kick_channel_routable: Boolean(site.kick_channel_external_id), ...site })),
     one: async () => ({ telegram_linked_at: "2026-08-02T00:00:00.000Z" }),
     // Creator identity is read from creator_connections, not users.kick_*.
     loadCreatorConnection: async (_run, userId, provider) => {
@@ -105,6 +107,41 @@ describe("Settings connection inventory", () => {
     expect(kick.action).toEqual({ label: "Manage", href: "/dashboard/site/connections?siteId=site-1" });
     expect(discord).toEqual(expect.objectContaining({ status: "not_configured", statusLabel: "Not configured" }));
     expect(telegram).toEqual(expect.objectContaining({ status: "not_configured", statusLabel: "Not configured" }));
+  });
+
+  it("reports a saved channel that lost its verifying Kick authorization as needing reconnect, like tournament signups", async () => {
+    const response = await handleAccountConnectedAccounts(request(), {}, dependencies({
+      sites: [{
+        id: "site-1", name: "Site One", slug: "one",
+        kick_channel_external_id: "channel", kick_channel_name: "one", kick_channel_routable: false,
+        discord_webhook_url_enc: null, telegram_chat_id: null, telegram_notify: false, active_reward_mappings: 0,
+      }],
+    }));
+    const body = await response.json();
+    const kick = body.connections.find(({ id }) => id === "kick-site:site-1");
+    expect(kick).toEqual(expect.objectContaining({
+      connected: false, status: "needs_attention", statusLabel: "Needs reconnect",
+    }));
+    expect(kick.detail).toMatch(/reconnect kick/i);
+    expect(kick.action).toEqual({ label: "Reconnect", href: "/dashboard/site/connections?siteId=site-1" });
+  });
+
+  it("derives a site's Kick health from that site's own authorization, not the account connection", async () => {
+    const response = await handleAccountConnectedAccounts(request(), {}, dependencies({
+      sites: [{
+        id: "site-1", name: "Site One", slug: "one",
+        kick_channel_external_id: "channel", kick_channel_name: "one",
+        kick_site_connection_id: "sc-1", kick_site_has_access_token: false, kick_site_has_refresh_token: false,
+        kick_site_token_expires_at: null,
+        discord_webhook_url_enc: null, telegram_chat_id: null, telegram_notify: false, active_reward_mappings: 1,
+      }],
+    }));
+    const body = await response.json();
+    expect(body.connections.find(({ id }) => id === "kick-account").status).not.toBe("needs_attention");
+    expect(body.connections.find(({ id }) => id === "kick-site:site-1")).toEqual(expect.objectContaining({
+      status: "needs_attention", statusLabel: "Connected", connected: true,
+    }));
+    expect(JSON.stringify(body)).not.toContain("sc-1");
   });
 
   it("labels an expired access token with unverified refreshability truthfully", async () => {
