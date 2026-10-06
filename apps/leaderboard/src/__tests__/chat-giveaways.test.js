@@ -187,6 +187,11 @@ function deps(overrides = {}) {
       return { role: "owner", res: null };
     },
     loadChatGiveawayConnection: async () => ({ connected: true, chatReady: true, channelName: "streamer", externalChannelId: "111" }),
+    loadChannelEventDelivery: async () => ({
+      rewardEventsSubscribedAt: new Date().toISOString(),
+      chatEventsSubscribedAt: new Date().toISOString(),
+      checkedAt: new Date().toISOString(),
+    }),
     reconcileKickWebhookDelivery: async () => ({
       status: "ok",
       subscriptions: { rewardEvents: true, chatEvents: true },
@@ -901,7 +906,8 @@ describe("Chat Giveaway API", () => {
       query: async (text) => String(text).includes("chat_giveaway_draws") ? [] : [{ id: "e1", username: "a", provider_user_id: "222" }],
     }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
+    const data = await res.json();
+    expect(data).toEqual({
       ok: true,
       capabilities: GIVEAWAY_CAPABILITIES,
       connection: { connected: true, chatReady: true, channelName: "streamer", externalChannelId: "111" },
@@ -909,7 +915,15 @@ describe("Chat Giveaway API", () => {
       entries: [{ id: "e1", username: "a", provider_user_id: "222" }],
       winner: null,
       draws: [],
+      doctor: data.doctor,
     });
+    // The poll carries a read-only diagnostic naming the first closed ingest
+    // gate, so an empty entrant list comes with a cause and an operator action
+    // instead of sending the streamer to the wrong console.
+    expect(data.doctor.checks.map((c) => c.name)).toEqual([
+      "channel_connected", "delivery_stamped", "channel_routable", "session_active", "keyword_valid",
+    ]);
+    expect(data.doctor.healthy).toBe(true);
   });
 
   it("denies members without the rewards capability", async () => {
