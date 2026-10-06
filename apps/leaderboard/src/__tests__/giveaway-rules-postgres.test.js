@@ -80,6 +80,13 @@ function creatorDeps() {
     requireSiteCapability: async () => ({ res: null }),
     one, query, transaction,
     loadChatGiveawayConnection: async () => ({ connected: true, chatReady: true, externalChannelId: channelId }),
+    // The start handler reconciles Kick webhook subscriptions live; these
+    // tests own the database, so the Kick network round-trip is stubbed.
+    reconcileKickWebhookDelivery: async () => ({
+      status: "ok",
+      subscriptions: { rewardEvents: true, chatEvents: true },
+      failedEvents: [],
+    }),
   };
 }
 

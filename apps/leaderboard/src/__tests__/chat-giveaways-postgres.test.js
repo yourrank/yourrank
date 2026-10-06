@@ -96,6 +96,16 @@ describe("Chat Giveaways (Postgres)", () => {
     delivery = await loadChannelEventDelivery(run, siteA);
     expect(delivery.chatEventsSubscribedAt).not.toBeNull();
 
+    // Kick auto-unsubscribes events after delivery failures: a reconciliation
+    // that can no longer confirm chat clears the stamp instead of leaving a
+    // stale "ready" behind.
+    await markChannelEventSubscriptions(run, siteA, "kick", { rewardEvents: true, chatEvents: false });
+    expect(await loadChatGiveawayConnection(run, siteA)).toMatchObject({ connected: true, chatReady: false });
+    delivery = await loadChannelEventDelivery(run, siteA);
+    expect(delivery.rewardEventsSubscribedAt).not.toBeNull();
+    expect(delivery.chatEventsSubscribedAt).toBeNull();
+    await markChannelEventSubscriptions(run, siteA, "kick", { rewardEvents: true, chatEvents: true });
+
     // Site B's channel is untouched by site A's reconciliation.
     expect(await loadChannelEventDelivery(run, siteB)).toEqual({ rewardEventsSubscribedAt: null, chatEventsSubscribedAt: null, checkedAt: null });
     await markChannelEventSubscriptions(run, siteB, "kick", { rewardEvents: true, chatEvents: true });
