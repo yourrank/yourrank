@@ -6,8 +6,10 @@ import { requireSiteCapability as defaultRequireSiteCapability } from "../site-a
 import { one as defaultOne, query as defaultQuery, exec as defaultExec } from "@yourrank/shared/db";
 import {
   loadChatGiveawayConnection as defaultLoadChatGiveawayConnection,
+  loadChannelEventDelivery as defaultLoadChannelEventDelivery,
   normalizeGiveawayKeyword,
 } from "@yourrank/shared/chat-giveaways";
+import { buildGiveawayDoctorReport } from "../giveaway-doctor.js";
 import {
   giveawayRules,
   giveawayRulesSchema,
@@ -88,6 +90,7 @@ function withDefaults(deps) {
     query: defaultQuery,
     exec: defaultExec,
     loadChatGiveawayConnection: defaultLoadChatGiveawayConnection,
+    loadChannelEventDelivery: defaultLoadChannelEventDelivery,
     reconcileKickWebhookDelivery: defaultReconcileKickWebhookDelivery,
     transaction: giveawayTransaction,
     ...deps,
@@ -170,7 +173,17 @@ export async function handleChatGiveawayState(request, env, deps = {}) {
   const url = new URL(request.url);
   const connection = await d.loadChatGiveawayConnection(d.query, site.id, "kick");
   const view = await loadSessionView(d, site.id, url.searchParams.get("sessionId"));
-  return ok({ connection, capabilities: { ...GIVEAWAY_CAPABILITIES, vpnDetection: !!env?.PROXYCHECK_API_KEY }, ...view });
+  // Read-only diagnostic for the "viewers type the keyword, nothing shows up"
+  // class of failure. Runs the same gates the ingest path runs and reports the
+  // first one that is closed, so an operator gets the cause and the fix instead
+  // of walking the code by hand. Never writes and never creates entries.
+  const delivery = await d.loadChannelEventDelivery(d.query, site.id, "kick");
+  const doctor = buildGiveawayDoctorReport({
+    connection,
+    delivery,
+    session: view.session && view.session.status === "active" ? view.session : null,
+  });
+  return ok({ connection, capabilities: { ...GIVEAWAY_CAPABILITIES, vpnDetection: !!env?.PROXYCHECK_API_KEY }, doctor, ...view });
 }
 
 /** POST /api/giveaways/chat/start — create the site's single active session. */
