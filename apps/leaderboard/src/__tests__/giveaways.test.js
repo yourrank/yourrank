@@ -286,8 +286,17 @@ describe("Giveaways React migration", () => {
     expect($id("gw-vpn-requirement").textContent.trim()).toBe("Blocks VPN, proxy, Tor and hosting networks.");
   });
 
-  it("uses the connected-channel API without the legacy chatroom listener", () => {
-    for (const legacy of ["connectKickChat", "chat-entry.js", "/api/giveaways/chatroom", "chatroomId", "Resolving Kick chatroom", "Start Listening", "Refreshing will clear"]) {
+  it("keeps chat ingest server-side; the live chat socket only triggers refreshes", () => {
+    // The migration invariant that matters: the browser never creates or
+    // submits entries — ingest happens only via Kick's server-side webhook.
+    // The read-only chat socket (the same one tournaments use) exists solely
+    // to re-read server state the moment a keyword message appears, so the
+    // dashboard feels live instead of waiting up to CHAT_POLL_MS.
+    expect(giveawaysPageSource).toContain("connectKickChat");
+    expect(giveawaysPageSource).toContain("burstRefresh");
+    expect(giveawaysPageSource).not.toContain("giveaways/chat/ingest");
+    expect(giveawaysPageSource.split('"/entries/add"').length - 1).toBe(1); // manual add form only
+    for (const legacy of ["Resolving Kick chatroom", "Start Listening", "Refreshing will clear"]) {
       expect(giveawaysPageSource).not.toContain(legacy);
     }
     expect(giveawaysPageSource).toContain('const CHAT_POLL_MS = 4_000');

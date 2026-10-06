@@ -16,6 +16,7 @@ import {
   GIVEAWAY_CAPABILITIES,
 } from "@yourrank/shared/giveaway-eligibility";
 import { SESSION_COLUMNS, ENTRY_COLUMNS, giveawayTransaction, drawGiveaway } from "../chat-giveaway-service.js";
+import { reconcileKickWebhookDelivery as defaultReconcileKickWebhookDelivery } from "./kick-auth.js";
 
 const CAPABILITY = "canRoleManageRewards";
 const MANUAL_RULES_ERROR = "Manual giveaways can't use Kick-only rules (members, verified entry, subscriber/VIP only, winner chat response).";
@@ -87,6 +88,7 @@ function withDefaults(deps) {
     query: defaultQuery,
     exec: defaultExec,
     loadChatGiveawayConnection: defaultLoadChatGiveawayConnection,
+    reconcileKickWebhookDelivery: defaultReconcileKickWebhookDelivery,
     transaction: giveawayTransaction,
     ...deps,
   };
@@ -203,9 +205,17 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
   if (!manual) {
     connection = await d.loadChatGiveawayConnection(d.query, site.id, "kick");
     if (!connection.connected) return bad("Chat giveaways require a connected Kick channel.", 409);
-    if (!connection.chatReady) {
+    // Kick auto-unsubscribes webhook events after delivery failures, and the
+    // recorded chatReady flag is only stamped at connect/repair time — so it
+    // can be stale in either direction. Reconcile live at the moment the
+    // subscription actually matters (the same check tournament signups run):
+    // missing subscriptions are recreated, dead ones surface as a 409 instead
+    // of as a giveaway that silently collects nothing.
+    const delivery = await d.reconcileKickWebhookDelivery(env, site.id, d);
+    if (delivery.status !== "ok" || !delivery.subscriptions?.chatEvents) {
       return bad("Kick chat events are not subscribed for this channel yet. Reconnect Kick in Settings → Connections.", 409);
     }
+    connection = { ...connection, chatReady: true };
   }
 
   try {

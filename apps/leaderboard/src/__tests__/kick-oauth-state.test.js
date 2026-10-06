@@ -664,8 +664,8 @@ describe("Kick OAuth state integration seams", () => {
     expect(writes.map(({ sql }) => sql.match(/INSERT INTO (\w+)|UPDATE (\w+)/).slice(1).find(Boolean))).toEqual([
       "creator_connections", "users", "community_channels", "sites", "community_channels",
     ]);
-    expect(writes[4].sql).toContain("reward_events_subscribed_at = CASE WHEN $3 THEN now() END");
-    expect(writes[4].sql).toContain("chat_events_subscribed_at = CASE WHEN $4 THEN now() END");
+    expect(writes[4].sql).toContain("reward_events_subscribed_at = CASE WHEN $3 THEN COALESCE(reward_events_subscribed_at, now()) ELSE NULL END");
+    expect(writes[4].sql).toContain("chat_events_subscribed_at = CASE WHEN $4 THEN COALESCE(chat_events_subscribed_at, now()) ELSE NULL END");
     expect(writes[4].sql).toContain("event_subscriptions_checked_at = now()");
     expect(writes[4].params).toEqual([site.id, "kick", true, true]);
     expect(writes[0].params.slice(0, 3)).toEqual([user.id, "kick", "123"]);

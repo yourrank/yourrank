@@ -187,6 +187,11 @@ function deps(overrides = {}) {
       return { role: "owner", res: null };
     },
     loadChatGiveawayConnection: async () => ({ connected: true, chatReady: true, channelName: "streamer", externalChannelId: "111" }),
+    reconcileKickWebhookDelivery: async () => ({
+      status: "ok",
+      subscriptions: { rewardEvents: true, chatEvents: true },
+      failedEvents: [],
+    }),
     one: async () => null,
     query: async () => [],
     exec: async () => {},
@@ -217,6 +222,7 @@ describe("Chat Giveaway API", () => {
       rules: { winnerRepeat: "again", excludePreviousWinners: true },
     }), {}, deps({
       loadChatGiveawayConnection: async () => { checkedConnection = true; throw new Error("should not load Kick"); },
+      reconcileKickWebhookDelivery: async () => { throw new Error("should not reconcile Kick for a manual giveaway"); },
       one: async (sql, params) => {
         inserted = { sql, params };
         return { id: "gs-manual", site_id: siteA.id, provider: "manual", keyword: "manual", status: "active" };
@@ -427,12 +433,71 @@ describe("Chat Giveaway API", () => {
     expect((await res.json()).error).toBe("VPN / proxy detection isn't available right now.");
   });
 
-  it("refuses to start when the chat subscription was not confirmed", async () => {
+  it("refuses to start when live reconciliation cannot confirm the chat subscription", async () => {
+    let inserted = false;
     const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", { keyword: "!win" }), {}, deps({
-      loadChatGiveawayConnection: async () => ({ connected: true, chatReady: false, channelName: "streamer", externalChannelId: "111" }),
+      reconcileKickWebhookDelivery: async () => ({
+        status: "ok",
+        subscriptions: { rewardEvents: true, chatEvents: false },
+        failedEvents: ["chat.message.sent"],
+      }),
+      one: async () => { inserted = true; return null; },
     }));
     expect(res.status).toBe(409);
     expect((await res.json()).error).toContain("not subscribed");
+    expect(inserted).toBe(false);
+  });
+
+  it("refuses to start when reconciliation reports the Kick grant needs reconnecting", async () => {
+    let inserted = false;
+    const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", { keyword: "!win" }), {}, deps({
+      reconcileKickWebhookDelivery: async () => ({ status: "reconnect_required" }),
+      one: async () => { inserted = true; return null; },
+    }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toContain("not subscribed");
+    expect(inserted).toBe(false);
+  });
+
+  it("self-heals: starts when the recorded flag is stale but the subscription is live", async () => {
+    // Regression: the recorded chatReady flag is only stamped at connect/repair
+    // time, while Kick auto-unsubscribes events after delivery failures. The
+    // start decision must come from the live reconciliation, not the flag.
+    let inserted;
+    let reconciled = false;
+    const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", { keyword: "!win" }), {}, deps({
+      loadChatGiveawayConnection: async () => ({ connected: true, chatReady: false, channelName: "streamer", externalChannelId: "111" }),
+      reconcileKickWebhookDelivery: async () => {
+        reconciled = true;
+        return { status: "ok", subscriptions: { rewardEvents: true, chatEvents: true }, failedEvents: [] };
+      },
+      one: async (sql, params) => {
+        inserted = { sql, params };
+        return { id: "gs-healed", site_id: siteA.id, keyword: params[1], status: "active" };
+      },
+    }));
+    expect(res.status).toBe(200);
+    expect(reconciled).toBe(true);
+    expect(inserted.sql).toContain("INSERT INTO chat_giveaway_sessions");
+  });
+
+  it("refuses to start when the recorded flag says ready but the subscription died at Kick", async () => {
+    // The incident this prevents: chatReady stayed stamped after Kick
+    // auto-unsubscribed chat.message.sent, so the giveaway started and
+    // silently collected zero entries.
+    let inserted = false;
+    const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", { keyword: "!win" }), {}, deps({
+      loadChatGiveawayConnection: async () => ({ connected: true, chatReady: true, channelName: "streamer", externalChannelId: "111" }),
+      reconcileKickWebhookDelivery: async () => ({
+        status: "ok",
+        subscriptions: { rewardEvents: true, chatEvents: false },
+        failedEvents: ["chat.message.sent"],
+      }),
+      one: async () => { inserted = true; return null; },
+    }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toContain("not subscribed");
+    expect(inserted).toBe(false);
   });
 
   it("starts an active session for a verified connected channel with a normalized keyword", async () => {

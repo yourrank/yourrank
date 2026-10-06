@@ -328,15 +328,18 @@ export function subscriptionsFromEvents(subscribed: readonly string[]): ChannelE
  * Record the outcome of a webhook subscription reconciliation on the site's
  * channel. Each event is stored on its own so readers can tell exactly which
  * delivery path is missing; `event_subscriptions_checked_at` marks that a
- * check actually happened (NULL = never verified).
+ * check actually happened (NULL = never verified). An event the reconciliation
+ * could not confirm has its stamp cleared: Kick auto-unsubscribes events after
+ * delivery failures, so a flag that can only ever be set — never cleared —
+ * would keep claiming readiness long after the subscription died.
  */
 export async function markChannelEventSubscriptions(
   run: SqlRunner, siteId: string, provider: ProviderId, subscriptions: ChannelEventSubscriptions,
 ): Promise<void> {
   await run(
     `UPDATE community_channels
-        SET reward_events_subscribed_at = CASE WHEN $3 THEN now() END,
-            chat_events_subscribed_at = CASE WHEN $4 THEN now() END,
+        SET reward_events_subscribed_at = CASE WHEN $3 THEN COALESCE(reward_events_subscribed_at, now()) ELSE NULL END,
+            chat_events_subscribed_at = CASE WHEN $4 THEN COALESCE(chat_events_subscribed_at, now()) ELSE NULL END,
             event_subscriptions_checked_at = now(),
             updated_at = now()
       WHERE site_id = $1 AND provider = $2`,

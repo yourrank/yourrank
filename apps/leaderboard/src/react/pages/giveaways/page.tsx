@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { engageCardState } from "../../../assets/dashboard/engage-hub-state.js";
 import { withDashboardTimeout } from "../../../assets/dashboard/request.js";
+import { connectKickChat } from "../../../assets/chat-entry.js";
 import { ENGAGE_FEATURES, GIVEAWAY_TABS } from "../../../pages/giveaway-pages.js";
 import { api } from "../../lib/api";
 import { cn } from "../../lib/utils";
@@ -534,6 +535,9 @@ function ChatGiveaway({
   const manualInputRef = useRef<HTMLInputElement>(null);
   const ruleSessionIdRef = useRef<string | null>(null);
   const autoRerollKeyRef = useRef("");
+  const chatConnectionRef = useRef<{ close: () => void } | null>(null);
+  const refreshTimersRef = useRef<number[]>([]);
+  const awaitingClaimRef = useRef(false);
   const session = data.session || null;
   const entries = data.entries || [];
   const verificationPath = session
@@ -587,6 +591,66 @@ function ChatGiveaway({
     const timer = window.setInterval(() => { void refresh(); }, CHAT_POLL_MS);
     return () => window.clearInterval(timer);
   }, [refresh]);
+
+  useEffect(() => {
+    awaitingClaimRef.current = Boolean(
+      active && session?.provider === "kick" && winner && !finalized && responseRequired && !winnerClaimed,
+    );
+  }, [active, session?.provider, winner, finalized, responseRequired, winnerClaimed]);
+
+  // Live chat trigger: the 4s poll above is the safety net, but Kick's own
+  // chat socket (the same feed the Kick website uses) tells us the instant a
+  // keyword message appears, so entries and winner claims surface in well
+  // under a second instead of waiting for poll + webhook latency. The webhook
+  // stays authoritative — this only decides WHEN to re-read the server state.
+  useEffect(() => {
+    const channel = (connection.channelName || "").trim();
+    if (!active || session?.provider !== "kick" || !channel) return;
+    const target = String(session?.keyword || keyword).trim().toLowerCase();
+    let disposed = false;
+    let handle: { close: () => void } | null = null;
+
+    const burstRefresh = () => {
+      for (const timer of refreshTimersRef.current) window.clearTimeout(timer);
+      // The webhook write can land a beat after the socket message, so
+      // re-read the server state in a short burst instead of just once.
+      refreshTimersRef.current = [150, 900, 2400].map((delay) =>
+        window.setTimeout(() => { void refresh(); }, delay),
+      );
+    };
+
+    void (async () => {
+      try {
+        const lookup = await apiClient<{ chatroomId?: number }>(
+          `/api/giveaways/chatroom?channel=${encodeURIComponent(channel)}`,
+          {},
+          siteId,
+        );
+        if (disposed || !lookup.chatroomId) return;
+        handle = connectKickChat({
+          chatroomId: lookup.chatroomId,
+          onMessage: (chatData: { content?: unknown }) => {
+            const tokens = String(chatData?.content ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+            if ((target && tokens.includes(target)) || awaitingClaimRef.current) burstRefresh();
+          },
+          onOpen: () => {},
+          onError: () => {},
+          onClose: () => { if (chatConnectionRef.current === handle) chatConnectionRef.current = null; },
+        });
+        chatConnectionRef.current = handle;
+      } catch {
+        // Live updates are a progressive enhancement; the poll still applies.
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      handle?.close();
+      if (chatConnectionRef.current === handle) chatConnectionRef.current = null;
+      for (const timer of refreshTimersRef.current) window.clearTimeout(timer);
+      refreshTimersRef.current = [];
+    };
+  }, [active, session?.id, session?.provider, session?.keyword, connection.channelName, keyword, refresh, apiClient, siteId]);
 
   useEffect(() => {
     if (session?.id && ruleSessionIdRef.current !== session.id) {
