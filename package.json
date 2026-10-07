@@ -53,7 +53,7 @@
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "overrides": {
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "js-yaml": "5.4.2",
     "undici": "7.29.1",
     "@parcel/watcher": "2.5.6",
